@@ -223,25 +223,35 @@ export async function topArtistsByYear(
 
 export type DailyPoint = { date: string; plays: number };
 
-export async function dailyListening(
+/**
+ * One row per day in `year`. For the current year, ends at today; for past
+ * years, runs Jan 1 → Dec 31.
+ */
+export async function dailyListeningByYear(
   username: string,
-  days: number,
+  year: number,
   tzOffsetMinutes = 0,
 ): Promise<DailyPoint[]> {
   const res = await withRetry(() =>
     db.execute<DailyPoint>(sql`
-      WITH dates AS (
-        SELECT generate_series(
-          (now() AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date - (${days - 1} || ' days')::interval,
-          (now() AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date,
-          '1 day'::interval
-        )::date AS day
+      WITH bounds AS (
+        SELECT
+          make_date(${year}, 1, 1) AS year_start,
+          LEAST(
+            make_date(${year}, 12, 31),
+            (now() AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date
+          ) AS year_end
+      ),
+      dates AS (
+        SELECT generate_series(b.year_start, b.year_end, '1 day'::interval)::date AS day
+        FROM bounds b
       ),
       plays_by_day AS (
         SELECT (listened_at + (${tzOffsetMinutes} || ' minutes')::interval)::date AS day, COUNT(*)::int AS plays
         FROM ${schema.listens}
         WHERE user_name = ${username}
-          AND listened_at >= (now() AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date - (${days} || ' days')::interval
+          AND listened_at >= (SELECT year_start FROM bounds)
+          AND listened_at <  (SELECT year_end FROM bounds) + INTERVAL '1 day'
         GROUP BY day
       )
       SELECT to_char(d.day, 'YYYY-MM-DD') AS date, COALESCE(p.plays, 0)::int AS plays

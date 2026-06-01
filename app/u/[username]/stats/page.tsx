@@ -9,7 +9,7 @@ import {
   todayStats,
   yearlyListening,
   hourlyDistribution,
-  dailyListening,
+  dailyListeningByYear,
   availableYears,
   topSongsByYear,
   topAlbumsByYear,
@@ -42,7 +42,8 @@ export default async function StatsPage({
   const today = await todayStats(username);
   const yearly = await yearlyListening(username);
   const hourly = await hourlyDistribution(username);
-  const daily = await dailyListening(username, 365);
+  const currentYear = new Date().getUTCFullYear();
+  const daily = await dailyListeningByYear(username, currentYear);
   const recent = await withRetry(() =>
     db.execute<{
       listened_at: string;
@@ -149,7 +150,7 @@ export default async function StatsPage({
           </section>
 
           <section className="space-y-3">
-            <SectionHeading icon={Calendar}>Last 365 days</SectionHeading>
+            <SectionHeading icon={Calendar}>{currentYear}</SectionHeading>
             <Heatmap days={daily} />
           </section>
 

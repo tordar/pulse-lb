@@ -91,16 +91,6 @@ body {
   }
 }
 
-.heatmap-area .year-label {
-  grid-column: 1;
-  grid-row: 1;
-  align-self: end;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--heatmap-label-color);
-  white-space: nowrap;
-}
-
 .heatmap-area .month-row {
   grid-column: 2;
   grid-row: 1;

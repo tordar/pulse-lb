@@ -45,16 +45,12 @@ export function Heatmap({ days, max }: { days: Day[]; max?: number }) {
     }
   }
 
-  const yearLabel = `${first.toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${first.getUTCFullYear()} – ${last.toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${last.getUTCFullYear()}`;
-
   return (
     <div
       className="heatmap-root"
       style={{ ["--weeks-count" as string]: weeks } as React.CSSProperties}
     >
       <div className="heatmap-area">
-        <span className="year-label">{yearLabel}</span>
-
         <div className="month-row">
           {monthLabels.map((m) => (
             <span key={m.col} className="month-label" style={{ gridColumn: m.col }}>
