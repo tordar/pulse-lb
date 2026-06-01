@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { PillNav } from "./PillNav";
+import { NowPlaying } from "./NowPlaying";
 
 export default async function UserLayout({
   children,
@@ -25,7 +26,7 @@ export default async function UserLayout({
             <span>{username}</span>
           </Link>
           <PillNav username={username} />
-          <div className="hidden md:block w-[1px]" aria-hidden />
+          <NowPlaying username={username} />
         </div>
       </header>
       <div className="max-w-6xl mx-auto px-6 py-6">{children}</div>
