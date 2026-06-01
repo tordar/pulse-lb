@@ -169,6 +169,14 @@ body {
   background: transparent;
   cursor: default;
 }
+.heatmap-area .cell.future {
+  background: color-mix(in oklab, var(--color-heatmap-empty) 50%, transparent);
+  cursor: default;
+}
+.heatmap-area .cell.active {
+  box-shadow: 0 0 0 2px var(--color-foreground), 0 0 16px color-mix(in oklab, var(--color-primary) 50%, transparent);
+  filter: brightness(1.15);
+}
 .heatmap-area .cell[data-level="1"] { background: color-mix(in oklab, var(--color-heatmap-fill) 30%, var(--color-heatmap-empty)); }
 .heatmap-area .cell[data-level="2"] { background: color-mix(in oklab, var(--color-heatmap-fill) 55%, var(--color-heatmap-empty)); }
 .heatmap-area .cell[data-level="3"] { background: color-mix(in oklab, var(--color-heatmap-fill) 80%, var(--color-heatmap-empty)); }

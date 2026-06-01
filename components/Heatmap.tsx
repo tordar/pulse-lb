@@ -1,12 +1,23 @@
+import Link from "next/link";
+
 type Day = { date: string; plays: number };
 
-export function Heatmap({ days, max }: { days: Day[]; max?: number }) {
+export function Heatmap({
+  days,
+  max,
+  hrefFor,
+  activeDate,
+}: {
+  days: Day[];
+  max?: number;
+  hrefFor?: (date: string) => string;
+  activeDate?: string | null;
+}) {
   if (days.length === 0) return null;
 
   const limit = max ?? Math.max(1, ...days.map((d) => d.plays));
   const byDate = new Map(days.map((d) => [d.date, d.plays]));
 
-  // Build column-major grid: starts on the Sunday on or before the first day.
   const first = parseDate(days[0].date);
   const last = parseDate(days[days.length - 1].date);
   const start = new Date(first);
@@ -14,7 +25,9 @@ export function Heatmap({ days, max }: { days: Day[]; max?: number }) {
   const totalCells = Math.ceil((last.getTime() - start.getTime()) / (24 * 3600 * 1000)) + 1;
   const weeks = Math.ceil(totalCells / 7);
 
-  const cells: { date: string; plays: number; inRange: boolean; col: number; row: number }[] = [];
+  const today = new Date().toISOString().slice(0, 10);
+
+  const cells: { date: string; plays: number; inRange: boolean; future: boolean; col: number; row: number }[] = [];
   for (let i = 0; i < weeks * 7; i++) {
     const d = new Date(start);
     d.setUTCDate(d.getUTCDate() + i);
@@ -24,12 +37,12 @@ export function Heatmap({ days, max }: { days: Day[]; max?: number }) {
       date: iso,
       plays: byDate.get(iso) ?? 0,
       inRange,
+      future: iso > today,
       col: Math.floor(i / 7) + 1,
       row: (i % 7) + 1,
     });
   }
 
-  // Month labels shown above the first week of each calendar month
   const monthLabels: { col: number; label: string }[] = [];
   let lastMonth = -1;
   for (let w = 0; w < weeks; w++) {
@@ -69,7 +82,6 @@ export function Heatmap({ days, max }: { days: Day[]; max?: number }) {
 
         <div className="heatmap-grid">
           {cells.map((c, i) => {
-            const level = c.inRange ? bucket(c.plays, limit) : -1;
             if (!c.inRange) {
               return (
                 <span
@@ -80,12 +92,40 @@ export function Heatmap({ days, max }: { days: Day[]; max?: number }) {
                 />
               );
             }
+            if (c.future) {
+              return (
+                <span
+                  key={i}
+                  className="cell future"
+                  style={{ gridColumn: c.col, gridRow: c.row }}
+                  title={c.date}
+                  aria-hidden
+                />
+              );
+            }
+            const level = bucket(c.plays, limit);
             const title = `${c.date} · ${c.plays} ${c.plays === 1 ? "play" : "plays"}`;
+            const active = activeDate === c.date;
+            const className = `cell${active ? " active" : ""}`;
+            if (hrefFor) {
+              return (
+                <Link
+                  key={i}
+                  href={hrefFor(c.date)}
+                  className={className}
+                  data-level={level}
+                  style={{ gridColumn: c.col, gridRow: c.row }}
+                  title={title}
+                  aria-label={title}
+                  scroll={false}
+                />
+              );
+            }
             return (
               <button
                 key={i}
                 type="button"
-                className="cell"
+                className={className}
                 data-level={level}
                 style={{ gridColumn: c.col, gridRow: c.row }}
                 title={title}

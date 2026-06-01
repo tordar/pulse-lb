@@ -224,8 +224,8 @@ export async function topArtistsByYear(
 export type DailyPoint = { date: string; plays: number };
 
 /**
- * One row per day in `year`. For the current year, ends at today; for past
- * years, runs Jan 1 → Dec 31.
+ * One row per day Jan 1 → Dec 31 of `year`. Future days return 0 plays so the
+ * heatmap can still render the full year grid.
  */
 export async function dailyListeningByYear(
   username: string,
@@ -234,24 +234,19 @@ export async function dailyListeningByYear(
 ): Promise<DailyPoint[]> {
   const res = await withRetry(() =>
     db.execute<DailyPoint>(sql`
-      WITH bounds AS (
-        SELECT
-          make_date(${year}, 1, 1) AS year_start,
-          LEAST(
-            make_date(${year}, 12, 31),
-            (now() AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date
-          ) AS year_end
-      ),
-      dates AS (
-        SELECT generate_series(b.year_start, b.year_end, '1 day'::interval)::date AS day
-        FROM bounds b
+      WITH dates AS (
+        SELECT generate_series(
+          make_date(${year}, 1, 1),
+          make_date(${year}, 12, 31),
+          '1 day'::interval
+        )::date AS day
       ),
       plays_by_day AS (
         SELECT (listened_at + (${tzOffsetMinutes} || ' minutes')::interval)::date AS day, COUNT(*)::int AS plays
         FROM ${schema.listens}
         WHERE user_name = ${username}
-          AND listened_at >= (SELECT year_start FROM bounds)
-          AND listened_at <  (SELECT year_end FROM bounds) + INTERVAL '1 day'
+          AND listened_at >= make_date(${year}, 1, 1)
+          AND listened_at <  make_date(${year} + 1, 1, 1)
         GROUP BY day
       )
       SELECT to_char(d.day, 'YYYY-MM-DD') AS date, COALESCE(p.plays, 0)::int AS plays
@@ -260,4 +255,70 @@ export async function dailyListeningByYear(
     `),
   );
   return (res as unknown as Row<DailyPoint>).rows;
+}
+
+export type DayListen = {
+  listened_at: string;
+  track_name: string;
+  artist_name: string;
+  release_name: string | null;
+  recording_mbid: string | null;
+  caa_id: number | null;
+  caa_release_mbid: string | null;
+};
+
+export type DaySummary = {
+  date: string;
+  plays: number;
+  effective_ms: number;
+  distinct_tracks: number;
+  distinct_artists: number;
+  listens: DayListen[];
+};
+
+export async function dayDetail(
+  username: string,
+  date: string,
+  tzOffsetMinutes = 0,
+): Promise<DaySummary | null> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+
+  const summaryRes = await withRetry(() =>
+    db.execute<Omit<DaySummary, "listens">>(sql`
+      SELECT
+        ${date}::text AS date,
+        COUNT(*)::int AS plays,
+        COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint AS effective_ms,
+        COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int AS distinct_tracks,
+        COUNT(DISTINCT l.artist_name)::int AS distinct_artists
+      FROM ${schema.listens} l
+      LEFT JOIN ${schema.recordings} r ON r.mbid = l.recording_mbid
+      WHERE l.user_name = ${username}
+        AND (l.listened_at + (${tzOffsetMinutes} || ' minutes')::interval)::date = ${date}::date
+    `),
+  );
+  const summary = (summaryRes as unknown as Row<Omit<DaySummary, "listens">>).rows[0];
+
+  const listensRes = await withRetry(() =>
+    db.execute<DayListen>(sql`
+      SELECT
+        listened_at,
+        track_name,
+        artist_name,
+        release_name,
+        recording_mbid::text AS recording_mbid,
+        caa_id,
+        caa_release_mbid::text AS caa_release_mbid
+      FROM ${schema.listens}
+      WHERE user_name = ${username}
+        AND (listened_at + (${tzOffsetMinutes} || ' minutes')::interval)::date = ${date}::date
+      ORDER BY listened_at ASC
+      LIMIT 200
+    `),
+  );
+
+  return {
+    ...summary,
+    listens: (listensRes as unknown as Row<DayListen>).rows,
+  };
 }

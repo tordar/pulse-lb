@@ -10,12 +10,14 @@ import {
   yearlyListening,
   hourlyDistribution,
   dailyListeningByYear,
+  dayDetail,
   availableYears,
   topSongsByYear,
   topAlbumsByYear,
   topArtistsByYear,
 } from "@/lib/db/queries/stats";
 import { SyncButton } from "./SyncButton";
+import { YearNav } from "./YearNav";
 import { YearlyChart } from "@/components/YearlyChart";
 import { HourlyChart } from "@/components/HourlyChart";
 import { Heatmap } from "@/components/Heatmap";
@@ -30,7 +32,7 @@ export default async function StatsPage({
   searchParams,
 }: {
   params: Promise<{ username: string }>;
-  searchParams: Promise<{ year?: string }>;
+  searchParams: Promise<{ year?: string; day?: string }>;
 }) {
   const { username } = await params;
   const sp = await searchParams;
@@ -42,8 +44,6 @@ export default async function StatsPage({
   const today = await todayStats(username);
   const yearly = await yearlyListening(username);
   const hourly = await hourlyDistribution(username);
-  const currentYear = new Date().getUTCFullYear();
-  const daily = await dailyListeningByYear(username, currentYear);
   const recent = await withRetry(() =>
     db.execute<{
       listened_at: string;
@@ -65,13 +65,21 @@ export default async function StatsPage({
   const selectedYear = years.length
     ? Math.max(years[years.length - 1], Math.min(years[0], parseInt(sp.year ?? "", 10) || years[0]))
     : null;
-  const [yearSongs, yearAlbums, yearArtists] = selectedYear
+
+  // Prev/next neighbours for the year nav (years[] is descending).
+  const yearIdx = selectedYear !== null ? years.indexOf(selectedYear) : -1;
+  const nextYear = yearIdx > 0 ? years[yearIdx - 1] : null;
+  const prevYear = yearIdx >= 0 && yearIdx < years.length - 1 ? years[yearIdx + 1] : null;
+
+  const [daily, yearSongs, yearAlbums, yearArtists, daySummary] = selectedYear
     ? await Promise.all([
+        dailyListeningByYear(username, selectedYear),
         topSongsByYear(username, selectedYear),
         topAlbumsByYear(username, selectedYear),
         topArtistsByYear(username, selectedYear),
+        sp.day ? dayDetail(username, sp.day) : Promise.resolve(null),
       ])
-    : [[], [], []];
+    : [[], [], [], [], null];
 
   return (
     <div className="space-y-8">
@@ -150,10 +158,24 @@ export default async function StatsPage({
             <HourlyChart data={hourly} height={200} />
           </section>
 
-          <section className="space-y-3">
-            <SectionHeading icon={Calendar}>{currentYear}</SectionHeading>
-            <Heatmap days={daily} />
-          </section>
+          {selectedYear !== null && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <SectionHeading icon={Calendar}>{selectedYear}</SectionHeading>
+                <YearNav year={selectedYear} prevYear={prevYear} nextYear={nextYear} />
+              </div>
+              <Heatmap
+                days={daily}
+                activeDate={sp.day ?? null}
+                hrefFor={(date) => {
+                  const next = new URLSearchParams({ year: String(selectedYear) });
+                  next.set("day", date);
+                  return `?${next}`;
+                }}
+              />
+              {daySummary && <DayDetailBlock username={username} day={daySummary} year={selectedYear} />}
+            </section>
+          )}
 
           {selectedYear !== null && years.length > 0 && (
             <section className="space-y-4">
@@ -255,6 +277,97 @@ export default async function StatsPage({
             </ul>
           </section>
         </>
+      )}
+    </div>
+  );
+}
+
+function DayDetailBlock({
+  username,
+  day,
+  year,
+}: {
+  username: string;
+  day: import("@/lib/db/queries/stats").DaySummary;
+  year: number;
+}) {
+  const date = new Date(`${day.date}T00:00:00Z`);
+  const human = date.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+  const hours = day.effective_ms / 1000 / 3600;
+  const closeHref = `?${new URLSearchParams({ year: String(year) })}`;
+
+  return (
+    <div key={day.date} className="fade-in rounded-lg border border-card-border bg-card p-5 space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-primary inline-flex items-center gap-1.5">
+            <Calendar size={13} /> {human}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            <strong className="text-foreground font-medium tabular-nums">{day.plays.toLocaleString()}</strong> plays
+            {hours >= 1 / 60 && (
+              <>
+                {" · "}
+                <strong className="text-foreground font-medium tabular-nums">{fmtHours(hours)}</strong> listening
+              </>
+            )}
+            {" · "}
+            <strong className="text-foreground font-medium tabular-nums">{day.distinct_tracks}</strong> distinct songs
+            {" · "}
+            <strong className="text-foreground font-medium tabular-nums">{day.distinct_artists}</strong> artists
+          </p>
+        </div>
+        <Link
+          href={closeHref}
+          scroll={false}
+          className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+          aria-label="Close day detail"
+        >
+          ✕ Close
+        </Link>
+      </div>
+
+      {day.listens.length === 0 ? (
+        <p className="text-sm text-subtle-foreground italic">No listens this day.</p>
+      ) : (
+        <ul className="divide-y divide-border text-sm">
+          {day.listens.map((l, i) => {
+            const time = new Date(l.listened_at).toISOString().slice(11, 16);
+            const href = l.recording_mbid
+              ? `/u/${encodeURIComponent(username)}/songs/${l.recording_mbid}?${new URLSearchParams({ name: l.track_name, artist: l.artist_name })}`
+              : null;
+            const row = (
+              <>
+                <span className="w-12 shrink-0 tabular-nums text-subtle-foreground">{time}</span>
+                <span className="flex-1 min-w-0 truncate">
+                  {l.track_name}
+                  <span className="text-subtle-foreground"> · {l.artist_name}</span>
+                  {l.release_name && <span className="text-subtle-foreground"> · {l.release_name}</span>}
+                </span>
+              </>
+            );
+            return (
+              <li key={i}>
+                {href ? (
+                  <Link
+                    href={href}
+                    className="flex items-center gap-3 py-1.5 hover:bg-muted -mx-2 px-2 rounded"
+                  >
+                    {row}
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-3 py-1.5">{row}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
