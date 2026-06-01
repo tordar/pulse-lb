@@ -1,0 +1,120 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { albumDetail } from "@/lib/db/queries/albumDetail";
+import { getReleaseMeta } from "@/lib/musicbrainz/client";
+import { CoverArt } from "@/components/CoverArt";
+import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function AlbumDetailPage({
+  params,
+}: {
+  params: Promise<{ username: string; releaseMbid: string }>;
+}) {
+  const { username, releaseMbid } = await params;
+  const detail = await albumDetail(username, releaseMbid);
+  if (!detail) notFound();
+
+  // Best-effort: get full tracklist size from MB for the "N/M played" line.
+  // Fire-and-forget on cache miss; the page still renders without it.
+  const meta = await getReleaseMeta(releaseMbid).catch(() => null);
+  const totalTracks = meta?.trackCount ?? null;
+
+  const { header, years, tracks } = detail;
+  const totalHours = header.total_minutes / 60;
+  const span = `${fmtDate(header.first_played)}`;
+
+  return (
+    <div className="space-y-8">
+      <div className="text-sm">
+        <Link href={`/u/${encodeURIComponent(username)}/albums`} className="text-gray-500 hover:text-gray-900 dark:hover:text-gray-100">
+          ← Albums
+        </Link>
+      </div>
+
+      <header className="flex flex-col md:flex-row gap-6 items-start">
+        <CoverArt
+          art={{ caaId: header.caa_id, caaReleaseMbid: header.caa_release_mbid }}
+          size={240}
+          alt={header.release_name}
+          className="rounded-lg shadow-md"
+        />
+        <div className="flex-1 space-y-2">
+          <p className="text-sm text-gray-500">Album</p>
+          <h1 className="text-3xl font-bold leading-tight">{header.release_name}</h1>
+          <p className="text-lg text-gray-700 dark:text-gray-300">{header.artist_name}</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm pt-2 text-gray-600 dark:text-gray-400">
+            <Stat label="Plays" value={header.total_plays.toLocaleString()} />
+            <Stat label="Listening time" value={fmtHours(totalHours)} />
+            <Stat
+              label="Tracks played"
+              value={
+                totalTracks
+                  ? `${header.distinct_recordings} / ${totalTracks}`
+                  : `${header.distinct_recordings}`
+              }
+            />
+            <Stat label="First played" value={span} />
+          </div>
+        </div>
+      </header>
+
+      {years.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+            Plays by year
+          </h2>
+          <PlaysPerYearChart data={years} metric="plays" />
+        </section>
+      )}
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          Songs <span className="text-gray-400 font-normal normal-case">({tracks.length})</span>
+        </h2>
+        <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
+          {tracks.map((t, i) => (
+            <li key={`${t.recording_mbid ?? t.track_name}-${i}`} className="flex items-center gap-3 py-2.5">
+              <span className="w-8 text-right text-sm text-gray-400 tabular-nums">{i + 1}</span>
+              <div className="flex-1 min-w-0">
+                <div className="truncate text-sm font-medium">{t.track_name}</div>
+                <div className="text-xs text-gray-500">first played {fmtDate(t.first_played)}</div>
+              </div>
+              <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400 w-20 text-right">
+                {t.plays.toLocaleString()} plays
+              </span>
+              {t.minutes > 0 && (
+                <span className="shrink-0 text-xs tabular-nums text-gray-400 w-16 text-right">
+                  {fmtHours(t.minutes / 60)}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <span>
+      <strong className="font-medium text-gray-900 dark:text-gray-100">{value}</strong>{" "}
+      <span className="text-gray-500">{label}</span>
+    </span>
+  );
+}
+
+function fmtDate(s: string): string {
+  return new Date(s).toISOString().slice(0, 10);
+}
+
+function fmtHours(h: number): string {
+  if (h < 1 / 60) return "—";
+  if (h < 1) return `${Math.round(h * 60)}m`;
+  const hr = Math.floor(h);
+  const m = Math.round((h - hr) * 60);
+  return m ? `${hr}h ${m}m` : `${hr}h`;
+}

@@ -1,8 +1,14 @@
+import Link from "next/link";
 import { topAlbums } from "@/lib/db/queries/topItems";
 import { SearchBox } from "@/components/SearchBox";
 import { Pagination } from "@/components/Pagination";
 import { CoverArt } from "@/components/CoverArt";
 import { ViewToggle, type View } from "@/components/ViewToggle";
+
+function albumHref(username: string, releaseMbid: string | null): string | null {
+  if (!releaseMbid) return null;
+  return `/u/${encodeURIComponent(username)}/albums/${releaseMbid}`;
+}
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,44 +46,72 @@ export default async function AlbumsPage({
         </p>
       ) : view === "grid" ? (
         <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {items.map((a) => (
-            <li key={`${a.release_name}-${a.artist_name}`} className="space-y-2">
-              <CoverArt
-                art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
-                size={240}
-                alt={a.release_name}
-                className="w-full h-auto aspect-square rounded-md"
-              />
-              <div className="space-y-0.5">
-                <div className="truncate text-sm font-medium">{a.release_name}</div>
-                <div className="truncate text-xs text-gray-500">{a.artist_name}</div>
-                <div className="text-xs text-gray-400 tabular-nums">{a.plays.toLocaleString()} plays</div>
-              </div>
-            </li>
-          ))}
+          {items.map((a) => {
+            const href = albumHref(username, a.release_mbid);
+            const inner = (
+              <>
+                <CoverArt
+                  art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
+                  size={240}
+                  alt={a.release_name}
+                  className="w-full h-auto aspect-square rounded-md"
+                />
+                <div className="space-y-0.5">
+                  <div className="truncate text-sm font-medium">{a.release_name}</div>
+                  <div className="truncate text-xs text-gray-500">{a.artist_name}</div>
+                  <div className="text-xs text-gray-400 tabular-nums">{a.plays.toLocaleString()} plays</div>
+                </div>
+              </>
+            );
+            return (
+              <li key={`${a.release_name}-${a.artist_name}`} className="space-y-2">
+                {href ? (
+                  <Link href={href} className="block group space-y-2">
+                    {inner}
+                  </Link>
+                ) : (
+                  inner
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
-          {items.map((a, i) => (
-            <li key={`${a.release_name}-${a.artist_name}`} className="flex items-center gap-3 py-2.5">
-              <span className="w-8 text-right text-sm text-gray-400 tabular-nums">
-                {page * 50 + i + 1}
-              </span>
-              <CoverArt
-                art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
-                size={48}
-                alt={a.release_name}
-                className="rounded"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="truncate text-sm font-medium">{a.release_name}</div>
-                <div className="truncate text-xs text-gray-500">{a.artist_name}</div>
-              </div>
-              <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
-                {a.plays.toLocaleString()} plays
-              </span>
-            </li>
-          ))}
+          {items.map((a, i) => {
+            const href = albumHref(username, a.release_mbid);
+            const row = (
+              <>
+                <span className="w-8 text-right text-sm text-gray-400 tabular-nums">
+                  {page * 50 + i + 1}
+                </span>
+                <CoverArt
+                  art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
+                  size={48}
+                  alt={a.release_name}
+                  className="rounded"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="truncate text-sm font-medium">{a.release_name}</div>
+                  <div className="truncate text-xs text-gray-500">{a.artist_name}</div>
+                </div>
+                <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                  {a.plays.toLocaleString()} plays
+                </span>
+              </>
+            );
+            return (
+              <li key={`${a.release_name}-${a.artist_name}`}>
+                {href ? (
+                  <Link href={href} className="flex items-center gap-3 py-2.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded">
+                    {row}
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-3 py-2.5">{row}</div>
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
 
