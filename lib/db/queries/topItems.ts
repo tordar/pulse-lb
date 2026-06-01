@@ -86,6 +86,7 @@ export type TopArtist = {
   plays: number;
   distinct_tracks: number;
   distinct_albums: number;
+  artist_mbid: string | null;
 };
 
 export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<TopArtist>> {
@@ -98,7 +99,8 @@ export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<Top
         artist_name,
         COUNT(*)::int AS plays,
         COUNT(DISTINCT track_name)::int AS distinct_tracks,
-        COUNT(DISTINCT release_name)::int AS distinct_albums
+        COUNT(DISTINCT release_name)::int AS distinct_albums,
+        (array_agg(artist_mbids[1] ORDER BY listened_at DESC) FILTER (WHERE artist_mbids[1] IS NOT NULL))[1]::text AS artist_mbid
       FROM ${schema.listens}
       WHERE user_name = ${opts.username} AND artist_name IS NOT NULL
         ${pat ? sql`AND artist_name ILIKE ${pat}` : sql``}

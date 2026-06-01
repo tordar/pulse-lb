@@ -1,6 +1,12 @@
+import Link from "next/link";
 import { topArtists } from "@/lib/db/queries/topItems";
 import { SearchBox } from "@/components/SearchBox";
 import { Pagination } from "@/components/Pagination";
+
+function artistHref(username: string, artistMbid: string | null): string | null {
+  if (!artistMbid) return null;
+  return `/u/${encodeURIComponent(username)}/artists/${artistMbid}`;
+}
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -34,22 +40,39 @@ export default async function ArtistsPage({
         </p>
       ) : (
         <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
-          {items.map((a, i) => (
-            <li key={a.artist_name} className="flex items-center gap-3 py-3">
-              <span className="w-8 text-right text-sm text-gray-400 tabular-nums">
-                {page * 50 + i + 1}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="truncate text-sm font-medium">{a.artist_name}</div>
-                <div className="text-xs text-gray-500 tabular-nums">
-                  {a.distinct_tracks.toLocaleString()} songs · {a.distinct_albums.toLocaleString()} albums
+          {items.map((a, i) => {
+            const href = artistHref(username, a.artist_mbid);
+            const row = (
+              <>
+                <span className="w-8 text-right text-sm text-gray-400 tabular-nums">
+                  {page * 50 + i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="truncate text-sm font-medium">{a.artist_name}</div>
+                  <div className="text-xs text-gray-500 tabular-nums">
+                    {a.distinct_tracks.toLocaleString()} songs · {a.distinct_albums.toLocaleString()} albums
+                  </div>
                 </div>
-              </div>
-              <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
-                {a.plays.toLocaleString()} plays
-              </span>
-            </li>
-          ))}
+                <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                  {a.plays.toLocaleString()} plays
+                </span>
+              </>
+            );
+            return (
+              <li key={a.artist_name}>
+                {href ? (
+                  <Link
+                    href={href}
+                    className="flex items-center gap-3 py-3 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded"
+                  >
+                    {row}
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-3 py-3">{row}</div>
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
 
