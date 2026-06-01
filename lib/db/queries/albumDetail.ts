@@ -59,10 +59,21 @@ export type AlbumDetail = {
 export async function albumDetail(
   username: string,
   releaseMbid: string,
+  hints: { releaseName?: string; artistName?: string } = {},
 ): Promise<AlbumDetail | null> {
-  const key = await resolveAlbumKey(username, releaseMbid);
-  if (!key) return null;
-  const { release_name, artist_name } = key;
+  // Trust caller-supplied (releaseName, artistName) over the release_mbid → name
+  // resolution. Why: LB sometimes maps multiple listens of the SAME album to
+  // different release_mbids (e.g. some Bowie "Low" plays got rewritten to a
+  // box-set release_mbid). Falling back to the MBID resolution alone would
+  // navigate users to the box set instead of the album they clicked.
+  let release_name: string | undefined = hints.releaseName;
+  let artist_name: string | undefined = hints.artistName;
+  if (!release_name || !artist_name) {
+    const key = await resolveAlbumKey(username, releaseMbid);
+    if (!key) return null;
+    release_name = key.release_name;
+    artist_name = key.artist_name;
+  }
 
   const headerRes = await withRetry(() =>
     db.execute<AlbumHeader>(sql`

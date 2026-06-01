@@ -10,11 +10,17 @@ export const revalidate = 0;
 
 export default async function AlbumDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ username: string; releaseMbid: string }>;
+  searchParams: Promise<{ name?: string; artist?: string }>;
 }) {
   const { username, releaseMbid } = await params;
-  const detail = await albumDetail(username, releaseMbid);
+  const sp = await searchParams;
+  const detail = await albumDetail(username, releaseMbid, {
+    releaseName: sp.name,
+    artistName: sp.artist,
+  });
   if (!detail) notFound();
 
   // Best-effort: get full tracklist size from MB for the "N/M played" line.
@@ -77,7 +83,7 @@ export default async function AlbumDetailPage({
         <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
           {tracks.map((t, i) => {
             const songHref = t.recording_mbid
-              ? `/u/${encodeURIComponent(username)}/songs/${t.recording_mbid}`
+              ? `/u/${encodeURIComponent(username)}/songs/${t.recording_mbid}?${new URLSearchParams({ name: t.track_name, artist: header.artist_name })}`
               : null;
             const row = (
               <>

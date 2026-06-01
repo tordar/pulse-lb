@@ -4,9 +4,15 @@ import { SearchBox } from "@/components/SearchBox";
 import { Pagination } from "@/components/Pagination";
 import { CoverArt } from "@/components/CoverArt";
 
-function songHref(username: string, recordingMbid: string | null): string | null {
+function songHref(
+  username: string,
+  recordingMbid: string | null,
+  name: string,
+  artist: string,
+): string | null {
   if (!recordingMbid) return null;
-  return `/u/${encodeURIComponent(username)}/songs/${recordingMbid}`;
+  const qs = new URLSearchParams({ name, artist }).toString();
+  return `/u/${encodeURIComponent(username)}/songs/${recordingMbid}?${qs}`;
 }
 
 export const dynamic = "force-dynamic";
@@ -42,7 +48,7 @@ export default async function SongsPage({
       ) : (
         <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
           {items.map((s, i) => {
-            const href = songHref(username, s.recording_mbid);
+            const href = songHref(username, s.recording_mbid, s.track_name, s.artist_name);
             const row = (
               <>
                 <span className="w-8 text-right text-sm text-gray-400 tabular-nums">

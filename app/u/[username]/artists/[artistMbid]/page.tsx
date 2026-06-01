@@ -60,7 +60,7 @@ export default async function ArtistDetailPage({
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {topAlbums.map((a) => {
               const href = a.release_mbid
-                ? `/u/${encodeURIComponent(username)}/albums/${a.release_mbid}`
+                ? `/u/${encodeURIComponent(username)}/albums/${a.release_mbid}?${new URLSearchParams({ name: a.release_name, artist: header.artist_name })}`
                 : null;
               const inner = (
                 <>
@@ -94,7 +94,7 @@ export default async function ArtistDetailPage({
           <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
             {topSongs.map((s, i) => {
               const href = s.recording_mbid
-                ? `/u/${encodeURIComponent(username)}/songs/${s.recording_mbid}`
+                ? `/u/${encodeURIComponent(username)}/songs/${s.recording_mbid}?${new URLSearchParams({ name: s.track_name, artist: header.artist_name })}`
                 : null;
               const row = (
                 <>

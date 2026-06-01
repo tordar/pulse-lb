@@ -5,9 +5,15 @@ import { Pagination } from "@/components/Pagination";
 import { CoverArt } from "@/components/CoverArt";
 import { ViewToggle, type View } from "@/components/ViewToggle";
 
-function albumHref(username: string, releaseMbid: string | null): string | null {
+function albumHref(
+  username: string,
+  releaseMbid: string | null,
+  name: string,
+  artist: string,
+): string | null {
   if (!releaseMbid) return null;
-  return `/u/${encodeURIComponent(username)}/albums/${releaseMbid}`;
+  const qs = new URLSearchParams({ name, artist }).toString();
+  return `/u/${encodeURIComponent(username)}/albums/${releaseMbid}?${qs}`;
 }
 
 export const dynamic = "force-dynamic";
@@ -47,7 +53,7 @@ export default async function AlbumsPage({
       ) : view === "grid" ? (
         <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {items.map((a) => {
-            const href = albumHref(username, a.release_mbid);
+            const href = albumHref(username, a.release_mbid, a.release_name, a.artist_name);
             const inner = (
               <>
                 <CoverArt
@@ -79,7 +85,7 @@ export default async function AlbumsPage({
       ) : (
         <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
           {items.map((a, i) => {
-            const href = albumHref(username, a.release_mbid);
+            const href = albumHref(username, a.release_mbid, a.release_name, a.artist_name);
             const row = (
               <>
                 <span className="w-8 text-right text-sm text-gray-400 tabular-nums">

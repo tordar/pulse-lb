@@ -56,10 +56,16 @@ async function resolveSongKey(
 export async function songDetail(
   username: string,
   recordingMbid: string,
+  hints: { trackName?: string; artistName?: string } = {},
 ): Promise<SongDetail | null> {
-  const key = await resolveSongKey(username, recordingMbid);
-  if (!key) return null;
-  const { track_name, artist_name } = key;
+  let track_name: string | undefined = hints.trackName;
+  let artist_name: string | undefined = hints.artistName;
+  if (!track_name || !artist_name) {
+    const key = await resolveSongKey(username, recordingMbid);
+    if (!key) return null;
+    track_name = key.track_name;
+    artist_name = key.artist_name;
+  }
 
   const headerRes = await withRetry(() =>
     db.execute<SongHeader>(sql`

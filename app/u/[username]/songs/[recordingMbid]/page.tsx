@@ -9,11 +9,17 @@ export const revalidate = 0;
 
 export default async function SongDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ username: string; recordingMbid: string }>;
+  searchParams: Promise<{ name?: string; artist?: string }>;
 }) {
   const { username, recordingMbid } = await params;
-  const detail = await songDetail(username, recordingMbid);
+  const sp = await searchParams;
+  const detail = await songDetail(username, recordingMbid, {
+    trackName: sp.name,
+    artistName: sp.artist,
+  });
   if (!detail) notFound();
 
   const { header, years, albums, recent } = detail;
@@ -87,7 +93,7 @@ export default async function SongDetailPage({
                 <li key={`${a.release_name}-${i}`}>
                   {a.release_mbid ? (
                     <Link
-                      href={`/u/${encodeURIComponent(username)}/albums/${a.release_mbid}`}
+                      href={`/u/${encodeURIComponent(username)}/albums/${a.release_mbid}?${new URLSearchParams({ name: a.release_name, artist: header.artist_name })}`}
                       className="flex items-center gap-3 py-2.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded"
                     >
                       {inner}
