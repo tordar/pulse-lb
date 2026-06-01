@@ -21,10 +21,10 @@ export function YearTabs({ years, active }: { years: number[]; active: number })
           <button
             key={y}
             onClick={() => setYear(y)}
-            className={`px-3 py-1.5 rounded text-sm font-medium tabular-nums transition-colors ${
+            className={`px-3.5 py-1.5 rounded-md text-sm font-medium tabular-nums transition-colors ${
               isActive
                 ? "bg-primary text-primary-foreground"
-                : "bg-muted text-foreground/80 hover:bg-muted"
+                : "bg-card border border-border text-foreground/80 hover:bg-muted"
             }`}
           >
             {y}

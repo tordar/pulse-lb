@@ -10,12 +10,12 @@ const TABS = [
   { slug: "artists", label: "Artists" },
 ] as const;
 
-export function UserNav({ username }: { username: string }) {
+export function PillNav({ username }: { username: string }) {
   const pathname = usePathname();
   const base = `/u/${encodeURIComponent(username)}`;
 
   return (
-    <nav className="flex items-center gap-1 border-b border-border">
+    <nav className="inline-flex items-center bg-card border border-card-border rounded-full p-1 shadow-sm">
       {TABS.map((t) => {
         const href = `${base}/${t.slug}`;
         const active = pathname === href || pathname?.startsWith(`${href}/`);
@@ -23,10 +23,10 @@ export function UserNav({ username }: { username: string }) {
           <Link
             key={t.slug}
             href={href}
-            className={`px-3 py-2 text-sm border-b-2 transition-colors ${
+            className={`px-5 py-1.5 rounded-full text-sm font-medium transition-colors ${
               active
-                ? "border-black dark:border-white font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                ? "bg-primary text-primary-foreground"
+                : "text-foreground/80 hover:bg-muted"
             }`}
           >
             {t.label}

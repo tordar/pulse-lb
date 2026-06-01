@@ -329,7 +329,7 @@ function YearRow({
 
 function StatTile({ value, label, big = false }: { value: string; label: string; big?: boolean }) {
   return (
-    <div className="rounded-lg border border-border p-4">
+    <div className="rounded-lg border border-card-border bg-card p-4">
       <div className={`tabular-nums font-semibold ${big ? "text-2xl" : "text-xl"}`}>{value}</div>
       <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">{label}</div>
     </div>
@@ -338,7 +338,7 @@ function StatTile({ value, label, big = false }: { value: string; label: string;
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-border p-4 space-y-3">
+    <div className="rounded-lg border border-card-border bg-card p-4 space-y-3">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
       {children}
     </div>

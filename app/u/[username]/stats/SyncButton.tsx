@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
 
 type JobStatus = {
   status: "never" | "queued" | "running" | "done" | "error";
@@ -56,14 +57,10 @@ export function SyncButton({ username }: { username: string }) {
           +{progress.added.toLocaleString()}
         </span>
       )}
-      {error && <span className="text-sm text-red-600">{error}</span>}
-      <button
-        onClick={trigger}
-        disabled={running}
-        className="px-4 py-2 bg-primary text-primary-foreground rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-      >
+      {error && <span className="text-sm text-destructive">{error}</span>}
+      <Button onClick={trigger} disabled={running} size="sm">
         {running ? "Syncing…" : "Sync now"}
-      </button>
+      </Button>
     </div>
   );
 }
