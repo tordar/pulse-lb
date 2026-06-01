@@ -75,23 +75,42 @@ export default async function AlbumDetailPage({
           Songs <span className="text-gray-400 font-normal normal-case">({tracks.length})</span>
         </h2>
         <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
-          {tracks.map((t, i) => (
-            <li key={`${t.recording_mbid ?? t.track_name}-${i}`} className="flex items-center gap-3 py-2.5">
-              <span className="w-8 text-right text-sm text-gray-400 tabular-nums">{i + 1}</span>
-              <div className="flex-1 min-w-0">
-                <div className="truncate text-sm font-medium">{t.track_name}</div>
-                <div className="text-xs text-gray-500">first played {fmtDate(t.first_played)}</div>
-              </div>
-              <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400 w-20 text-right">
-                {t.plays.toLocaleString()} plays
-              </span>
-              {t.minutes > 0 && (
-                <span className="shrink-0 text-xs tabular-nums text-gray-400 w-16 text-right">
-                  {fmtHours(t.minutes / 60)}
+          {tracks.map((t, i) => {
+            const songHref = t.recording_mbid
+              ? `/u/${encodeURIComponent(username)}/songs/${t.recording_mbid}`
+              : null;
+            const row = (
+              <>
+                <span className="w-8 text-right text-sm text-gray-400 tabular-nums">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="truncate text-sm font-medium">{t.track_name}</div>
+                  <div className="text-xs text-gray-500">first played {fmtDate(t.first_played)}</div>
+                </div>
+                <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400 w-20 text-right">
+                  {t.plays.toLocaleString()} plays
                 </span>
-              )}
-            </li>
-          ))}
+                {t.minutes > 0 && (
+                  <span className="shrink-0 text-xs tabular-nums text-gray-400 w-16 text-right">
+                    {fmtHours(t.minutes / 60)}
+                  </span>
+                )}
+              </>
+            );
+            return (
+              <li key={`${t.recording_mbid ?? t.track_name}-${i}`}>
+                {songHref ? (
+                  <Link
+                    href={songHref}
+                    className="flex items-center gap-3 py-2.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded"
+                  >
+                    {row}
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-3 py-2.5">{row}</div>
+                )}
+              </li>
+            );
+          })}
         </ol>
       </section>
     </div>

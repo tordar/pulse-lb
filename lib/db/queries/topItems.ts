@@ -19,6 +19,7 @@ export type TopSong = {
   plays: number;
   caa_id: number | null;
   caa_release_mbid: string | null;
+  recording_mbid: string | null;
 };
 
 export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSong>> {
@@ -32,7 +33,8 @@ export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSo
         artist_name,
         COUNT(*)::int AS plays,
         (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
-        (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid
+        (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
+        (array_agg(recording_mbid ORDER BY listened_at DESC) FILTER (WHERE recording_mbid IS NOT NULL))[1] AS recording_mbid
       FROM ${schema.listens}
       WHERE user_name = ${opts.username}
         ${pat ? sql`AND (track_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql``}

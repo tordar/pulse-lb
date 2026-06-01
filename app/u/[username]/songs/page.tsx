@@ -1,7 +1,13 @@
+import Link from "next/link";
 import { topSongs } from "@/lib/db/queries/topItems";
 import { SearchBox } from "@/components/SearchBox";
 import { Pagination } from "@/components/Pagination";
 import { CoverArt } from "@/components/CoverArt";
+
+function songHref(username: string, recordingMbid: string | null): string | null {
+  if (!recordingMbid) return null;
+  return `/u/${encodeURIComponent(username)}/songs/${recordingMbid}`;
+}
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -35,26 +41,43 @@ export default async function SongsPage({
         </p>
       ) : (
         <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
-          {items.map((s, i) => (
-            <li key={`${s.track_name}-${s.artist_name}`} className="flex items-center gap-3 py-2.5">
-              <span className="w-8 text-right text-sm text-gray-400 tabular-nums">
-                {page * 50 + i + 1}
-              </span>
-              <CoverArt
-                art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
-                size={40}
-                alt={s.track_name}
-                className="rounded"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="truncate text-sm font-medium">{s.track_name}</div>
-                <div className="truncate text-xs text-gray-500">{s.artist_name}</div>
-              </div>
-              <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
-                {s.plays.toLocaleString()} plays
-              </span>
-            </li>
-          ))}
+          {items.map((s, i) => {
+            const href = songHref(username, s.recording_mbid);
+            const row = (
+              <>
+                <span className="w-8 text-right text-sm text-gray-400 tabular-nums">
+                  {page * 50 + i + 1}
+                </span>
+                <CoverArt
+                  art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
+                  size={40}
+                  alt={s.track_name}
+                  className="rounded"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="truncate text-sm font-medium">{s.track_name}</div>
+                  <div className="truncate text-xs text-gray-500">{s.artist_name}</div>
+                </div>
+                <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                  {s.plays.toLocaleString()} plays
+                </span>
+              </>
+            );
+            return (
+              <li key={`${s.track_name}-${s.artist_name}`}>
+                {href ? (
+                  <Link
+                    href={href}
+                    className="flex items-center gap-3 py-2.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded"
+                  >
+                    {row}
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-3 py-2.5">{row}</div>
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
 
