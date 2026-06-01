@@ -2,11 +2,11 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-black">
+    <main className="min-h-screen flex items-center justify-center p-6 bg-background">
       <div className="w-full max-w-xl space-y-10">
         <div className="space-y-3">
           <h1 className="text-5xl font-bold tracking-tight">pulse</h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
+          <p className="text-lg text-muted-foreground">
             Your listening history, visualized. Powered by{" "}
             <a href="https://listenbrainz.org" className="underline" target="_blank" rel="noreferrer">
               ListenBrainz
@@ -26,11 +26,11 @@ export default function Home() {
               required
               autoFocus
               placeholder="e.g. tordar"
-              className="flex-1 border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 rounded-md px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+              className="flex-1 border border-border bg-card rounded-md px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary"
             />
             <button
               type="submit"
-              className="px-6 py-3 bg-black text-white dark:bg-white dark:text-black rounded-md font-medium hover:opacity-90 transition-opacity"
+              className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:opacity-90 transition-opacity"
             >
               View
             </button>
@@ -38,7 +38,7 @@ export default function Home() {
         </form>
 
         <div className="space-y-2 text-sm">
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-muted-foreground">
             First time? You&apos;ll need a ListenBrainz account with your listening history imported.
           </p>
           <Link href="/onboarding" className="inline-block font-medium underline underline-offset-4">
@@ -46,7 +46,7 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="pt-8 border-t border-gray-200 dark:border-gray-800 space-y-1 text-sm text-gray-500">
+        <div className="pt-8 border-t border-border space-y-1 text-sm text-muted-foreground">
           <p>
             Curious what it looks like?{" "}
             <Link href="/u/tordar/stats" className="underline">

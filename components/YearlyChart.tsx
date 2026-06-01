@@ -12,18 +12,34 @@ export function YearlyChart({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
-        <XAxis dataKey="year" tick={{ fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#e5e7eb" }} />
-        <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
+        <XAxis
+          dataKey="year"
+          tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+          tickLine={false}
+          axisLine={{ stroke: "var(--color-border)" }}
+        />
+        <YAxis
+          tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+          tickLine={false}
+          axisLine={false}
+          width={40}
+        />
         <Tooltip
-          cursor={{ fill: "rgba(0,0,0,0.04)" }}
-          contentStyle={{ fontSize: 12, borderRadius: 6, border: "1px solid #e5e7eb" }}
+          cursor={{ fill: "rgba(255,255,255,0.04)" }}
+          contentStyle={{
+            fontSize: 12,
+            borderRadius: 8,
+            border: "1px solid var(--color-border)",
+            backgroundColor: "var(--color-card)",
+            color: "var(--color-foreground)",
+          }}
           formatter={(v, _name, item) => {
             const p = item?.payload as { plays: number; hours: number } | undefined;
             return [`${v} plays · ${p?.hours ?? 0}h`, item?.payload?.year];
           }}
           labelFormatter={() => ""}
         />
-        <Bar dataKey="plays" fill="#0f172a" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="plays" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

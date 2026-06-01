@@ -23,8 +23,8 @@ export function YearTabs({ years, active }: { years: number[]; active: number })
             onClick={() => setYear(y)}
             className={`px-3 py-1.5 rounded text-sm font-medium tabular-nums transition-colors ${
               isActive
-                ? "bg-emerald-500 text-white"
-                : "bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-foreground/80 hover:bg-muted"
             }`}
           >
             {y}

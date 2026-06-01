@@ -18,7 +18,7 @@ export function CoverArt({
   if (!url) {
     return (
       <div
-        className={`shrink-0 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-800 dark:to-zinc-700 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs ${className}`}
+        className={`shrink-0 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-800 dark:to-zinc-700 flex items-center justify-center text-subtle-foreground dark:text-gray-600 text-xs ${className}`}
         style={{ width: size, height: size }}
         aria-label={alt}
       >
@@ -32,7 +32,7 @@ export function CoverArt({
       alt={alt}
       width={size}
       height={size}
-      className={`shrink-0 bg-gray-100 dark:bg-zinc-900 ${className}`}
+      className={`shrink-0 bg-muted ${className}`}
       unoptimized
     />
   );

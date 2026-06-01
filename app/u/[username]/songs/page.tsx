@@ -42,16 +42,16 @@ export default async function SongsPage({
       </div>
 
       {items.length === 0 ? (
-        <p className="py-12 text-center text-gray-500 text-sm">
+        <p className="py-12 text-center text-muted-foreground text-sm">
           {query ? `No songs match "${query}".` : "No songs yet — try syncing."}
         </p>
       ) : (
-        <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
+        <ol className="divide-y divide-border">
           {items.map((s, i) => {
             const href = songHref(username, s.recording_mbid, s.track_name, s.artist_name);
             const row = (
               <>
-                <span className="w-8 text-right text-sm text-gray-400 tabular-nums">
+                <span className="w-8 text-right text-sm text-subtle-foreground tabular-nums">
                   {page * 50 + i + 1}
                 </span>
                 <CoverArt
@@ -62,9 +62,9 @@ export default async function SongsPage({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-sm font-medium">{s.track_name}</div>
-                  <div className="truncate text-xs text-gray-500">{s.artist_name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{s.artist_name}</div>
                 </div>
-                <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
                   {s.plays.toLocaleString()} plays
                 </span>
               </>
@@ -74,7 +74,7 @@ export default async function SongsPage({
                 {href ? (
                   <Link
                     href={href}
-                    className="flex items-center gap-3 py-2.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded"
+                    className="flex items-center gap-3 py-2.5 hover:bg-muted -mx-2 px-2 rounded"
                   >
                     {row}
                   </Link>

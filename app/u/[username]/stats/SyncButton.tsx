@@ -47,12 +47,12 @@ export function SyncButton({ username }: { username: string }) {
   return (
     <div className="flex items-center gap-3">
       {running && progress && (
-        <span className="font-mono text-sm text-gray-600 tabular-nums">
+        <span className="text-sm text-muted-foreground tabular-nums">
           {progress.added.toLocaleString()} listens · {progress.pages} pages
         </span>
       )}
       {!running && progress && progress.added > 0 && (
-        <span className="font-mono text-sm text-green-600">
+        <span className="text-sm text-primary">
           +{progress.added.toLocaleString()}
         </span>
       )}
@@ -60,7 +60,7 @@ export function SyncButton({ username }: { username: string }) {
       <button
         onClick={trigger}
         disabled={running}
-        className="px-4 py-2 bg-black text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-4 py-2 bg-primary text-primary-foreground rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {running ? "Syncing…" : "Sync now"}
       </button>

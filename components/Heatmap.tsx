@@ -45,14 +45,14 @@ export function Heatmap({ days, max }: { days: Day[]; max?: number }) {
           {Array.from({ length: weeks }).map((_, w) => {
             const m = monthLabels.find((l) => l.col === w);
             return (
-              <div key={w} style={{ width: cellSize + gap, fontSize: 10 }} className="text-gray-500 mb-1">
+              <div key={w} style={{ width: cellSize + gap, fontSize: 10 }} className="text-muted-foreground mb-1">
                 {m?.label ?? ""}
               </div>
             );
           })}
         </div>
         <div className="flex gap-[2px]">
-          <div className="flex flex-col gap-[2px] mr-2 text-[10px] text-gray-500" style={{ width: 24 }}>
+          <div className="flex flex-col gap-[2px] mr-2 text-[10px] text-muted-foreground" style={{ width: 24 }}>
             {["", "Mon", "", "Wed", "", "Fri", ""].map((d, i) => (
               <div key={i} style={{ height: cellSize, lineHeight: `${cellSize}px` }}>
                 {d}
@@ -76,7 +76,7 @@ export function Heatmap({ days, max }: { days: Day[]; max?: number }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 mt-3 text-[10px] text-gray-500">
+        <div className="flex items-center justify-end gap-2 mt-3 text-[10px] text-muted-foreground">
           <span>Less</span>
           {[0, 1, 2, 3, 4].map((lvl) => (
             <span key={lvl} className={`w-3 h-3 rounded-sm ${colorFor(lvl)}`} />
@@ -107,7 +107,7 @@ function colorFor(level: number): string {
     case -1:
       return "bg-transparent";
     case 0:
-      return "bg-gray-100 dark:bg-zinc-800/60";
+      return "bg-muted/60";
     case 1:
       return "bg-emerald-200 dark:bg-emerald-900/60";
     case 2:

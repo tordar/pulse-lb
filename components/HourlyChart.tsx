@@ -14,20 +14,31 @@ export function HourlyChart({
       <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
         <XAxis
           dataKey="hour"
-          tick={{ fontSize: 11 }}
+          tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
           tickLine={false}
-          axisLine={{ stroke: "#e5e7eb" }}
+          axisLine={{ stroke: "var(--color-border)" }}
           tickFormatter={(h) => (h % 3 === 0 ? `${h}:00` : "")}
           interval={0}
         />
-        <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
+        <YAxis
+          tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+          tickLine={false}
+          axisLine={false}
+          width={40}
+        />
         <Tooltip
-          cursor={{ fill: "rgba(0,0,0,0.04)" }}
-          contentStyle={{ fontSize: 12, borderRadius: 6, border: "1px solid #e5e7eb" }}
+          cursor={{ fill: "rgba(255,255,255,0.04)" }}
+          contentStyle={{
+            fontSize: 12,
+            borderRadius: 8,
+            border: "1px solid var(--color-border)",
+            backgroundColor: "var(--color-card)",
+            color: "var(--color-foreground)",
+          }}
           formatter={(v) => [`${v} plays`, "plays"]}
           labelFormatter={(h) => `${String(h).padStart(2, "0")}:00`}
         />
-        <Bar dataKey="plays" fill="#0f172a" radius={[3, 3, 0, 0]} />
+        <Bar dataKey="plays" fill="var(--color-primary)" radius={[3, 3, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

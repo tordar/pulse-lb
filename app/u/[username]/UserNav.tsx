@@ -15,7 +15,7 @@ export function UserNav({ username }: { username: string }) {
   const base = `/u/${encodeURIComponent(username)}`;
 
   return (
-    <nav className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-800">
+    <nav className="flex items-center gap-1 border-b border-border">
       {TABS.map((t) => {
         const href = `${base}/${t.slug}`;
         const active = pathname === href || pathname?.startsWith(`${href}/`);
@@ -26,7 +26,7 @@ export function UserNav({ username }: { username: string }) {
             className={`px-3 py-2 text-sm border-b-2 transition-colors ${
               active
                 ? "border-black dark:border-white font-medium"
-                : "border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             {t.label}

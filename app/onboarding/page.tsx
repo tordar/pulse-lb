@@ -16,7 +16,7 @@ const STEPS: Step[] = [
         <strong>5–30 days</strong> to prepare the export and emails you a ZIP when it&apos;s ready.
         <br />
         <br />
-        <span className="text-gray-500 text-sm">
+        <span className="text-muted-foreground text-sm">
           (If you only want your last ~50 plays you can skip this — but most people want the full history,
           and the export is the only way to get it.)
         </span>
@@ -44,7 +44,7 @@ const STEPS: Step[] = [
         layer pulse reads from.
         <br />
         <br />
-        <span className="text-gray-500 text-sm">
+        <span className="text-muted-foreground text-sm">
           LB also has a &quot;connect Spotify&quot; option that scrobbles future plays automatically — worth
           enabling so your data stays current.
         </span>
@@ -89,11 +89,11 @@ export default async function OnboardingPage({
   return (
     <main className="min-h-screen p-6 md:p-10 max-w-3xl mx-auto">
       <div className="mb-10 space-y-3">
-        <Link href="/" className="text-sm text-gray-500 underline">
+        <Link href="/" className="text-sm text-muted-foreground underline">
           ← pulse
         </Link>
         <h1 className="text-4xl font-bold tracking-tight">Set up pulse</h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <p className="text-muted-foreground">
           Four steps. The first one (Spotify&apos;s export) is the only slow part — 5–30 days while you
           wait for their email. The rest takes minutes.
         </p>
@@ -104,12 +104,12 @@ export default async function OnboardingPage({
       <ol className="space-y-8">
         {STEPS.map((s, i) => (
           <li key={i} className="flex gap-5">
-            <div className="shrink-0 w-9 h-9 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center font-semibold text-sm">
+            <div className="shrink-0 w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
               {i + 1}
             </div>
             <div className="space-y-2 pt-1">
               <h2 className="text-xl font-semibold">{s.title}</h2>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{s.body}</p>
+              <p className="text-foreground/80 leading-relaxed">{s.body}</p>
               {s.link && (
                 <a
                   href={s.link.href}
@@ -125,7 +125,7 @@ export default async function OnboardingPage({
         ))}
       </ol>
 
-      <div className="mt-16 pt-8 border-t border-gray-200 dark:border-gray-800 text-sm text-gray-500 space-y-2">
+      <div className="mt-16 pt-8 border-t border-border text-sm text-muted-foreground space-y-2">
         <p>
           Already have a ListenBrainz account with data?{" "}
           <Link href="/" className="underline">

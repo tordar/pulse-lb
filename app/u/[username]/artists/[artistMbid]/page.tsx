@@ -24,16 +24,16 @@ export default async function ArtistDetailPage({
       <div className="text-sm">
         <Link
           href={`/u/${encodeURIComponent(username)}/artists`}
-          className="text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
+          className="text-muted-foreground hover:text-foreground"
         >
           ← Artists
         </Link>
       </div>
 
       <header className="space-y-3">
-        <p className="text-sm text-gray-500">Artist</p>
+        <p className="text-sm text-muted-foreground">Artist</p>
         <h1 className="text-4xl font-bold leading-tight">{header.artist_name}</h1>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600 dark:text-gray-400">
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
           <Stat label="Plays" value={header.total_plays.toLocaleString()} />
           <Stat label="Listening time" value={fmtHours(totalHours)} />
           <Stat label="Songs" value={header.distinct_tracks.toLocaleString()} />
@@ -45,7 +45,7 @@ export default async function ArtistDetailPage({
 
       {years.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Plays by year
           </h2>
           <PlaysPerYearChart data={years} metric="plays" />
@@ -54,8 +54,8 @@ export default async function ArtistDetailPage({
 
       {topAlbums.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-            Top albums <span className="text-gray-400 font-normal normal-case">({topAlbums.length})</span>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Top albums <span className="text-subtle-foreground font-normal normal-case">({topAlbums.length})</span>
           </h2>
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {topAlbums.map((a) => {
@@ -72,7 +72,7 @@ export default async function ArtistDetailPage({
                   />
                   <div className="space-y-0.5">
                     <div className="truncate text-sm font-medium">{a.release_name}</div>
-                    <div className="text-xs text-gray-400 tabular-nums">{a.plays.toLocaleString()} plays</div>
+                    <div className="text-xs text-subtle-foreground tabular-nums">{a.plays.toLocaleString()} plays</div>
                   </div>
                 </>
               );
@@ -88,17 +88,17 @@ export default async function ArtistDetailPage({
 
       {topSongs.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-            Top songs <span className="text-gray-400 font-normal normal-case">({topSongs.length})</span>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Top songs <span className="text-subtle-foreground font-normal normal-case">({topSongs.length})</span>
           </h2>
-          <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
+          <ol className="divide-y divide-border">
             {topSongs.map((s, i) => {
               const href = s.recording_mbid
                 ? `/u/${encodeURIComponent(username)}/songs/${s.recording_mbid}?${new URLSearchParams({ name: s.track_name, artist: header.artist_name })}`
                 : null;
               const row = (
                 <>
-                  <span className="w-8 text-right text-sm text-gray-400 tabular-nums">{i + 1}</span>
+                  <span className="w-8 text-right text-sm text-subtle-foreground tabular-nums">{i + 1}</span>
                   <CoverArt
                     art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
                     size={40}
@@ -108,7 +108,7 @@ export default async function ArtistDetailPage({
                   <div className="flex-1 min-w-0">
                     <div className="truncate text-sm font-medium">{s.track_name}</div>
                   </div>
-                  <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                  <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
                     {s.plays.toLocaleString()} plays
                   </span>
                 </>
@@ -118,7 +118,7 @@ export default async function ArtistDetailPage({
                   {href ? (
                     <Link
                       href={href}
-                      className="flex items-center gap-3 py-2.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded"
+                      className="flex items-center gap-3 py-2.5 hover:bg-muted -mx-2 px-2 rounded"
                     >
                       {row}
                     </Link>
@@ -134,17 +134,17 @@ export default async function ArtistDetailPage({
 
       {recent.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Recent listens
           </h2>
-          <ul className="divide-y divide-gray-100 dark:divide-zinc-800 font-mono text-sm">
+          <ul className="divide-y divide-border text-sm">
             {recent.map((r, i) => (
               <li key={i} className="flex gap-3 py-1.5">
-                <span className="text-gray-400 tabular-nums w-36">{fmtDateTime(r.listened_at)}</span>
+                <span className="text-subtle-foreground tabular-nums w-36">{fmtDateTime(r.listened_at)}</span>
                 <span className="truncate">
                   {r.track_name}
                   {r.release_name && (
-                    <span className="text-gray-400"> · {r.release_name}</span>
+                    <span className="text-subtle-foreground"> · {r.release_name}</span>
                   )}
                 </span>
               </li>
@@ -159,8 +159,8 @@ export default async function ArtistDetailPage({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <span>
-      <strong className="font-medium text-gray-900 dark:text-gray-100">{value}</strong>{" "}
-      <span className="text-gray-500">{label}</span>
+      <strong className="font-medium text-foreground">{value}</strong>{" "}
+      <span className="text-muted-foreground">{label}</span>
     </span>
   );
 }

@@ -13,20 +13,31 @@ export function PlaysPerYearChart({
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
-        <XAxis dataKey="year" tick={{ fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#e5e7eb" }} />
+        <XAxis
+          dataKey="year"
+          tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+          tickLine={false}
+          axisLine={{ stroke: "var(--color-border)" }}
+        />
         <YAxis
-          tick={{ fontSize: 11 }}
+          tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
           tickLine={false}
           axisLine={false}
           width={36}
           allowDecimals={metric === "hours"}
         />
         <Tooltip
-          cursor={{ fill: "rgba(0,0,0,0.04)" }}
-          contentStyle={{ fontSize: 12, borderRadius: 6, border: "1px solid #e5e7eb" }}
+          cursor={{ fill: "rgba(255,255,255,0.04)" }}
+          contentStyle={{
+            fontSize: 12,
+            borderRadius: 8,
+            border: "1px solid var(--color-border)",
+            backgroundColor: "var(--color-card)",
+            color: "var(--color-foreground)",
+          }}
           formatter={(v) => [metric === "hours" ? `${v} h` : `${v} plays`, metric]}
         />
-        <Bar dataKey={key} fill="#0f172a" radius={[4, 4, 0, 0]} />
+        <Bar dataKey={key} fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

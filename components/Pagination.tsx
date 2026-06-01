@@ -21,15 +21,15 @@ export function Pagination({
   return (
     <div className="flex items-center justify-between text-sm pt-4">
       {page > 0 ? (
-        <Link href={mkUrl(page - 1)} className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-100 dark:hover:bg-zinc-900">
+        <Link href={mkUrl(page - 1)} className="px-3 py-1.5 border border-border rounded hover:bg-muted">
           ← Previous
         </Link>
       ) : (
         <span />
       )}
-      <span className="text-gray-500">Page {page + 1}</span>
+      <span className="text-muted-foreground">Page {page + 1}</span>
       {hasMore ? (
-        <Link href={mkUrl(page + 1)} className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-100 dark:hover:bg-zinc-900">
+        <Link href={mkUrl(page + 1)} className="px-3 py-1.5 border border-border rounded hover:bg-muted">
           Next →
         </Link>
       ) : (

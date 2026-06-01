@@ -18,16 +18,16 @@ export function ViewToggle({ current }: { current: View }) {
   }
 
   return (
-    <div className="inline-flex border border-gray-300 dark:border-gray-700 rounded-md overflow-hidden">
+    <div className="inline-flex border border-border rounded-md overflow-hidden">
       <button
         onClick={() => setView("grid")}
-        className={`px-3 py-1.5 text-sm ${current === "grid" ? "bg-black text-white dark:bg-white dark:text-black" : ""}`}
+        className={`px-3 py-1.5 text-sm ${current === "grid" ? "bg-primary text-primary-foreground" : ""}`}
       >
         Grid
       </button>
       <button
         onClick={() => setView("list")}
-        className={`px-3 py-1.5 text-sm border-l border-gray-300 dark:border-gray-700 ${current === "list" ? "bg-black text-white dark:bg-white dark:text-black" : ""}`}
+        className={`px-3 py-1.5 text-sm border-l border-border ${current === "list" ? "bg-primary text-primary-foreground" : ""}`}
       >
         List
       </button>

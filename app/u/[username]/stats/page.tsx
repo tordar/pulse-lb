@@ -73,7 +73,7 @@ export default async function StatsPage({
   return (
     <div className="space-y-8">
       <header className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           {state?.lastSyncedAt
             ? <>Last synced {relTime(state.lastSyncedAt)}</>
             : <>Not synced yet</>}
@@ -82,7 +82,7 @@ export default async function StatsPage({
       </header>
 
       {empty ? (
-        <p className="py-16 text-center text-gray-500 text-sm">
+        <p className="py-16 text-center text-muted-foreground text-sm">
           No listens yet. Click sync to backfill.
         </p>
       ) : (
@@ -112,13 +112,13 @@ export default async function StatsPage({
               <div className="flex items-baseline gap-6">
                 <div>
                   <div className="text-3xl font-semibold tabular-nums">{today.plays.toLocaleString()}</div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">plays</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">plays</div>
                 </div>
                 <div>
                   <div className="text-3xl font-semibold tabular-nums">
                     {fmtHours(today.effective_ms / 1000 / 3600)}
                   </div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">listening time</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">listening time</div>
                 </div>
               </div>
             </Card>
@@ -128,7 +128,7 @@ export default async function StatsPage({
                 <div className="text-sm">
                   Listening time is estimated from MusicBrainz track lengths for plays missing duration. Coverage grows as you click into more albums and artists (the cache fills opportunistically).
                 </div>
-                <div className="text-xs text-gray-500 tabular-nums pt-1">
+                <div className="text-xs text-muted-foreground tabular-nums pt-1">
                   {allTime.duration_coverage_pct?.toFixed(1) ?? "0"}% of your plays have a known duration.
                 </div>
               </div>
@@ -136,19 +136,19 @@ export default async function StatsPage({
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Listening by year</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Listening by year</h2>
             <YearlyChart data={yearly} height={260} />
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-              When you listen <span className="text-gray-400 font-normal normal-case">(hour of day, all-time)</span>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              When you listen <span className="text-subtle-foreground font-normal normal-case">(hour of day, all-time)</span>
             </h2>
             <HourlyChart data={hourly} height={200} />
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Last 365 days
             </h2>
             <Heatmap days={daily} />
@@ -157,7 +157,7 @@ export default async function StatsPage({
           {selectedYear !== null && years.length > 0 && (
             <section className="space-y-4">
               <div className="flex items-baseline justify-between gap-3 flex-wrap">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   Top by year
                 </h2>
               </div>
@@ -238,17 +238,17 @@ export default async function StatsPage({
           )}
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Recent listens
             </h2>
-            <ul className="divide-y divide-gray-100 dark:divide-zinc-800 font-mono text-sm">
+            <ul className="divide-y divide-border text-sm">
               {recentRows.map((r, i) => (
                 <li key={i} className="flex gap-3 py-1.5">
-                  <span className="text-gray-400 tabular-nums w-36">{fmtDateTime(r.listened_at)}</span>
+                  <span className="text-subtle-foreground tabular-nums w-36">{fmtDateTime(r.listened_at)}</span>
                   <span className="truncate">
                     {r.track_name}
-                    <span className="text-gray-400"> · {r.artist_name}</span>
-                    {r.release_name && <span className="text-gray-400"> · {r.release_name}</span>}
+                    <span className="text-subtle-foreground"> · {r.artist_name}</span>
+                    {r.release_name && <span className="text-subtle-foreground"> · {r.release_name}</span>}
                   </span>
                 </li>
               ))}
@@ -263,14 +263,14 @@ export default async function StatsPage({
 function YearColumn({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
       <ol className="space-y-2">{children}</ol>
     </div>
   );
 }
 
 function Empty() {
-  return <li className="text-sm text-gray-400 italic">no plays</li>;
+  return <li className="text-sm text-subtle-foreground italic">no plays</li>;
 }
 
 function YearRow({
@@ -295,7 +295,7 @@ function YearRow({
   const hours = ms / 1000 / 3600;
   const inner = (
     <>
-      <span className="shrink-0 w-7 h-7 rounded bg-gray-100 dark:bg-zinc-800 text-xs text-gray-500 tabular-nums grid place-items-center">
+      <span className="shrink-0 w-7 h-7 rounded bg-muted text-xs text-muted-foreground tabular-nums grid place-items-center">
         {rank}
       </span>
       <CoverArt
@@ -306,8 +306,8 @@ function YearRow({
       />
       <div className="flex-1 min-w-0">
         <div className="truncate text-sm font-medium">{title}</div>
-        <div className="truncate text-xs text-gray-500">{subtitle}</div>
-        <div className="text-xs text-gray-400 tabular-nums pt-0.5">
+        <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
+        <div className="text-xs text-subtle-foreground tabular-nums pt-0.5">
           ▶ {plays.toLocaleString()}
           {hours > 0 && <span>  ⏱ {fmtHours(hours)}</span>}
         </div>
@@ -317,7 +317,7 @@ function YearRow({
   return (
     <li>
       {href ? (
-        <Link href={href} className="flex items-center gap-3 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded">
+        <Link href={href} className="flex items-center gap-3 py-1.5 hover:bg-muted -mx-2 px-2 rounded">
           {inner}
         </Link>
       ) : (
@@ -329,17 +329,17 @@ function YearRow({
 
 function StatTile({ value, label, big = false }: { value: string; label: string; big?: boolean }) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-zinc-800 p-4">
+    <div className="rounded-lg border border-border p-4">
       <div className={`tabular-nums font-semibold ${big ? "text-2xl" : "text-xl"}`}>{value}</div>
-      <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">{label}</div>
+      <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">{label}</div>
     </div>
   );
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-zinc-800 p-4 space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
+    <div className="rounded-lg border border-border p-4 space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
       {children}
     </div>
   );

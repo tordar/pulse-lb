@@ -12,10 +12,10 @@ export default async function UserLayout({
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-gray-200 dark:border-gray-800">
+      <header className="border-b border-border">
         <div className="max-w-6xl mx-auto px-6 pt-4">
           <div className="flex items-baseline gap-3 mb-3">
-            <Link href="/" className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-gray-100">
+            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
               ← pulse
             </Link>
             <h1 className="text-2xl font-bold">{username}</h1>

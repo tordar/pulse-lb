@@ -38,7 +38,7 @@ export default async function AlbumDetailPage({
   return (
     <div className="space-y-8">
       <div className="text-sm">
-        <Link href={`/u/${encodeURIComponent(username)}/albums`} className="text-gray-500 hover:text-gray-900 dark:hover:text-gray-100">
+        <Link href={`/u/${encodeURIComponent(username)}/albums`} className="text-muted-foreground hover:text-foreground">
           ← Albums
         </Link>
       </div>
@@ -51,10 +51,10 @@ export default async function AlbumDetailPage({
           className="rounded-lg shadow-md"
         />
         <div className="flex-1 space-y-2">
-          <p className="text-sm text-gray-500">Album</p>
+          <p className="text-sm text-muted-foreground">Album</p>
           <h1 className="text-3xl font-bold leading-tight">{header.release_name}</h1>
-          <p className="text-lg text-gray-700 dark:text-gray-300">{header.artist_name}</p>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm pt-2 text-gray-600 dark:text-gray-400">
+          <p className="text-lg text-foreground/80">{header.artist_name}</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm pt-2 text-muted-foreground">
             <Stat label="Plays" value={header.total_plays.toLocaleString()} />
             <Stat label="Listening time" value={fmtHours(totalHours)} />
             <Stat
@@ -72,7 +72,7 @@ export default async function AlbumDetailPage({
 
       {years.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Plays by year
           </h2>
           <PlaysPerYearChart data={years} metric="plays" />
@@ -80,26 +80,26 @@ export default async function AlbumDetailPage({
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-          Songs <span className="text-gray-400 font-normal normal-case">({tracks.length})</span>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Songs <span className="text-subtle-foreground font-normal normal-case">({tracks.length})</span>
         </h2>
-        <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
+        <ol className="divide-y divide-border">
           {tracks.map((t, i) => {
             const songHref = t.recording_mbid
               ? `/u/${encodeURIComponent(username)}/songs/${t.recording_mbid}?${new URLSearchParams({ name: t.track_name, artist: header.artist_name })}`
               : null;
             const row = (
               <>
-                <span className="w-8 text-right text-sm text-gray-400 tabular-nums">{i + 1}</span>
+                <span className="w-8 text-right text-sm text-subtle-foreground tabular-nums">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-sm font-medium">{t.track_name}</div>
-                  <div className="text-xs text-gray-500">first played {fmtDate(t.first_played)}</div>
+                  <div className="text-xs text-muted-foreground">first played {fmtDate(t.first_played)}</div>
                 </div>
-                <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400 w-20 text-right">
+                <span className="shrink-0 text-sm tabular-nums text-muted-foreground w-20 text-right">
                   {t.plays.toLocaleString()} plays
                 </span>
                 {t.minutes > 0 && (
-                  <span className="shrink-0 text-xs tabular-nums text-gray-400 w-16 text-right">
+                  <span className="shrink-0 text-xs tabular-nums text-subtle-foreground w-16 text-right">
                     {fmtHours(t.minutes / 60)}
                   </span>
                 )}
@@ -110,7 +110,7 @@ export default async function AlbumDetailPage({
                 {songHref ? (
                   <Link
                     href={songHref}
-                    className="flex items-center gap-3 py-2.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded"
+                    className="flex items-center gap-3 py-2.5 hover:bg-muted -mx-2 px-2 rounded"
                   >
                     {row}
                   </Link>
@@ -129,8 +129,8 @@ export default async function AlbumDetailPage({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <span>
-      <strong className="font-medium text-gray-900 dark:text-gray-100">{value}</strong>{" "}
-      <span className="text-gray-500">{label}</span>
+      <strong className="font-medium text-foreground">{value}</strong>{" "}
+      <span className="text-muted-foreground">{label}</span>
     </span>
   );
 }

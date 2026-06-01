@@ -33,7 +33,7 @@ export default async function SongDetailPage({
       <div className="text-sm">
         <Link
           href={`/u/${encodeURIComponent(username)}/songs`}
-          className="text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
+          className="text-muted-foreground hover:text-foreground"
         >
           ← Songs
         </Link>
@@ -47,10 +47,10 @@ export default async function SongDetailPage({
           className="rounded-lg shadow-md"
         />
         <div className="flex-1 space-y-2">
-          <p className="text-sm text-gray-500">Song</p>
+          <p className="text-sm text-muted-foreground">Song</p>
           <h1 className="text-3xl font-bold leading-tight">{header.track_name}</h1>
-          <p className="text-lg text-gray-700 dark:text-gray-300">{header.artist_name}</p>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm pt-2 text-gray-600 dark:text-gray-400">
+          <p className="text-lg text-foreground/80">{header.artist_name}</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm pt-2 text-muted-foreground">
             <Stat label="Plays" value={header.total_plays.toLocaleString()} />
             <Stat label="Listening time" value={fmtHours(totalHours)} />
             <Stat label="First played" value={fmtDate(header.first_played)} />
@@ -64,7 +64,7 @@ export default async function SongDetailPage({
 
       {years.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Plays by year
           </h2>
           <PlaysPerYearChart data={years} metric="plays" />
@@ -73,18 +73,18 @@ export default async function SongDetailPage({
 
       {albums.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-            On albums <span className="text-gray-400 font-normal normal-case">({albums.length})</span>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            On albums <span className="text-subtle-foreground font-normal normal-case">({albums.length})</span>
           </h2>
-          <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
+          <ol className="divide-y divide-border">
             {albums.map((a, i) => {
               const inner = (
                 <>
-                  <span className="w-8 text-right text-sm text-gray-400 tabular-nums">{i + 1}</span>
+                  <span className="w-8 text-right text-sm text-subtle-foreground tabular-nums">{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <div className="truncate text-sm font-medium">{a.release_name}</div>
                   </div>
-                  <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                  <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
                     {a.plays.toLocaleString()} plays
                   </span>
                 </>
@@ -94,7 +94,7 @@ export default async function SongDetailPage({
                   {a.release_mbid ? (
                     <Link
                       href={`/u/${encodeURIComponent(username)}/albums/${a.release_mbid}?${new URLSearchParams({ name: a.release_name, artist: header.artist_name })}`}
-                      className="flex items-center gap-3 py-2.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded"
+                      className="flex items-center gap-3 py-2.5 hover:bg-muted -mx-2 px-2 rounded"
                     >
                       {inner}
                     </Link>
@@ -110,14 +110,14 @@ export default async function SongDetailPage({
 
       {recent.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Recent listens
           </h2>
-          <ul className="divide-y divide-gray-100 dark:divide-zinc-800 font-mono text-sm">
+          <ul className="divide-y divide-border text-sm">
             {recent.map((r, i) => (
               <li key={i} className="flex gap-3 py-1.5">
-                <span className="text-gray-400 tabular-nums w-36">{fmtDateTime(r.listened_at)}</span>
-                <span className="truncate text-gray-600 dark:text-gray-400">
+                <span className="text-subtle-foreground tabular-nums w-36">{fmtDateTime(r.listened_at)}</span>
+                <span className="truncate text-muted-foreground">
                   {r.release_name ?? "—"}
                 </span>
               </li>
@@ -132,8 +132,8 @@ export default async function SongDetailPage({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <span>
-      <strong className="font-medium text-gray-900 dark:text-gray-100">{value}</strong>{" "}
-      <span className="text-gray-500">{label}</span>
+      <strong className="font-medium text-foreground">{value}</strong>{" "}
+      <span className="text-muted-foreground">{label}</span>
     </span>
   );
 }
