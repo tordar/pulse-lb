@@ -1,12 +1,69 @@
-export default function SongsPage() {
-  return <Placeholder title="Top Songs" />;
-}
+import { topSongs } from "@/lib/db/queries/topItems";
+import { SearchBox } from "@/components/SearchBox";
+import { Pagination } from "@/components/Pagination";
+import { CoverArt } from "@/components/CoverArt";
 
-function Placeholder({ title }: { title: string }) {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+type SP = Promise<{ q?: string; page?: string }>;
+
+export default async function SongsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ username: string }>;
+  searchParams: SP;
+}) {
+  const { username } = await params;
+  const sp = await searchParams;
+  const page = Math.max(0, parseInt(sp.page ?? "0", 10) || 0);
+  const query = sp.q ?? "";
+
+  const { items, hasMore } = await topSongs({ username, query, page });
+
   return (
-    <div className="py-16 text-center text-gray-500">
-      <p className="text-2xl font-semibold mb-2">{title}</p>
-      <p className="text-sm">Coming in Phase 2 — paginated list with search, sort, and grid/list views.</p>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-xl font-semibold">Top songs</h2>
+        <SearchBox placeholder="Search songs or artists…" />
+      </div>
+
+      {items.length === 0 ? (
+        <p className="py-12 text-center text-gray-500 text-sm">
+          {query ? `No songs match "${query}".` : "No songs yet — try syncing."}
+        </p>
+      ) : (
+        <ol className="divide-y divide-gray-100 dark:divide-zinc-800">
+          {items.map((s, i) => (
+            <li key={`${s.track_name}-${s.artist_name}`} className="flex items-center gap-3 py-2.5">
+              <span className="w-8 text-right text-sm text-gray-400 tabular-nums">
+                {page * 50 + i + 1}
+              </span>
+              <CoverArt
+                art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
+                size={40}
+                alt={s.track_name}
+                className="rounded"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="truncate text-sm font-medium">{s.track_name}</div>
+                <div className="truncate text-xs text-gray-500">{s.artist_name}</div>
+              </div>
+              <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                {s.plays.toLocaleString()} plays
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <Pagination
+        basePath={`/u/${encodeURIComponent(username)}/songs`}
+        searchParams={sp}
+        page={page}
+        hasMore={hasMore}
+      />
     </div>
   );
 }
