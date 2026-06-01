@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, schema } from "@/lib/db/client";
+import { withRetry } from "@/lib/db/retry";
 import { syncUser } from "@/lib/sync/syncUser";
 
 export const maxDuration = 300;
@@ -14,7 +15,9 @@ export async function POST(
   const { username } = await params;
   const jobId = randomUUID();
 
-  await db.insert(schema.syncJobs).values({ id: jobId, userName: username, status: "queued" });
+  await withRetry(() =>
+    db.insert(schema.syncJobs).values({ id: jobId, userName: username, status: "queued" }),
+  );
 
   after(async () => {
     try {
@@ -61,10 +64,12 @@ export async function GET(
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
-  const latest = await db.query.syncJobs.findFirst({
-    where: eq(schema.syncJobs.userName, username),
-    orderBy: desc(schema.syncJobs.startedAt),
-  });
+  const latest = await withRetry(() =>
+    db.query.syncJobs.findFirst({
+      where: eq(schema.syncJobs.userName, username),
+      orderBy: desc(schema.syncJobs.startedAt),
+    }),
+  );
   if (!latest) return NextResponse.json({ status: "never" });
   return NextResponse.json(latest);
 }

@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
+import { withRetry } from "@/lib/db/retry";
 import { SyncButton } from "./SyncButton";
 
 export const dynamic = "force-dynamic";
@@ -10,39 +11,49 @@ type Row<T> = { rows: T[] };
 export default async function UserPage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
 
-  const [state, totalsRes, topArtistsRes, topAlbumsRes, topSongsRes, recentRes] = await Promise.all([
+  const state = await withRetry(() =>
     db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
+  );
+  const totalsRes = await withRetry(() =>
     db.execute<{ total: number; earliest: string | null; latest: string | null }>(sql`
       SELECT COUNT(*)::int AS total,
              MIN(listened_at) AS earliest,
              MAX(listened_at) AS latest
       FROM ${schema.listens} WHERE user_name = ${username}
     `),
+  );
+  const topArtistsRes = await withRetry(() =>
     db.execute<{ artist_name: string; plays: number }>(sql`
       SELECT artist_name, COUNT(*)::int AS plays
       FROM ${schema.listens}
       WHERE user_name = ${username} AND artist_name IS NOT NULL
       GROUP BY artist_name ORDER BY plays DESC LIMIT 10
     `),
+  );
+  const topAlbumsRes = await withRetry(() =>
     db.execute<{ release_name: string; artist_name: string; plays: number }>(sql`
       SELECT release_name, artist_name, COUNT(*)::int AS plays
       FROM ${schema.listens}
       WHERE user_name = ${username} AND release_name IS NOT NULL
       GROUP BY release_name, artist_name ORDER BY plays DESC LIMIT 10
     `),
+  );
+  const topSongsRes = await withRetry(() =>
     db.execute<{ track_name: string; artist_name: string; plays: number }>(sql`
       SELECT track_name, artist_name, COUNT(*)::int AS plays
       FROM ${schema.listens}
       WHERE user_name = ${username}
       GROUP BY track_name, artist_name ORDER BY plays DESC LIMIT 10
     `),
+  );
+  const recentRes = await withRetry(() =>
     db.execute<{ listened_at: string; track_name: string; artist_name: string; release_name: string | null }>(sql`
       SELECT listened_at, track_name, artist_name, release_name
       FROM ${schema.listens}
       WHERE user_name = ${username}
       ORDER BY listened_at DESC LIMIT 8
     `),
-  ]);
+  );
 
   const totals = (totalsRes as Row<{ total: number; earliest: string | null; latest: string | null }>).rows?.[0] ?? { total: 0, earliest: null, latest: null };
   const topArtists = (topArtistsRes as Row<{ artist_name: string; plays: number }>).rows ?? [];

@@ -10,7 +10,7 @@ type JobStatus = {
   errorMessage?: string | null;
 };
 
-const POLL_MS = 1500;
+const POLL_MS = 3000;
 
 export function SyncButton({ username }: { username: string }) {
   const [running, setRunning] = useState(false);

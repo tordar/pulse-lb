@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
+import { withRetry } from "@/lib/db/retry";
 import { getListens, LBError, type Listen } from "@/lib/listenbrainz/client";
 
 const PAGE_SIZES = [1000, 500, 200, 100];
@@ -12,9 +13,9 @@ export async function syncUser(
   username: string,
   opts: { token?: string; onProgress?: (added: number, pages: number) => void } = {},
 ): Promise<SyncResult> {
-  const state = await db.query.syncState.findFirst({
-    where: eq(schema.syncState.userName, username),
-  });
+  const state = await withRetry(() =>
+    db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
+  );
 
   const mode: "backfill" | "incremental" = state?.lastListenedAt ? "incremental" : "backfill";
   let cursor: number | null = state?.lastListenedAt
@@ -30,11 +31,13 @@ export async function syncUser(
     if (listens.length === 0) break;
 
     const rows = listens.map((l) => listenToRow(username, l));
-    const inserted = await db
-      .insert(schema.listens)
-      .values(rows)
-      .onConflictDoNothing()
-      .returning({ ts: schema.listens.listenedAt });
+    const inserted = await withRetry(() =>
+      db
+        .insert(schema.listens)
+        .values(rows)
+        .onConflictDoNothing()
+        .returning({ ts: schema.listens.listenedAt }),
+    );
 
     added += inserted.length;
     pages++;
@@ -56,18 +59,20 @@ export async function syncUser(
   const newTotal = (state?.totalListens ?? 0) + added;
   const now = new Date();
 
-  await db
-    .insert(schema.syncState)
-    .values({
-      userName: username,
-      lastSyncedAt: now,
-      lastListenedAt: newLastListenedAt,
-      totalListens: newTotal,
-    })
-    .onConflictDoUpdate({
-      target: schema.syncState.userName,
-      set: { lastSyncedAt: now, lastListenedAt: newLastListenedAt, totalListens: newTotal },
-    });
+  await withRetry(() =>
+    db
+      .insert(schema.syncState)
+      .values({
+        userName: username,
+        lastSyncedAt: now,
+        lastListenedAt: newLastListenedAt,
+        totalListens: newTotal,
+      })
+      .onConflictDoUpdate({
+        target: schema.syncState.userName,
+        set: { lastSyncedAt: now, lastListenedAt: newLastListenedAt, totalListens: newTotal },
+      }),
+  );
 
   return { added, pages, mode };
 }
