@@ -85,9 +85,10 @@ export default async function StatsPage({
       </header>
 
       {empty ? (
-        <p className="py-16 text-center text-muted-foreground text-sm">
+        <div className="py-24 flex flex-col items-center gap-3 text-sm text-muted-foreground">
+          <Play size={36} className="text-subtle-foreground" />
           No listens yet. Click sync to backfill.
-        </p>
+        </div>
       ) : (
         <>
           <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -160,7 +161,10 @@ export default async function StatsPage({
                 <SectionHeading icon={BarChart3}>Top by year</SectionHeading>
               </div>
               <YearTabs years={years} active={selectedYear} />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+              <div
+                key={selectedYear}
+                className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 fade-in"
+              >
                 <YearColumn title="Top songs">
                   {yearSongs.length === 0 ? (
                     <Empty />

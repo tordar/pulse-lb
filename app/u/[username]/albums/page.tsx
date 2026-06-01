@@ -50,9 +50,10 @@ export default async function AlbumsPage({
       </div>
 
       {items.length === 0 ? (
-        <p className="py-12 text-center text-muted-foreground text-sm">
+        <div className="py-16 flex flex-col items-center text-sm text-muted-foreground gap-3">
+          <Disc3 size={32} className="text-subtle-foreground" />
           {query ? `No albums match "${query}".` : "No albums yet — try syncing."}
-        </p>
+        </div>
       ) : view === "grid" ? (
         <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {items.map((a) => {

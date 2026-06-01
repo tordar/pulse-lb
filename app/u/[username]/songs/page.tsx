@@ -45,9 +45,10 @@ export default async function SongsPage({
       </div>
 
       {items.length === 0 ? (
-        <p className="py-12 text-center text-muted-foreground text-sm">
+        <div className="py-16 flex flex-col items-center text-sm text-muted-foreground gap-3">
+          <Music2 size={32} className="text-subtle-foreground" />
           {query ? `No songs match "${query}".` : "No songs yet — try syncing."}
-        </p>
+        </div>
       ) : (
         <ol className="divide-y divide-border">
           {items.map((s, i) => {

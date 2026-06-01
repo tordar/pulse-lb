@@ -38,9 +38,10 @@ export default async function ArtistsPage({
       </div>
 
       {items.length === 0 ? (
-        <p className="py-12 text-center text-muted-foreground text-sm">
+        <div className="py-16 flex flex-col items-center text-sm text-muted-foreground gap-3">
+          <Users size={32} className="text-subtle-foreground" />
           {query ? `No artists match "${query}".` : "No artists yet — try syncing."}
-        </p>
+        </div>
       ) : (
         <ol className="divide-y divide-border">
           {items.map((a, i) => {

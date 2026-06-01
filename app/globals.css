@@ -52,6 +52,21 @@ body {
   min-height: 100dvh;
 }
 
+/* Small fade-in for content that swaps on URL params (e.g. year tab content) */
+@keyframes content-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-in {
+  animation: content-fade-in 0.22s ease-out;
+}
+
 /* Listening heatmap (GitHub-style 53×7 grid with month strip + day axis) */
 .heatmap-root {
   --heatmap-cell: 14px;
