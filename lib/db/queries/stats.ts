@@ -1,0 +1,128 @@
+import { sql } from "drizzle-orm";
+import { db, schema } from "@/lib/db/client";
+import { withRetry } from "@/lib/db/retry";
+
+type Row<T> = { rows: T[] };
+
+export type AllTimeStats = {
+  total_plays: number;
+  effective_ms: number;
+  distinct_artists: number;
+  distinct_albums: number;
+  distinct_songs: number;
+  first_played: string | null;
+  last_played: string | null;
+  duration_coverage_pct: number;
+};
+
+export async function allTimeStats(username: string): Promise<AllTimeStats> {
+  const res = await withRetry(() =>
+    db.execute<AllTimeStats>(sql`
+      SELECT
+        COUNT(*)::int AS total_plays,
+        COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint AS effective_ms,
+        COUNT(DISTINCT l.artist_name)::int AS distinct_artists,
+        COUNT(DISTINCT l.release_name)::int AS distinct_albums,
+        COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int AS distinct_songs,
+        MIN(l.listened_at) AS first_played,
+        MAX(l.listened_at) AS last_played,
+        ROUND(100.0 * COUNT(*) FILTER (WHERE l.duration_ms IS NOT NULL OR r.length_ms IS NOT NULL) / NULLIF(COUNT(*), 0), 1)::float8 AS duration_coverage_pct
+      FROM ${schema.listens} l
+      LEFT JOIN ${schema.recordings} r ON r.mbid = l.recording_mbid
+      WHERE l.user_name = ${username}
+    `),
+  );
+  return (res as unknown as Row<AllTimeStats>).rows[0];
+}
+
+export type TodayStats = {
+  plays: number;
+  effective_ms: number;
+};
+
+export async function todayStats(username: string, tzOffsetMinutes = 0): Promise<TodayStats> {
+  const res = await withRetry(() =>
+    db.execute<TodayStats>(sql`
+      SELECT
+        COUNT(*)::int AS plays,
+        COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint AS effective_ms
+      FROM ${schema.listens} l
+      LEFT JOIN ${schema.recordings} r ON r.mbid = l.recording_mbid
+      WHERE l.user_name = ${username}
+        AND (l.listened_at AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date
+          = (now() AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date
+    `),
+  );
+  return (res as unknown as Row<TodayStats>).rows[0] ?? { plays: 0, effective_ms: 0 };
+}
+
+export type YearlyPoint = { year: number; plays: number; hours: number };
+
+export async function yearlyListening(username: string): Promise<YearlyPoint[]> {
+  const res = await withRetry(() =>
+    db.execute<YearlyPoint>(sql`
+      SELECT
+        EXTRACT(YEAR FROM l.listened_at)::int AS year,
+        COUNT(*)::int AS plays,
+        ROUND(COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)/1000.0/3600, 2)::float8 AS hours
+      FROM ${schema.listens} l
+      LEFT JOIN ${schema.recordings} r ON r.mbid = l.recording_mbid
+      WHERE l.user_name = ${username}
+      GROUP BY year ORDER BY year
+    `),
+  );
+  return (res as unknown as Row<YearlyPoint>).rows;
+}
+
+export type HourlyPoint = { hour: number; plays: number };
+
+export async function hourlyDistribution(
+  username: string,
+  tzOffsetMinutes = 0,
+): Promise<HourlyPoint[]> {
+  const res = await withRetry(() =>
+    db.execute<HourlyPoint>(sql`
+      WITH local AS (
+        SELECT EXTRACT(HOUR FROM (listened_at + (${tzOffsetMinutes} || ' minutes')::interval))::int AS hour
+        FROM ${schema.listens}
+        WHERE user_name = ${username}
+      )
+      SELECT h.hour, COALESCE(c.plays, 0)::int AS plays
+      FROM generate_series(0, 23) AS h(hour)
+      LEFT JOIN (SELECT hour, COUNT(*)::int AS plays FROM local GROUP BY hour) c USING (hour)
+      ORDER BY h.hour
+    `),
+  );
+  return (res as unknown as Row<HourlyPoint>).rows;
+}
+
+export type DailyPoint = { date: string; plays: number };
+
+export async function dailyListening(
+  username: string,
+  days: number,
+  tzOffsetMinutes = 0,
+): Promise<DailyPoint[]> {
+  const res = await withRetry(() =>
+    db.execute<DailyPoint>(sql`
+      WITH dates AS (
+        SELECT generate_series(
+          (now() AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date - (${days - 1} || ' days')::interval,
+          (now() AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date,
+          '1 day'::interval
+        )::date AS day
+      ),
+      plays_by_day AS (
+        SELECT (listened_at + (${tzOffsetMinutes} || ' minutes')::interval)::date AS day, COUNT(*)::int AS plays
+        FROM ${schema.listens}
+        WHERE user_name = ${username}
+          AND listened_at >= (now() AT TIME ZONE 'UTC' + (${tzOffsetMinutes} || ' minutes')::interval)::date - (${days} || ' days')::interval
+        GROUP BY day
+      )
+      SELECT to_char(d.day, 'YYYY-MM-DD') AS date, COALESCE(p.plays, 0)::int AS plays
+      FROM dates d LEFT JOIN plays_by_day p ON p.day = d.day
+      ORDER BY d.day
+    `),
+  );
+  return (res as unknown as Row<DailyPoint>).rows;
+}
