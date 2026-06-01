@@ -24,8 +24,11 @@ export default async function AlbumDetailPage({
   if (!detail) notFound();
 
   // Best-effort: get full tracklist size from MB for the "N/M played" line.
-  // Fire-and-forget on cache miss; the page still renders without it.
-  const meta = await getReleaseMeta(releaseMbid).catch(() => null);
+  // Use the user's most-PLAYED release_mbid for this album rather than
+  // whatever happened to be in the URL — the URL might point to a box set
+  // edition while most plays were under the standalone album.
+  const lookupMbid = detail.header.canonical_release_mbid ?? releaseMbid;
+  const meta = await getReleaseMeta(lookupMbid).catch(() => null);
   const totalTracks = meta?.trackCount ?? null;
 
   const { header, years, tracks } = detail;

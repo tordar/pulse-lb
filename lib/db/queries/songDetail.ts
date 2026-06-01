@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
+import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
 
 export type SongHeader = {
   track_name: string;
@@ -68,14 +69,16 @@ export async function songDetail(
   }
 
   const headerRes = await withRetry(() =>
-    db.execute<SongHeader>(sql`
+    db.execute<SongHeader & { plays_with_duration: number; sum_duration_ms: number }>(sql`
       SELECT
         ${track_name}::text AS track_name,
         ${artist_name}::text AS artist_name,
         (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
         (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
         COUNT(*)::int AS total_plays,
-        ROUND(COALESCE(SUM(duration_ms),0)/1000.0/60, 1)::float8 AS total_minutes,
+        0::float8 AS total_minutes,
+        COUNT(*) FILTER (WHERE duration_ms IS NOT NULL)::int AS plays_with_duration,
+        COALESCE(SUM(duration_ms), 0)::bigint AS sum_duration_ms,
         MIN(listened_at) AS first_played,
         MAX(listened_at) AS last_played
       FROM ${schema.listens}
@@ -84,8 +87,13 @@ export async function songDetail(
         AND artist_name = ${artist_name}
     `),
   );
-  const header = (headerRes as unknown as Row<SongHeader>).rows[0];
+  const header = (headerRes as unknown as Row<SongHeader & { plays_with_duration: number; sum_duration_ms: number }>).rows[0];
   if (!header || !header.total_plays) return null;
+
+  const lengths = await ensureRecordingLengths([recordingMbid]);
+  const canonicalMs = lengths.get(recordingMbid) ?? 0;
+  const playsMissing = header.total_plays - header.plays_with_duration;
+  header.total_minutes = (Number(header.sum_duration_ms) + canonicalMs * playsMissing) / 1000 / 60;
 
   const yearsRes = await withRetry(() =>
     db.execute<SongYear>(sql`
@@ -105,7 +113,7 @@ export async function songDetail(
     db.execute<SongAlbum>(sql`
       SELECT
         release_name,
-        (array_agg(release_mbid ORDER BY listened_at DESC) FILTER (WHERE release_mbid IS NOT NULL))[1]::text AS release_mbid,
+        mode() WITHIN GROUP (ORDER BY release_mbid) FILTER (WHERE release_mbid IS NOT NULL)::text AS release_mbid,
         COUNT(*)::int AS plays
       FROM ${schema.listens}
       WHERE user_name = ${username}

@@ -34,7 +34,7 @@ export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSo
         COUNT(*)::int AS plays,
         (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
         (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
-        (array_agg(recording_mbid ORDER BY listened_at DESC) FILTER (WHERE recording_mbid IS NOT NULL))[1] AS recording_mbid
+        mode() WITHIN GROUP (ORDER BY recording_mbid) FILTER (WHERE recording_mbid IS NOT NULL)::text AS recording_mbid
       FROM ${schema.listens}
       WHERE user_name = ${opts.username}
         ${pat ? sql`AND (track_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql``}
@@ -68,7 +68,7 @@ export async function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopA
         COUNT(*)::int AS plays,
         (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
         (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
-        (array_agg(release_mbid ORDER BY listened_at DESC) FILTER (WHERE release_mbid IS NOT NULL))[1] AS release_mbid
+        mode() WITHIN GROUP (ORDER BY release_mbid) FILTER (WHERE release_mbid IS NOT NULL)::text AS release_mbid
       FROM ${schema.listens}
       WHERE user_name = ${opts.username} AND release_name IS NOT NULL
         ${pat ? sql`AND (release_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql``}
@@ -100,7 +100,7 @@ export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<Top
         COUNT(*)::int AS plays,
         COUNT(DISTINCT track_name)::int AS distinct_tracks,
         COUNT(DISTINCT release_name)::int AS distinct_albums,
-        (array_agg(artist_mbids[1] ORDER BY listened_at DESC) FILTER (WHERE artist_mbids[1] IS NOT NULL))[1]::text AS artist_mbid
+        mode() WITHIN GROUP (ORDER BY artist_mbids[1]) FILTER (WHERE artist_mbids[1] IS NOT NULL)::text AS artist_mbid
       FROM ${schema.listens}
       WHERE user_name = ${opts.username} AND artist_name IS NOT NULL
         ${pat ? sql`AND artist_name ILIKE ${pat}` : sql``}

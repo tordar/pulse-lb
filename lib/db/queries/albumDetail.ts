@@ -1,12 +1,14 @@
 import { sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
+import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
 
 export type AlbumHeader = {
   release_name: string;
   artist_name: string;
   caa_id: number | null;
   caa_release_mbid: string | null;
+  canonical_release_mbid: string | null;
   total_plays: number;
   total_minutes: number;
   distinct_recordings: number;
@@ -20,6 +22,8 @@ export type AlbumTrack = {
   recording_mbid: string | null;
   track_name: string;
   plays: number;
+  plays_with_duration: number;
+  sum_duration_ms: number;
   minutes: number;
   first_played: string;
 };
@@ -82,9 +86,10 @@ export async function albumDetail(
         ${artist_name}::text AS artist_name,
         (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
         (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
+        mode() WITHIN GROUP (ORDER BY release_mbid) FILTER (WHERE release_mbid IS NOT NULL)::text AS canonical_release_mbid,
         COUNT(*)::int AS total_plays,
-        ROUND(COALESCE(SUM(duration_ms),0)/1000.0/60, 1)::float8 AS total_minutes,
-        COUNT(DISTINCT recording_mbid)::int AS distinct_recordings,
+        0::float8 AS total_minutes,
+        COUNT(DISTINCT COALESCE(recording_mbid::text, track_name))::int AS distinct_recordings,
         MIN(listened_at) AS first_played,
         MAX(listened_at) AS last_played
       FROM ${schema.listens}
@@ -113,19 +118,37 @@ export async function albumDetail(
   const tracksRes = await withRetry(() =>
     db.execute<AlbumTrack>(sql`
       SELECT
-        recording_mbid::text AS recording_mbid,
-        track_name,
+        mode() WITHIN GROUP (ORDER BY recording_mbid) FILTER (WHERE recording_mbid IS NOT NULL)::text AS recording_mbid,
+        (array_agg(track_name ORDER BY listened_at DESC))[1] AS track_name,
         COUNT(*)::int AS plays,
-        ROUND(COALESCE(SUM(duration_ms),0)/1000.0/60, 1)::float8 AS minutes,
+        COUNT(*) FILTER (WHERE duration_ms IS NOT NULL)::int AS plays_with_duration,
+        COALESCE(SUM(duration_ms), 0)::bigint AS sum_duration_ms,
+        0::float8 AS minutes,
         MIN(listened_at) AS first_played
       FROM ${schema.listens}
       WHERE user_name = ${username}
         AND release_name = ${release_name}
         AND artist_name = ${artist_name}
-      GROUP BY recording_mbid, track_name
+      GROUP BY COALESCE(recording_mbid::text, '~' || track_name)
       ORDER BY plays DESC, track_name
     `),
   );
+  const rawTracks = (tracksRes as unknown as Row<AlbumTrack>).rows;
+
+  // Enrich with canonical recording lengths from LB, then fold them into
+  // per-track and total minutes so listens without duration_ms still count.
+  const recIds = rawTracks.map((t) => t.recording_mbid).filter((x): x is string => !!x);
+  const lengths = await ensureRecordingLengths(recIds);
+
+  const tracks: AlbumTrack[] = rawTracks.map((t) => {
+    const canonicalMs = t.recording_mbid ? (lengths.get(t.recording_mbid) ?? 0) : 0;
+    const playsMissing = t.plays - t.plays_with_duration;
+    const effectiveMs = Number(t.sum_duration_ms) + canonicalMs * playsMissing;
+    return { ...t, minutes: effectiveMs / 1000 / 60 };
+  });
+
+  const totalMinutes = tracks.reduce((s, t) => s + t.minutes, 0);
+  header.total_minutes = totalMinutes;
 
   return {
     release_mbid: releaseMbid,
@@ -133,6 +156,6 @@ export async function albumDetail(
     artist_name,
     header,
     years: (yearsRes as unknown as Row<AlbumYear>).rows,
-    tracks: (tracksRes as unknown as Row<AlbumTrack>).rows,
+    tracks,
   };
 }
