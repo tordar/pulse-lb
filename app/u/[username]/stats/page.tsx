@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
@@ -7,21 +8,30 @@ import {
   yearlyListening,
   hourlyDistribution,
   dailyListening,
+  availableYears,
+  topSongsByYear,
+  topAlbumsByYear,
+  topArtistsByYear,
 } from "@/lib/db/queries/stats";
 import { SyncButton } from "./SyncButton";
 import { YearlyChart } from "@/components/YearlyChart";
 import { HourlyChart } from "@/components/HourlyChart";
 import { Heatmap } from "@/components/Heatmap";
+import { YearTabs } from "@/components/YearTabs";
+import { CoverArt } from "@/components/CoverArt";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function StatsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ username: string }>;
+  searchParams: Promise<{ year?: string }>;
 }) {
   const { username } = await params;
+  const sp = await searchParams;
 
   const state = await withRetry(() =>
     db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
@@ -47,6 +57,18 @@ export default async function StatsPage({
   const recentRows = (recent as unknown as { rows: { listened_at: string; track_name: string; artist_name: string; release_name: string | null }[] }).rows;
 
   const empty = allTime.total_plays === 0;
+
+  const years = empty ? [] : await availableYears(username);
+  const selectedYear = years.length
+    ? Math.max(years[years.length - 1], Math.min(years[0], parseInt(sp.year ?? "", 10) || years[0]))
+    : null;
+  const [yearSongs, yearAlbums, yearArtists] = selectedYear
+    ? await Promise.all([
+        topSongsByYear(username, selectedYear),
+        topAlbumsByYear(username, selectedYear),
+        topArtistsByYear(username, selectedYear),
+      ])
+    : [[], [], []];
 
   return (
     <div className="space-y-8">
@@ -132,6 +154,89 @@ export default async function StatsPage({
             <Heatmap days={daily} />
           </section>
 
+          {selectedYear !== null && years.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  Top by year
+                </h2>
+              </div>
+              <YearTabs years={years} active={selectedYear} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                <YearColumn title="Top songs">
+                  {yearSongs.length === 0 ? (
+                    <Empty />
+                  ) : (
+                    yearSongs.map((s, i) => {
+                      const href = s.recording_mbid
+                        ? `/u/${encodeURIComponent(username)}/songs/${s.recording_mbid}?${new URLSearchParams({ name: s.track_name, artist: s.artist_name })}`
+                        : null;
+                      return (
+                        <YearRow
+                          key={i}
+                          rank={i + 1}
+                          art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
+                          title={s.track_name}
+                          subtitle={s.artist_name}
+                          plays={s.plays}
+                          ms={Number(s.effective_ms)}
+                          href={href}
+                        />
+                      );
+                    })
+                  )}
+                </YearColumn>
+                <YearColumn title="Top artists">
+                  {yearArtists.length === 0 ? (
+                    <Empty />
+                  ) : (
+                    yearArtists.map((a, i) => {
+                      const href = a.artist_mbid
+                        ? `/u/${encodeURIComponent(username)}/artists/${a.artist_mbid}?${new URLSearchParams({ name: a.artist_name, artist: a.artist_name })}`
+                        : null;
+                      return (
+                        <YearRow
+                          key={i}
+                          rank={i + 1}
+                          art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
+                          artShape="circle"
+                          title={a.artist_name}
+                          subtitle={`${a.distinct_songs.toLocaleString()} songs`}
+                          plays={a.plays}
+                          ms={Number(a.effective_ms)}
+                          href={href}
+                        />
+                      );
+                    })
+                  )}
+                </YearColumn>
+                <YearColumn title="Top albums">
+                  {yearAlbums.length === 0 ? (
+                    <Empty />
+                  ) : (
+                    yearAlbums.map((a, i) => {
+                      const href = a.release_mbid
+                        ? `/u/${encodeURIComponent(username)}/albums/${a.release_mbid}?${new URLSearchParams({ name: a.release_name, artist: a.artist_name })}`
+                        : null;
+                      return (
+                        <YearRow
+                          key={i}
+                          rank={i + 1}
+                          art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
+                          title={a.release_name}
+                          subtitle={a.artist_name}
+                          plays={a.plays}
+                          ms={Number(a.effective_ms)}
+                          href={href}
+                        />
+                      );
+                    })
+                  )}
+                </YearColumn>
+              </div>
+            </section>
+          )}
+
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
               Recent listens
@@ -152,6 +257,73 @@ export default async function StatsPage({
         </>
       )}
     </div>
+  );
+}
+
+function YearColumn({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
+      <ol className="space-y-2">{children}</ol>
+    </div>
+  );
+}
+
+function Empty() {
+  return <li className="text-sm text-gray-400 italic">no plays</li>;
+}
+
+function YearRow({
+  rank,
+  art,
+  artShape = "square",
+  title,
+  subtitle,
+  plays,
+  ms,
+  href,
+}: {
+  rank: number;
+  art: { caaId: number | null; caaReleaseMbid: string | null };
+  artShape?: "square" | "circle";
+  title: string;
+  subtitle: string;
+  plays: number;
+  ms: number;
+  href: string | null;
+}) {
+  const hours = ms / 1000 / 3600;
+  const inner = (
+    <>
+      <span className="shrink-0 w-7 h-7 rounded bg-gray-100 dark:bg-zinc-800 text-xs text-gray-500 tabular-nums grid place-items-center">
+        {rank}
+      </span>
+      <CoverArt
+        art={art}
+        size={44}
+        alt={title}
+        className={artShape === "circle" ? "rounded-full" : "rounded"}
+      />
+      <div className="flex-1 min-w-0">
+        <div className="truncate text-sm font-medium">{title}</div>
+        <div className="truncate text-xs text-gray-500">{subtitle}</div>
+        <div className="text-xs text-gray-400 tabular-nums pt-0.5">
+          ▶ {plays.toLocaleString()}
+          {hours > 0 && <span>  ⏱ {fmtHours(hours)}</span>}
+        </div>
+      </div>
+    </>
+  );
+  return (
+    <li>
+      {href ? (
+        <Link href={href} className="flex items-center gap-3 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-900 -mx-2 px-2 rounded">
+          {inner}
+        </Link>
+      ) : (
+        <div className="flex items-center gap-3 py-1.5">{inner}</div>
+      )}
+    </li>
   );
 }
 
