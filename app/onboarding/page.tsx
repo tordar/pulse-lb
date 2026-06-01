@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronLeft, ExternalLink } from "lucide-react";
 
 type Step = {
   title: string;
@@ -89,8 +90,11 @@ export default async function OnboardingPage({
   return (
     <main className="min-h-screen p-6 md:p-10 max-w-3xl mx-auto">
       <div className="mb-10 space-y-3">
-        <Link href="/" className="text-sm text-muted-foreground underline">
-          ← pulse
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft size={14} /> pulse
         </Link>
         <h1 className="text-4xl font-bold tracking-tight">Set up pulse</h1>
         <p className="text-muted-foreground">
@@ -115,9 +119,10 @@ export default async function OnboardingPage({
                   href={s.link.href}
                   target={s.link.href.startsWith("http") ? "_blank" : undefined}
                   rel={s.link.href.startsWith("http") ? "noreferrer" : undefined}
-                  className="inline-block mt-2 text-sm font-medium underline underline-offset-4"
+                  className="inline-flex items-center gap-1.5 mt-2 text-sm font-medium text-primary hover:underline underline-offset-4"
                 >
-                  {s.link.label} →
+                  {s.link.label}
+                  {s.link.href.startsWith("http") ? <ExternalLink size={12} /> : <span aria-hidden>→</span>}
                 </a>
               )}
             </div>

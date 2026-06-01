@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Disc3 } from "lucide-react";
 import { topAlbums } from "@/lib/db/queries/topItems";
 import { SearchBox } from "@/components/SearchBox";
 import { Pagination } from "@/components/Pagination";
@@ -39,7 +40,9 @@ export default async function AlbumsPage({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-xl font-semibold">Top albums</h2>
+        <h2 className="text-xl font-semibold inline-flex items-center gap-2">
+          <Disc3 size={18} className="text-primary" /> Top albums
+        </h2>
         <div className="flex items-center gap-3 flex-wrap">
           <SearchBox placeholder="Search albums or artists…" />
           <ViewToggle current={view} />

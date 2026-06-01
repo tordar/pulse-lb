@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChevronLeft, Disc3, Music2, Play, TrendingUp } from "lucide-react";
 import { albumDetail } from "@/lib/db/queries/albumDetail";
 import { getReleaseMeta } from "@/lib/musicbrainz/client";
 import { CoverArt } from "@/components/CoverArt";
@@ -38,8 +39,11 @@ export default async function AlbumDetailPage({
   return (
     <div className="space-y-8">
       <div className="text-sm">
-        <Link href={`/u/${encodeURIComponent(username)}/albums`} className="text-muted-foreground hover:text-foreground">
-          ← Albums
+        <Link
+          href={`/u/${encodeURIComponent(username)}/albums`}
+          className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft size={14} /> Albums
         </Link>
       </div>
 
@@ -51,7 +55,9 @@ export default async function AlbumDetailPage({
           className="rounded-lg shadow-md"
         />
         <div className="flex-1 space-y-2">
-          <p className="text-sm text-muted-foreground">Album</p>
+          <p className="text-xs text-primary uppercase tracking-wide inline-flex items-center gap-1.5">
+            <Disc3 size={13} /> Album
+          </p>
           <h1 className="text-3xl font-bold leading-tight">{header.release_name}</h1>
           <p className="text-lg text-foreground/80">{header.artist_name}</p>
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm pt-2 text-muted-foreground">
@@ -72,16 +78,16 @@ export default async function AlbumDetailPage({
 
       {years.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Plays by year
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+            <TrendingUp size={15} className="text-primary" /> Plays by year
           </h2>
           <PlaysPerYearChart data={years} metric="plays" />
         </section>
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Songs <span className="text-subtle-foreground font-normal normal-case">({tracks.length})</span>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+          <Music2 size={15} className="text-primary" /> Songs <span className="text-subtle-foreground font-normal normal-case">({tracks.length})</span>
         </h2>
         <ol className="divide-y divide-border">
           {tracks.map((t, i) => {

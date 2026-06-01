@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { PillNav } from "./PillNav";
 
 export default async function UserLayout({
@@ -16,11 +17,11 @@ export default async function UserLayout({
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 flex-wrap">
           <Link
             href="/"
-            className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-2"
+            className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5"
           >
-            <span>←</span>
+            <ChevronLeft size={16} />
             <span className="font-semibold text-foreground">pulse</span>
-            <span className="text-subtle-foreground">/</span>
+            <span className="text-subtle-foreground mx-0.5">/</span>
             <span>{username}</span>
           </Link>
           <PillNav username={username} />

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Music2 } from "lucide-react";
 import { topSongs } from "@/lib/db/queries/topItems";
 import { SearchBox } from "@/components/SearchBox";
 import { Pagination } from "@/components/Pagination";
@@ -37,7 +38,9 @@ export default async function SongsPage({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-xl font-semibold">Top songs</h2>
+        <h2 className="text-xl font-semibold inline-flex items-center gap-2">
+          <Music2 size={18} className="text-primary" /> Top songs
+        </h2>
         <SearchBox placeholder="Search songs or artists…" />
       </div>
 

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { BarChart3, Calendar, Clock, Disc3, Music2, Play, TrendingUp, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
@@ -88,12 +90,13 @@ export default async function StatsPage({
       ) : (
         <>
           <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <StatTile big value={allTime.total_plays.toLocaleString()} label="plays" />
-            <StatTile big value={fmtHours(allTime.effective_ms / 1000 / 3600)} label="listening time" />
-            <StatTile value={allTime.distinct_artists.toLocaleString()} label="artists" />
-            <StatTile value={allTime.distinct_albums.toLocaleString()} label="albums" />
-            <StatTile value={allTime.distinct_songs.toLocaleString()} label="songs" />
+            <StatTile icon={Play} big value={allTime.total_plays.toLocaleString()} label="plays" />
+            <StatTile icon={Clock} big value={fmtHours(allTime.effective_ms / 1000 / 3600)} label="listening time" />
+            <StatTile icon={Users} value={allTime.distinct_artists.toLocaleString()} label="artists" />
+            <StatTile icon={Disc3} value={allTime.distinct_albums.toLocaleString()} label="albums" />
+            <StatTile icon={Music2} value={allTime.distinct_songs.toLocaleString()} label="songs" />
             <StatTile
+              icon={Calendar}
               value={
                 allTime.first_played && allTime.last_played
                   ? spanLabel(allTime.first_played, allTime.last_played)
@@ -136,30 +139,24 @@ export default async function StatsPage({
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Listening by year</h2>
+            <SectionHeading icon={TrendingUp}>Listening by year</SectionHeading>
             <YearlyChart data={yearly} height={260} />
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              When you listen <span className="text-subtle-foreground font-normal normal-case">(hour of day, all-time)</span>
-            </h2>
+            <SectionHeading icon={Clock} extra="(hour of day, all-time)">When you listen</SectionHeading>
             <HourlyChart data={hourly} height={200} />
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Last 365 days
-            </h2>
+            <SectionHeading icon={Calendar}>Last 365 days</SectionHeading>
             <Heatmap days={daily} />
           </section>
 
           {selectedYear !== null && years.length > 0 && (
             <section className="space-y-4">
               <div className="flex items-baseline justify-between gap-3 flex-wrap">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Top by year
-                </h2>
+                <SectionHeading icon={BarChart3}>Top by year</SectionHeading>
               </div>
               <YearTabs years={years} active={selectedYear} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
@@ -238,9 +235,7 @@ export default async function StatsPage({
           )}
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Recent listens
-            </h2>
+            <SectionHeading icon={Clock}>Recent listens</SectionHeading>
             <ul className="divide-y divide-border text-sm">
               {recentRows.map((r, i) => (
                 <li key={i} className="flex gap-3 py-1.5">
@@ -327,12 +322,33 @@ function YearRow({
   );
 }
 
-function StatTile({ value, label, big = false }: { value: string; label: string; big?: boolean }) {
+function StatTile({
+  icon: Icon,
+  value,
+  label,
+  big = false,
+}: {
+  icon?: LucideIcon;
+  value: string;
+  label: string;
+  big?: boolean;
+}) {
   return (
-    <div className="rounded-lg border border-card-border bg-card p-4">
+    <div className="rounded-lg border border-card-border bg-card p-4 space-y-2">
+      {Icon && <Icon size={16} className="text-primary" />}
       <div className={`tabular-nums font-semibold ${big ? "text-2xl" : "text-xl"}`}>{value}</div>
-      <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">{label}</div>
+      <div className="text-xs text-muted-foreground uppercase tracking-wide">{label}</div>
     </div>
+  );
+}
+
+function SectionHeading({ icon: Icon, children, extra }: { icon: LucideIcon; children: React.ReactNode; extra?: React.ReactNode }) {
+  return (
+    <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+      <Icon size={15} className="text-primary" />
+      <span>{children}</span>
+      {extra && <span className="text-subtle-foreground font-normal normal-case">{extra}</span>}
+    </h2>
   );
 }
 

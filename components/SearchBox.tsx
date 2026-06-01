@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { Search } from "lucide-react";
 
 export function SearchBox({ placeholder = "Search…" }: { placeholder?: string }) {
   const router = useRouter();
@@ -26,12 +27,16 @@ export function SearchBox({ placeholder = "Search…" }: { placeholder?: string 
 
   return (
     <div className="relative">
+      <Search
+        size={15}
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle-foreground pointer-events-none"
+      />
       <input
         type="search"
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder={placeholder}
-        className="w-full md:w-80 border border-border bg-card rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        className="w-full md:w-80 border border-border bg-card rounded-md pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-subtle-foreground"
       />
       {pending && (
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-subtle-foreground">…</span>

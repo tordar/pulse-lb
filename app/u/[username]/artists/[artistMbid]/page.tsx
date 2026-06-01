@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChevronLeft, Clock, Disc3, Music2, TrendingUp, Users } from "lucide-react";
 import { artistDetail } from "@/lib/db/queries/artistDetail";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
@@ -24,14 +25,16 @@ export default async function ArtistDetailPage({
       <div className="text-sm">
         <Link
           href={`/u/${encodeURIComponent(username)}/artists`}
-          className="text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
         >
-          ← Artists
+          <ChevronLeft size={14} /> Artists
         </Link>
       </div>
 
       <header className="space-y-3">
-        <p className="text-sm text-muted-foreground">Artist</p>
+        <p className="text-xs text-primary uppercase tracking-wide inline-flex items-center gap-1.5">
+          <Users size={13} /> Artist
+        </p>
         <h1 className="text-4xl font-bold leading-tight">{header.artist_name}</h1>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
           <Stat label="Plays" value={header.total_plays.toLocaleString()} />
@@ -45,8 +48,8 @@ export default async function ArtistDetailPage({
 
       {years.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Plays by year
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+            <TrendingUp size={15} className="text-primary" /> Plays by year
           </h2>
           <PlaysPerYearChart data={years} metric="plays" />
         </section>
@@ -54,8 +57,8 @@ export default async function ArtistDetailPage({
 
       {topAlbums.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Top albums <span className="text-subtle-foreground font-normal normal-case">({topAlbums.length})</span>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+            <Disc3 size={15} className="text-primary" /> Top albums <span className="text-subtle-foreground font-normal normal-case">({topAlbums.length})</span>
           </h2>
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {topAlbums.map((a) => {
@@ -88,8 +91,8 @@ export default async function ArtistDetailPage({
 
       {topSongs.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Top songs <span className="text-subtle-foreground font-normal normal-case">({topSongs.length})</span>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+            <Music2 size={15} className="text-primary" /> Top songs <span className="text-subtle-foreground font-normal normal-case">({topSongs.length})</span>
           </h2>
           <ol className="divide-y divide-border">
             {topSongs.map((s, i) => {
@@ -134,8 +137,8 @@ export default async function ArtistDetailPage({
 
       {recent.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Recent listens
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+            <Clock size={15} className="text-primary" /> Recent listens
           </h2>
           <ul className="divide-y divide-border text-sm">
             {recent.map((r, i) => (

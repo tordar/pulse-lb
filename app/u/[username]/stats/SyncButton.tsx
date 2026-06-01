@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 type JobStatus = {
@@ -59,6 +60,7 @@ export function SyncButton({ username }: { username: string }) {
       )}
       {error && <span className="text-sm text-destructive">{error}</span>}
       <Button onClick={trigger} disabled={running} size="sm">
+        <RefreshCw size={14} className={running ? "animate-spin" : ""} />
         {running ? "Syncing…" : "Sync now"}
       </Button>
     </div>
