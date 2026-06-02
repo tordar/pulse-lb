@@ -1,8 +1,8 @@
 import { inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
+import { lbFetch } from "./client";
 
-const LB_BASE = "https://api.listenbrainz.org";
 const BATCH = 25;
 
 /**
@@ -31,16 +31,15 @@ export async function ensureRecordingLengths(
   const inserts: { mbid: string; name: string | null; lengthMs: number | null }[] = [];
   for (let i = 0; i < missing.length; i += BATCH) {
     const batch = missing.slice(i, i + BATCH);
-    const url = `${LB_BASE}/1/metadata/recording?recording_mbids=${batch.join(",")}`;
-    const r = await fetch(url, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(15_000),
-    }).catch(() => null);
-    if (!r || !r.ok) continue;
-    const data = (await r.json().catch(() => ({}))) as Record<
-      string,
-      { recording?: { name?: string | null; length?: number | null } }
-    >;
+    let data: Record<string, { recording?: { name?: string | null; length?: number | null } }> = {};
+    try {
+      const r = await lbFetch(`/1/metadata/recording?recording_mbids=${batch.join(",")}`, {
+        timeoutMs: 15_000,
+      });
+      data = (await r.json().catch(() => ({}))) as typeof data;
+    } catch {
+      continue;
+    }
     for (const mbid of batch) {
       const meta = data[mbid]?.recording;
       const len = meta?.length ?? null;

@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-const LB_BASE = "https://api.listenbrainz.org";
+const LB_PRIMARY = "https://api.listenbrainz.org";
+const LB_FALLBACK = "https://beta-api.listenbrainz.org";
+const PRIMARY_TIMEOUT_MS = 5_000;
 
 const AdditionalInfo = z
   .object({
@@ -81,12 +83,44 @@ export class LBError extends Error {
   }
 }
 
-async function lbFetch(path: string, opts: { token?: string; timeoutMs?: number } = {}) {
+/**
+ * Fetch from LB with a primary-then-beta fallback. The main api host
+ * (api.listenbrainz.org) goes down occasionally; the beta API
+ * (beta-api.listenbrainz.org) usually stays up during those outages.
+ *
+ * Flow:
+ *   1. Try primary with a tight 5s timeout
+ *   2. If primary returns a 4xx (incl. 404 for missing users) → propagate.
+ *      4xx is a real answer from LB, not an availability issue.
+ *   3. If primary returns 5xx OR throws (network/timeout) → fall through
+ *      to beta with the full request timeout.
+ *
+ * Exported so the metadata batch helpers can reuse the same logic.
+ */
+export async function lbFetch(path: string, opts: { token?: string; timeoutMs?: number } = {}) {
   const headers: Record<string, string> = {};
   if (opts.token) headers["Authorization"] = `Token ${opts.token}`;
-  const r = await fetch(`${LB_BASE}${path}`, {
+  const fullTimeout = opts.timeoutMs ?? 60_000;
+
+  try {
+    const r = await fetch(`${LB_PRIMARY}${path}`, {
+      headers,
+      signal: AbortSignal.timeout(Math.min(PRIMARY_TIMEOUT_MS, fullTimeout)),
+    });
+    if (r.status < 500) {
+      if (!r.ok) throw new LBError(r.status, await r.text(), r.headers);
+      return r;
+    }
+    // 5xx — fall through to beta
+  } catch (e) {
+    // 4xx errors must propagate (real answer from LB).
+    // Network / timeout / 5xx fall through to beta.
+    if (e instanceof LBError) throw e;
+  }
+
+  const r = await fetch(`${LB_FALLBACK}${path}`, {
     headers,
-    signal: AbortSignal.timeout(opts.timeoutMs ?? 60_000),
+    signal: AbortSignal.timeout(fullTimeout),
   });
   if (!r.ok) throw new LBError(r.status, await r.text(), r.headers);
   return r;
