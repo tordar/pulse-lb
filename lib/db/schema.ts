@@ -7,6 +7,7 @@ import {
   uuid,
   primaryKey,
   index,
+  boolean,
 } from "drizzle-orm/pg-core";
 
 export const listens = pgTable(
@@ -58,6 +59,12 @@ export const syncState = pgTable("sync_state", {
   lastListenedAt: timestamp("last_listened_at", { withTimezone: true }),
   totalListens: integer("total_listens").default(0).notNull(),
   firstSeen: timestamp("first_seen", { withTimezone: true }).defaultNow().notNull(),
+  // True once the backward backfill has hit the origin (empty page from LB).
+  // While false, the next sync resumes backfill from MIN(listened_at) - 1 in
+  // the listens table — so interrupting a sync (refresh, Vercel timeout) and
+  // clicking again picks up where it stopped instead of re-paging the data
+  // we already have.
+  backfillComplete: boolean("backfill_complete").default(false).notNull(),
 });
 
 export const syncJobs = pgTable(

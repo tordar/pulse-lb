@@ -1,0 +1,1 @@
+ALTER TABLE "sync_state" ADD COLUMN "backfill_complete" boolean DEFAULT false NOT NULL;

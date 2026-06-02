@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { getListens, LBError, type Listen } from "@/lib/listenbrainz/client";
@@ -17,46 +17,73 @@ export async function syncUser(
     db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
   );
 
-  const mode: "backfill" | "incremental" = state?.lastListenedAt ? "incremental" : "backfill";
-  let cursor: number | null = state?.lastListenedAt
-    ? Math.floor(state.lastListenedAt.getTime() / 1000)
-    : null;
+  // Look at what's actually in the listens table — that's the source of truth
+  // for where to resume. sync_state.lastListenedAt was previously written only
+  // at the end of a sync, so an interrupted backfill would restart from now.
+  const boundsRes = await withRetry(() =>
+    db.execute<{ oldest: number | null; newest: number | null }>(sql`
+      SELECT
+        EXTRACT(EPOCH FROM MIN(listened_at))::bigint AS oldest,
+        EXTRACT(EPOCH FROM MAX(listened_at))::bigint AS newest
+      FROM ${schema.listens} WHERE user_name = ${username}
+    `),
+  );
+  const bounds = (boundsRes as unknown as { rows: { oldest: number | null; newest: number | null }[] })
+    .rows[0] ?? { oldest: null, newest: null };
+  const hasData = bounds.newest != null;
+  let backfillComplete = state?.backfillComplete ?? false;
 
-  let added = 0;
-  let pages = 0;
-  let newestSeen = cursor ?? 0;
+  let totalAdded = 0;
+  let totalPages = 0;
+  let primaryMode: "backfill" | "incremental" = hasData ? "incremental" : "backfill";
+  let newestSeen = bounds.newest ?? 0;
 
-  while (true) {
-    const listens = await fetchPageWithFallback({ username, mode, cursor, token: opts.token });
-    if (listens.length === 0) break;
+  const onPage = () => opts.onProgress?.(totalAdded, totalPages);
 
-    const rows = listens.map((l) => listenToRow(username, l));
-    const inserted = await withRetry(() =>
-      db
-        .insert(schema.listens)
-        .values(rows)
-        .onConflictDoNothing()
-        .returning({ ts: schema.listens.listenedAt }),
-    );
+  // 1) Forward (incremental) pass — pick up any new listens since we last
+  //    synced. Cheap when there are no new listens (one empty page).
+  if (hasData) {
+    const fwd = await paginate({
+      username,
+      mode: "incremental",
+      cursor: bounds.newest!,
+      token: opts.token,
+      onInserted: (n, ts) => {
+        totalAdded += n;
+        totalPages++;
+        if (ts > newestSeen) newestSeen = ts;
+        onPage();
+      },
+    });
+    void fwd;
+  }
 
-    added += inserted.length;
-    pages++;
-
-    newestSeen = Math.max(newestSeen, listens[0].listened_at);
-
-    if (mode === "incremental") {
-      cursor = listens[0].listened_at;
-    } else {
-      cursor = listens.at(-1)!.listened_at - 1;
+  // 2) Backward (backfill) pass — continue from the oldest we have, until LB
+  //    returns nothing. Once we hit origin, flip backfill_complete so future
+  //    syncs skip this branch entirely.
+  if (!backfillComplete) {
+    const startCursor = hasData ? bounds.oldest! - 1 : null;
+    const back = await paginate({
+      username,
+      mode: "backfill",
+      cursor: startCursor,
+      token: opts.token,
+      onInserted: (n, ts) => {
+        totalAdded += n;
+        totalPages++;
+        if (ts > newestSeen) newestSeen = ts;
+        onPage();
+      },
+    });
+    if (back.reachedOrigin) backfillComplete = true;
+    if (back.firstNewest > 0 && back.firstNewest > newestSeen) {
+      newestSeen = back.firstNewest;
     }
-
-    opts.onProgress?.(added, pages);
-
-    if (listens.length < 1000) break;
+    primaryMode = "backfill";
   }
 
   const newLastListenedAt = newestSeen ? new Date(newestSeen * 1000) : state?.lastListenedAt ?? null;
-  const newTotal = (state?.totalListens ?? 0) + added;
+  const newTotal = (state?.totalListens ?? 0) + totalAdded;
   const now = new Date();
 
   await withRetry(() =>
@@ -67,14 +94,74 @@ export async function syncUser(
         lastSyncedAt: now,
         lastListenedAt: newLastListenedAt,
         totalListens: newTotal,
+        backfillComplete,
       })
       .onConflictDoUpdate({
         target: schema.syncState.userName,
-        set: { lastSyncedAt: now, lastListenedAt: newLastListenedAt, totalListens: newTotal },
+        set: {
+          lastSyncedAt: now,
+          lastListenedAt: newLastListenedAt,
+          totalListens: newTotal,
+          backfillComplete,
+        },
       }),
   );
 
-  return { added, pages, mode };
+  return { added: totalAdded, pages: totalPages, mode: primaryMode };
+}
+
+/**
+ * Walk LB listens in one direction until the API gives us nothing more.
+ * Inserts each page idempotently into the listens table.
+ */
+async function paginate(args: {
+  username: string;
+  mode: "backfill" | "incremental";
+  cursor: number | null;
+  token?: string;
+  onInserted: (n: number, newestSeenInPage: number) => void;
+}): Promise<{ reachedOrigin: boolean; firstNewest: number }> {
+  let { cursor } = args;
+  let reachedOrigin = false;
+  let firstNewest = 0;
+
+  while (true) {
+    const listens = await fetchPageWithFallback({
+      username: args.username,
+      mode: args.mode,
+      cursor,
+      token: args.token,
+    });
+    if (listens.length === 0) {
+      reachedOrigin = true;
+      break;
+    }
+
+    const rows = listens.map((l) => listenToRow(args.username, l));
+    const inserted = await withRetry(() =>
+      db
+        .insert(schema.listens)
+        .values(rows)
+        .onConflictDoNothing()
+        .returning({ ts: schema.listens.listenedAt }),
+    );
+
+    if (firstNewest === 0) firstNewest = listens[0].listened_at;
+    args.onInserted(inserted.length, listens[0].listened_at);
+
+    if (args.mode === "incremental") {
+      cursor = listens[0].listened_at;
+    } else {
+      cursor = listens.at(-1)!.listened_at - 1;
+    }
+
+    if (listens.length < 1000) {
+      reachedOrigin = true;
+      break;
+    }
+  }
+
+  return { reachedOrigin, firstNewest };
 }
 
 async function fetchPageWithFallback(opts: {

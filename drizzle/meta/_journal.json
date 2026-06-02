@@ -8,6 +8,13 @@
       "when": 1780303162802,
       "tag": "0000_free_energizer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780410700398,
+      "tag": "0001_furry_tiger_shark",
+      "breakpoints": true
     }
   ]
 }
