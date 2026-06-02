@@ -1,7 +1,15 @@
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
-export default function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; username?: string }>;
+}) {
+  const sp = await searchParams;
+  const upstreamErr = sp.error === "upstream";
+
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-background">
       <div className="w-full max-w-xl space-y-10">
@@ -21,6 +29,27 @@ export default function Home() {
           </p>
         </div>
 
+        {upstreamErr && (
+          <div className="flex gap-3 items-start p-4 rounded-md border border-amber-900/60 bg-amber-950/30 text-amber-100 text-sm">
+            <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-400" />
+            <div className="space-y-1">
+              <p className="font-medium">ListenBrainz looks unreachable right now.</p>
+              <p className="text-amber-100/80">
+                Could be a transient hiccup on their side — try again in a minute. You can check{" "}
+                <a
+                  href="https://status.metabrainz.org/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  status.metabrainz.org
+                </a>{" "}
+                for live updates.
+              </p>
+            </div>
+          </div>
+        )}
+
         <form action="/u" className="space-y-3">
           <label className="block text-sm font-medium" htmlFor="username">
             Enter your ListenBrainz username
@@ -31,6 +60,7 @@ export default function Home() {
               name="username"
               required
               autoFocus
+              defaultValue={sp.username ?? ""}
               placeholder="e.g. tordar"
               className="flex-1 border border-border bg-card rounded-md px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary"
             />
