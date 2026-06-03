@@ -9,6 +9,20 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export type SyncResult = { added: number; pages: number; mode: "backfill" | "incremental" };
 
+/**
+ * Sync semantics, one rule:
+ *   "Fill in whatever listens LB has that aren't in our DB yet."
+ *
+ * Every click does the same thing:
+ *   1. Ask LB for anything newer than MAX(listened_at) in the DB
+ *   2. Ask LB for anything older than MIN(listened_at) in the DB
+ *
+ * Both passes walk LB pagination until they hit an empty page. For a fully
+ * synced user, both passes are one cheap probe each (~1 second). For a
+ * user mid-backfill, the backward pass continues from where the previous
+ * (possibly interrupted) sync stopped — no re-paging of data we already
+ * have, and no need for any "is the backfill complete" flag.
+ */
 export async function syncUser(
   username: string,
   opts: { token?: string; onProgress?: (added: number, pages: number) => void } = {},
@@ -17,9 +31,7 @@ export async function syncUser(
     db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
   );
 
-  // Look at what's actually in the listens table — that's the source of truth
-  // for where to resume. sync_state.lastListenedAt was previously written only
-  // at the end of a sync, so an interrupted backfill would restart from now.
+  // Source of truth for resume cursors: the listens table itself.
   const boundsRes = await withRetry(() =>
     db.execute<{ oldest: number | null; newest: number | null }>(sql`
       SELECT
@@ -31,56 +43,40 @@ export async function syncUser(
   const bounds = (boundsRes as unknown as { rows: { oldest: number | null; newest: number | null }[] })
     .rows[0] ?? { oldest: null, newest: null };
   const hasData = bounds.newest != null;
-  let backfillComplete = state?.backfillComplete ?? false;
 
   let totalAdded = 0;
   let totalPages = 0;
-  let primaryMode: "backfill" | "incremental" = hasData ? "incremental" : "backfill";
   let newestSeen = bounds.newest ?? 0;
+  const onInserted = (n: number, newestInPage: number) => {
+    totalAdded += n;
+    totalPages++;
+    if (newestInPage > newestSeen) newestSeen = newestInPage;
+    opts.onProgress?.(totalAdded, totalPages);
+  };
 
-  const onPage = () => opts.onProgress?.(totalAdded, totalPages);
-
-  // 1) Forward (incremental) pass — pick up any new listens since we last
-  //    synced. Cheap when there are no new listens (one empty page).
+  // Forward pass: pick up anything newer than what we have. Skipped only
+  // when the table is completely empty (nothing to start from).
   if (hasData) {
-    const fwd = await paginate({
+    await paginate({
       username,
       mode: "incremental",
       cursor: bounds.newest!,
       token: opts.token,
-      onInserted: (n, ts) => {
-        totalAdded += n;
-        totalPages++;
-        if (ts > newestSeen) newestSeen = ts;
-        onPage();
-      },
+      onInserted,
     });
-    void fwd;
   }
 
-  // 2) Backward (backfill) pass — continue from the oldest we have, until LB
-  //    returns nothing. Once we hit origin, flip backfill_complete so future
-  //    syncs skip this branch entirely.
-  if (!backfillComplete) {
-    const startCursor = hasData ? bounds.oldest! - 1 : null;
-    const back = await paginate({
-      username,
-      mode: "backfill",
-      cursor: startCursor,
-      token: opts.token,
-      onInserted: (n, ts) => {
-        totalAdded += n;
-        totalPages++;
-        if (ts > newestSeen) newestSeen = ts;
-        onPage();
-      },
-    });
-    if (back.reachedOrigin) backfillComplete = true;
-    if (back.firstNewest > 0 && back.firstNewest > newestSeen) {
-      newestSeen = back.firstNewest;
-    }
-    primaryMode = "backfill";
-  }
+  // Backward pass: continue from one second before our oldest listen
+  // (or from "now" if the table is empty). Stops as soon as LB returns
+  // an empty/short page.
+  const back = await paginate({
+    username,
+    mode: "backfill",
+    cursor: hasData ? bounds.oldest! - 1 : null,
+    token: opts.token,
+    onInserted,
+  });
+  if (back.firstNewest > newestSeen) newestSeen = back.firstNewest;
 
   const newLastListenedAt = newestSeen ? new Date(newestSeen * 1000) : state?.lastListenedAt ?? null;
   const newTotal = (state?.totalListens ?? 0) + totalAdded;
@@ -94,7 +90,6 @@ export async function syncUser(
         lastSyncedAt: now,
         lastListenedAt: newLastListenedAt,
         totalListens: newTotal,
-        backfillComplete,
       })
       .onConflictDoUpdate({
         target: schema.syncState.userName,
@@ -102,12 +97,11 @@ export async function syncUser(
           lastSyncedAt: now,
           lastListenedAt: newLastListenedAt,
           totalListens: newTotal,
-          backfillComplete,
         },
       }),
   );
 
-  return { added: totalAdded, pages: totalPages, mode: primaryMode };
+  return { added: totalAdded, pages: totalPages, mode: hasData ? "incremental" : "backfill" };
 }
 
 /**
