@@ -19,20 +19,29 @@ export async function allTimeStats(username: string): Promise<AllTimeStats> {
   const res = await withRetry(() =>
     db.execute<AllTimeStats>(sql`
       SELECT
-        COUNT(*)::int AS total_plays,
-        COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint AS effective_ms,
-        COUNT(DISTINCT l.artist_name)::int AS distinct_artists,
-        COUNT(DISTINCT l.release_name)::int AS distinct_albums,
-        COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int AS distinct_songs,
-        MIN(l.listened_at) AS first_played,
-        MAX(l.listened_at) AS last_played,
-        ROUND(100.0 * COUNT(*) FILTER (WHERE l.duration_ms IS NOT NULL OR r.length_ms IS NOT NULL) / NULLIF(COUNT(*), 0), 1)::float8 AS duration_coverage_pct
-      FROM ${schema.listens} l
-      LEFT JOIN ${schema.recordings} r ON r.mbid = l.recording_mbid
-      WHERE l.user_name = ${username}
+        total_plays,
+        effective_ms,
+        distinct_artists,
+        distinct_albums,
+        distinct_songs,
+        first_played,
+        last_played,
+        duration_coverage_pct
+      FROM ${schema.aggAlltime}
+      WHERE user_name = ${username}
     `),
   );
-  return (res as unknown as Row<AllTimeStats>).rows[0];
+  const row = (res as unknown as Row<AllTimeStats>).rows[0];
+  return row ?? {
+    total_plays: 0,
+    effective_ms: 0,
+    distinct_artists: 0,
+    distinct_albums: 0,
+    distinct_songs: 0,
+    first_played: null,
+    last_played: null,
+    duration_coverage_pct: 0,
+  };
 }
 
 export type TodayStats = {
@@ -61,14 +70,10 @@ export type YearlyPoint = { year: number; plays: number; hours: number };
 export async function yearlyListening(username: string): Promise<YearlyPoint[]> {
   const res = await withRetry(() =>
     db.execute<YearlyPoint>(sql`
-      SELECT
-        EXTRACT(YEAR FROM l.listened_at)::int AS year,
-        COUNT(*)::int AS plays,
-        ROUND(COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)/1000.0/3600, 2)::float8 AS hours
-      FROM ${schema.listens} l
-      LEFT JOIN ${schema.recordings} r ON r.mbid = l.recording_mbid
-      WHERE l.user_name = ${username}
-      GROUP BY year ORDER BY year
+      SELECT year, plays, hours
+      FROM ${schema.aggYear}
+      WHERE user_name = ${username}
+      ORDER BY year
     `),
   );
   return (res as unknown as Row<YearlyPoint>).rows;
@@ -76,21 +81,13 @@ export async function yearlyListening(username: string): Promise<YearlyPoint[]> 
 
 export type HourlyPoint = { hour: number; plays: number };
 
-export async function hourlyDistribution(
-  username: string,
-  tzOffsetMinutes = 0,
-): Promise<HourlyPoint[]> {
+export async function hourlyDistribution(username: string): Promise<HourlyPoint[]> {
   const res = await withRetry(() =>
     db.execute<HourlyPoint>(sql`
-      WITH local AS (
-        SELECT EXTRACT(HOUR FROM (listened_at + (${tzOffsetMinutes} || ' minutes')::interval))::int AS hour
-        FROM ${schema.listens}
-        WHERE user_name = ${username}
-      )
-      SELECT h.hour, COALESCE(c.plays, 0)::int AS plays
-      FROM generate_series(0, 23) AS h(hour)
-      LEFT JOIN (SELECT hour, COUNT(*)::int AS plays FROM local GROUP BY hour) c USING (hour)
-      ORDER BY h.hour
+      SELECT hour, plays
+      FROM ${schema.aggHour}
+      WHERE user_name = ${username}
+      ORDER BY hour
     `),
   );
   return (res as unknown as Row<HourlyPoint>).rows;
@@ -129,8 +126,7 @@ export type TopArtistInYear = {
 export async function availableYears(username: string): Promise<number[]> {
   const res = await withRetry(() =>
     db.execute<{ year: number }>(sql`
-      SELECT DISTINCT EXTRACT(YEAR FROM listened_at)::int AS year
-      FROM ${schema.listens}
+      SELECT year FROM ${schema.aggYear}
       WHERE user_name = ${username}
       ORDER BY year DESC
     `),
@@ -145,19 +141,10 @@ export async function topSongsByYear(
 ): Promise<TopSongInYear[]> {
   const res = await withRetry(() =>
     db.execute<TopSongInYear>(sql`
-      SELECT
-        (array_agg(l.track_name ORDER BY l.listened_at DESC))[1] AS track_name,
-        l.artist_name,
-        COUNT(*)::int AS plays,
-        COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint AS effective_ms,
-        (array_agg(l.caa_id ORDER BY l.listened_at DESC) FILTER (WHERE l.caa_id IS NOT NULL))[1] AS caa_id,
-        (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC) FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
-        mode() WITHIN GROUP (ORDER BY l.recording_mbid) FILTER (WHERE l.recording_mbid IS NOT NULL)::text AS recording_mbid
-      FROM ${schema.listens} l
-      LEFT JOIN ${schema.recordings} r ON r.mbid = l.recording_mbid
-      WHERE l.user_name = ${username}
-        AND EXTRACT(YEAR FROM l.listened_at)::int = ${year}
-      GROUP BY COALESCE(l.recording_mbid::text, '~' || l.track_name), l.artist_name
+      SELECT track_name, artist_name, plays, effective_ms,
+             caa_id, caa_release_mbid, recording_mbid
+      FROM ${schema.aggSong}
+      WHERE user_name = ${username} AND scope = ${year}
       ORDER BY plays DESC, track_name
       LIMIT ${limit}
     `),
@@ -172,21 +159,11 @@ export async function topAlbumsByYear(
 ): Promise<TopAlbumInYear[]> {
   const res = await withRetry(() =>
     db.execute<TopAlbumInYear>(sql`
-      SELECT
-        l.release_name,
-        l.artist_name,
-        COUNT(*)::int AS plays,
-        COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint AS effective_ms,
-        (array_agg(l.caa_id ORDER BY l.listened_at DESC) FILTER (WHERE l.caa_id IS NOT NULL))[1] AS caa_id,
-        (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC) FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
-        mode() WITHIN GROUP (ORDER BY l.release_mbid) FILTER (WHERE l.release_mbid IS NOT NULL)::text AS release_mbid
-      FROM ${schema.listens} l
-      LEFT JOIN ${schema.recordings} r ON r.mbid = l.recording_mbid
-      WHERE l.user_name = ${username}
-        AND l.release_name IS NOT NULL
-        AND EXTRACT(YEAR FROM l.listened_at)::int = ${year}
-      GROUP BY l.release_name, l.artist_name
-      ORDER BY plays DESC, l.release_name
+      SELECT release_name, artist_name, plays, effective_ms,
+             caa_id, caa_release_mbid, release_mbid
+      FROM ${schema.aggAlbum}
+      WHERE user_name = ${username} AND scope = ${year}
+      ORDER BY plays DESC, release_name
       LIMIT ${limit}
     `),
   );
@@ -200,21 +177,11 @@ export async function topArtistsByYear(
 ): Promise<TopArtistInYear[]> {
   const res = await withRetry(() =>
     db.execute<TopArtistInYear>(sql`
-      SELECT
-        l.artist_name,
-        COUNT(*)::int AS plays,
-        COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint AS effective_ms,
-        COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int AS distinct_songs,
-        mode() WITHIN GROUP (ORDER BY l.artist_mbids[1]) FILTER (WHERE l.artist_mbids[1] IS NOT NULL)::text AS artist_mbid,
-        (array_agg(l.caa_id ORDER BY l.listened_at DESC) FILTER (WHERE l.caa_id IS NOT NULL))[1] AS caa_id,
-        (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC) FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid
-      FROM ${schema.listens} l
-      LEFT JOIN ${schema.recordings} r ON r.mbid = l.recording_mbid
-      WHERE l.user_name = ${username}
-        AND l.artist_name IS NOT NULL
-        AND EXTRACT(YEAR FROM l.listened_at)::int = ${year}
-      GROUP BY l.artist_name
-      ORDER BY plays DESC, l.artist_name
+      SELECT artist_name, plays, effective_ms, distinct_songs,
+             artist_mbid, caa_id, caa_release_mbid
+      FROM ${schema.aggArtist}
+      WHERE user_name = ${username} AND scope = ${year}
+      ORDER BY plays DESC, artist_name
       LIMIT ${limit}
     `),
   );
@@ -230,27 +197,18 @@ export type DailyPoint = { date: string; plays: number };
 export async function dailyListeningByYear(
   username: string,
   year: number,
-  tzOffsetMinutes = 0,
 ): Promise<DailyPoint[]> {
   const res = await withRetry(() =>
     db.execute<DailyPoint>(sql`
-      WITH dates AS (
-        SELECT generate_series(
-          make_date(${year}, 1, 1),
-          make_date(${year}, 12, 31),
-          '1 day'::interval
-        )::date AS day
-      ),
-      plays_by_day AS (
-        SELECT (listened_at + (${tzOffsetMinutes} || ' minutes')::interval)::date AS day, COUNT(*)::int AS plays
-        FROM ${schema.listens}
-        WHERE user_name = ${username}
-          AND listened_at >= make_date(${year}, 1, 1)
-          AND listened_at <  make_date(${year} + 1, 1, 1)
-        GROUP BY day
-      )
-      SELECT to_char(d.day, 'YYYY-MM-DD') AS date, COALESCE(p.plays, 0)::int AS plays
-      FROM dates d LEFT JOIN plays_by_day p ON p.day = d.day
+      SELECT to_char(d.day, 'YYYY-MM-DD') AS date,
+             COALESCE(a.plays, 0)::int AS plays
+      FROM generate_series(
+        make_date(${year}, 1, 1),
+        make_date(${year}, 12, 31),
+        '1 day'::interval
+      ) d(day)
+      LEFT JOIN ${schema.aggDay} a
+        ON a.user_name = ${username} AND a.date = d.day::date
       ORDER BY d.day
     `),
   );
