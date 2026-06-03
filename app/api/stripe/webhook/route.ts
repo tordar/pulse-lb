@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       case "checkout.session.completed":
         await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
         break;
+      case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted":
         await handleSubscriptionChange(event.data.object as Stripe.Subscription);
@@ -114,12 +115,15 @@ async function handleSubscriptionChange(sub: Stripe.Subscription) {
     sub.status === "canceled" || sub.status === "incomplete_expired"
       ? ("canceled" as const)
       : ("active" as const);
+  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
   await withRetry(() =>
     db
       .update(schema.users)
       .set({
         subscriptionStatus: status,
+        subscriptionKind: "annual",
         stripeSubscriptionId: sub.id,
+        stripeCustomerId: customerId ?? undefined,
         currentPeriodEnd,
       })
       .where(eq(schema.users.id, userId)),
