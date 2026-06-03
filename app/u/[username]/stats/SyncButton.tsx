@@ -149,12 +149,23 @@ export function SyncButton({ username }: { username: string }) {
   }
 
   async function trigger() {
+    seenRef.current = new Set();
+    setStream([]);
+    setPages(0);
+    setError(null);
     await fetch(`/api/sync/${username}`, { method: "POST" });
     startPolling();
   }
 
+  // Floor to 0.1% so we never display "100.0%" while dbCount is still short
+  // of target — LB's getListenCount can report more than /listens will
+  // paginate to (private/deleted plays), so the exact equality may never hit.
   const pct =
-    target && target > 0 ? Math.max(0, Math.min(100, (dbCount / target) * 100)) : null;
+    target && target > 0
+      ? dbCount >= target
+        ? 100
+        : Math.max(0, Math.min(99.9, Math.floor((dbCount / target) * 1000) / 10))
+      : null;
 
   return (
     <div className="w-full space-y-3">
