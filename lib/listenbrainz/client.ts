@@ -2,7 +2,10 @@ import { z } from "zod";
 
 const LB_PRIMARY = "https://api.listenbrainz.org";
 const LB_FALLBACK = "https://beta-api.listenbrainz.org";
-const PRIMARY_TIMEOUT_MS = 5_000;
+// Healthy primary responds in <1s. If it doesn't answer in 2s, we'd rather
+// pay one beta call than wait it out — across 200 pages of pagination, a
+// 5s timeout vs 2s timeout adds ~10 minutes of wall-clock to a backfill.
+const PRIMARY_TIMEOUT_MS = 2_000;
 
 const AdditionalInfo = z
   .object({
