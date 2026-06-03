@@ -178,16 +178,16 @@ export default async function StatsPage({
           )}
 
           {selectedYear !== null && years.length > 0 && (
-            <section className="space-y-4">
-              <div className="flex items-baseline justify-between gap-3 flex-wrap">
-                <SectionHeading icon={BarChart3}>Top by year</SectionHeading>
+            <section className="rounded-lg border border-card-border bg-card">
+              <div className="p-5 border-b border-card-border space-y-4">
+                <h2 className="text-lg font-semibold">Top Songs, Artists &amp; Albums by Year</h2>
+                <YearTabs years={years} active={selectedYear} />
               </div>
-              <YearTabs years={years} active={selectedYear} />
               <div
                 key={selectedYear}
-                className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 fade-in"
+                className="p-5 grid gap-8 md:grid-cols-2 lg:grid-cols-3 fade-in"
               >
-                <YearColumn title="Top songs">
+                <YearColumn title="Top Songs" icon={Music2}>
                   {yearSongs.length === 0 ? (
                     <Empty />
                   ) : (
@@ -210,7 +210,7 @@ export default async function StatsPage({
                     })
                   )}
                 </YearColumn>
-                <YearColumn title="Top artists">
+                <YearColumn title="Top Artists" icon={Users}>
                   {yearArtists.length === 0 ? (
                     <Empty />
                   ) : (
@@ -234,7 +234,7 @@ export default async function StatsPage({
                     })
                   )}
                 </YearColumn>
-                <YearColumn title="Top albums">
+                <YearColumn title="Top Albums" icon={Disc3}>
                   {yearAlbums.length === 0 ? (
                     <Empty />
                   ) : (
@@ -373,10 +373,21 @@ function DayDetailBlock({
   );
 }
 
-function YearColumn({ title, children }: { title: string; children: React.ReactNode }) {
+function YearColumn({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <Icon className="w-5 h-5 text-muted-foreground" />
+        <h3 className="font-semibold text-lg">{title}</h3>
+      </div>
       <ol className="space-y-2">{children}</ol>
     </div>
   );
@@ -407,34 +418,42 @@ function YearRow({
 }) {
   const hours = ms / 1000 / 3600;
   const inner = (
-    <>
-      <span className="shrink-0 w-7 h-7 rounded bg-muted text-xs text-muted-foreground tabular-nums grid place-items-center">
+    <div className="flex items-start gap-3">
+      <span className="shrink-0 w-8 h-8 rounded-md bg-muted text-xs font-medium text-muted-foreground tabular-nums grid place-items-center mt-0.5">
         {rank}
       </span>
       <CoverArt
         art={art}
-        size={44}
+        size={64}
         alt={title}
-        className={artShape === "circle" ? "rounded-full" : "rounded"}
+        className={`mt-0.5 ${artShape === "circle" ? "rounded-full" : "rounded-md"}`}
       />
       <div className="flex-1 min-w-0">
-        <div className="truncate text-sm font-medium">{title}</div>
-        <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
-        <div className="text-xs text-subtle-foreground tabular-nums pt-0.5">
-          ▶ {plays.toLocaleString()}
-          {hours > 0 && <span>  ⏱ {fmtHours(hours)}</span>}
+        <p className="font-medium text-sm break-words">{title}</p>
+        <p className="text-xs text-muted-foreground break-words mb-2">{subtitle}</p>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
+          <div className="flex items-center gap-1">
+            <Play className="w-3 h-3" />
+            <span>{plays.toLocaleString()}</span>
+          </div>
+          {hours > 0 && (
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              <span>{fmtHours(hours)}</span>
+            </div>
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
   return (
     <li>
       {href ? (
-        <Link href={href} className="flex items-center gap-3 py-1.5 hover:bg-muted -mx-2 px-2 rounded">
+        <Link href={href} className="block p-2 rounded-md hover:bg-muted/50 transition-colors">
           {inner}
         </Link>
       ) : (
-        <div className="flex items-center gap-3 py-1.5">{inner}</div>
+        <div className="p-2 rounded-md">{inner}</div>
       )}
     </li>
   );

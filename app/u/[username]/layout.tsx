@@ -15,7 +15,7 @@ export default async function UserLayout({
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 backdrop-blur-md bg-background/70 border-b border-border/60">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
           <Link
             href="/"
             className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5"
@@ -29,7 +29,7 @@ export default async function UserLayout({
           <NowPlaying username={username} />
         </div>
       </header>
-      <div className="max-w-6xl mx-auto px-6 py-6">{children}</div>
+      <div className="max-w-7xl mx-auto px-6 py-6">{children}</div>
     </div>
   );
 }

@@ -14,17 +14,17 @@ export function YearTabs({ years, active }: { years: number[]; active: number })
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid grid-cols-5 sm:grid-cols-5 md:grid-cols-8 lg:grid-cols-12 gap-2">
       {years.map((y) => {
         const isActive = y === active;
         return (
           <button
             key={y}
             onClick={() => setYear(y)}
-            className={`px-3.5 py-1.5 rounded-md text-sm font-medium tabular-nums transition-colors ${
+            className={`w-full px-3 py-1.5 rounded-md text-sm font-medium tabular-nums transition-colors ${
               isActive
                 ? "bg-primary text-primary-foreground"
-                : "bg-card border border-border text-foreground/80 hover:bg-muted"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
             {y}
