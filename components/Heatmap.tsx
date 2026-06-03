@@ -136,13 +136,6 @@ export function Heatmap({
         </div>
       </div>
 
-      <div className="heatmap-legend">
-        <span>Less</span>
-        {[0, 1, 2, 3, 4].map((lvl) => (
-          <span key={lvl} className="cell legend-cell" data-level={lvl} aria-hidden />
-        ))}
-        <span>More</span>
-      </div>
     </div>
   );
 }

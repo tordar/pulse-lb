@@ -364,7 +364,7 @@ Append:
 
 ```ts
 function buildSong(username: string) {
-  // UNION ALL of year-scoped rows (scope = year) and all-time rows (scope = NULL).
+  // UNION ALL of year-scoped rows (scope = year) and all-time rows (scope = 0 (all-time sentinel)).
   // Same SELECT shape; the only differences are the scope expression and the
   // GROUP BY columns.
   return sql`
@@ -397,10 +397,10 @@ function buildSong(username: string) {
 
     UNION ALL
 
-    -- All-time (scope = NULL)
+    -- All-time (scope = 0)
     SELECT
       ${username}::text,
-      NULL::int,
+      0::int,
       COALESCE(l.recording_mbid::text, '~' || l.track_name),
       (array_agg(l.track_name ORDER BY l.listened_at DESC))[1],
       l.artist_name,
@@ -459,7 +459,7 @@ function buildArtist(username: string) {
     -- All-time
     SELECT
       ${username}::text,
-      NULL::int,
+      0::int,
       l.artist_name,
       COUNT(*)::int,
       COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
@@ -509,7 +509,7 @@ function buildAlbum(username: string) {
     -- All-time
     SELECT
       ${username}::text,
-      NULL::int,
+      0::int,
       l.release_name || '|' || COALESCE(l.artist_name, ''),
       l.release_name,
       l.artist_name,
@@ -1044,7 +1044,7 @@ export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSo
       SELECT track_name, artist_name, plays,
              caa_id, caa_release_mbid, recording_mbid
       FROM ${schema.aggSong}
-      WHERE user_name = ${opts.username} AND scope IS NULL
+      WHERE user_name = ${opts.username} AND scope = 0
         ${pat ? sql`AND (track_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql``}
       ORDER BY plays DESC, track_name
       LIMIT ${limit} OFFSET ${offset}
@@ -1067,7 +1067,7 @@ export async function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopA
       SELECT release_name, artist_name, plays,
              caa_id, caa_release_mbid, release_mbid
       FROM ${schema.aggAlbum}
-      WHERE user_name = ${opts.username} AND scope IS NULL
+      WHERE user_name = ${opts.username} AND scope = 0
         ${pat ? sql`AND (release_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql``}
       ORDER BY plays DESC, release_name
       LIMIT ${limit} OFFSET ${offset}
@@ -1092,7 +1092,7 @@ export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<Top
              distinct_albums,
              artist_mbid
       FROM ${schema.aggArtist}
-      WHERE user_name = ${opts.username} AND scope IS NULL
+      WHERE user_name = ${opts.username} AND scope = 0
         ${pat ? sql`AND artist_name ILIKE ${pat}` : sql``}
       ORDER BY plays DESC, artist_name
       LIMIT ${limit} OFFSET ${offset}
