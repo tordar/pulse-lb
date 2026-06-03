@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { syncUser } from "@/lib/sync/syncUser";
+import { rebuildAll } from "@/lib/db/aggregates/rebuild";
 
 export const maxDuration = 300;
 
@@ -88,6 +89,32 @@ export async function POST(
           pagesFetched: result.pages,
         })
         .where(eq(schema.syncJobs.id, jobId));
+
+      // End-of-chain rebuild: if no new data was found this hop AND the sync
+      // is complete (both passes reached origin), and our aggregates are
+      // behind the latest listen, rebuild aggregates atomically. Stamp
+      // last_aggregated_at so a subsequent no-op resync skips this work.
+      const isChainTerminal = result.completed && result.added === 0;
+      if (isChainTerminal) {
+        const state = await withRetry(() =>
+          db.query.syncState.findFirst({
+            where: eq(schema.syncState.userName, username),
+          }),
+        );
+        const stale =
+          !state?.lastAggregatedAt ||
+          (state.lastListenedAt != null &&
+            state.lastAggregatedAt < state.lastListenedAt);
+        if (stale) {
+          await rebuildAll(username);
+          await withRetry(() =>
+            db
+              .update(schema.syncState)
+              .set({ lastAggregatedAt: new Date() })
+              .where(eq(schema.syncState.userName, username)),
+          );
+        }
+      }
 
       // Self-continuation: if this pass timed out (more work remains) OR if
       // it completed naturally but added something, keep going. Chain ends
