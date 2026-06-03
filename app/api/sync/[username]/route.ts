@@ -67,6 +67,10 @@ export async function POST(
         .where(eq(schema.syncJobs.id, jobId));
 
       const result = await syncUser(username, {
+        // Budget syncUser at 40s — that leaves ~20s of headroom under Vercel's
+        // 60s Hobby cap for: end-of-sync sync_state UPSERT, sync_jobs "done"
+        // write, the self-trigger fetch, and any retry budget.
+        maxDurationMs: 40_000,
         onProgress: async (added, pages) => {
           await db
             .update(schema.syncJobs)
@@ -85,12 +89,14 @@ export async function POST(
         })
         .where(eq(schema.syncJobs.id, jobId));
 
-      // Self-continuation: if this pass added anything, there's probably more
-      // to fetch. Spawn a new POST to ourselves. The new function gets a
-      // fresh 60s/300s budget; chain ends when a pass adds 0.
+      // Self-continuation: if this pass timed out (more work remains) OR if
+      // it completed naturally but added something, keep going. Chain ends
+      // only when a pass completes with added=0 (fully synced).
       const elapsed = Date.now() - startedAt;
+      void elapsed;
+      const moreWorkRemaining = !result.completed || result.added > 0;
       const shouldContinue =
-        result.added > 0 && chainDepth < MAX_CHAIN_DEPTH;
+        moreWorkRemaining && chainDepth < MAX_CHAIN_DEPTH;
       if (shouldContinue) {
         // Fire-and-forget — we don't await the response, just trigger it.
         fetch(`${origin}/api/sync/${encodeURIComponent(username)}`, {
@@ -178,8 +184,23 @@ export async function GET(
       recent,
     });
   }
+
+  // Detect zombie jobs: if a "running" or "queued" row hasn't moved in 90s,
+  // Vercel killed the function. Report it as effectively dead so the UI can
+  // stop polling and surface a retry option. We don't write to the DB here —
+  // the next POST will sweep it.
+  const ageMs = Date.now() - latest.startedAt.getTime();
+  const ZOMBIE_THRESHOLD_MS = 90_000;
+  const isZombie =
+    (latest.status === "running" || latest.status === "queued") &&
+    ageMs > ZOMBIE_THRESHOLD_MS;
+
   return NextResponse.json({
     ...latest,
+    status: isZombie ? "error" : latest.status,
+    errorMessage: isZombie
+      ? "function timed out — click Sync again to continue"
+      : latest.errorMessage,
     target: state?.targetListens ?? null,
     dbCount,
     recent,

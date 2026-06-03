@@ -7,7 +7,13 @@ const PAGE_SIZES = [1000, 500, 200, 100];
 const MAX_RETRIES_PER_SIZE = 3;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export type SyncResult = { added: number; pages: number; mode: "backfill" | "incremental" };
+export type SyncResult = {
+  added: number;
+  pages: number;
+  mode: "backfill" | "incremental";
+  /** False when we bailed out because the time budget ran out; more work may remain. */
+  completed: boolean;
+};
 
 /**
  * Sync semantics, one rule:
@@ -25,8 +31,17 @@ export type SyncResult = { added: number; pages: number; mode: "backfill" | "inc
  */
 export async function syncUser(
   username: string,
-  opts: { token?: string; onProgress?: (added: number, pages: number) => void } = {},
+  opts: {
+    token?: string;
+    onProgress?: (added: number, pages: number) => void;
+    /** Hard time budget for this invocation. Default 40s leaves headroom under
+     *  Vercel Hobby's 60s function timeout for the route's post-sync writes
+     *  and self-trigger fetch. */
+    maxDurationMs?: number;
+  } = {},
 ): Promise<SyncResult> {
+  const deadline = Date.now() + (opts.maxDurationMs ?? 40_000);
+  const outOfTime = () => Date.now() >= deadline;
   const state = await withRetry(() =>
     db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
   );
@@ -90,29 +105,41 @@ export async function syncUser(
     opts.onProgress?.(totalAdded, totalPages);
   };
 
+  let fwd = { reachedOrigin: true, firstNewest: 0, timedOut: false };
+  let back = { reachedOrigin: true, firstNewest: 0, timedOut: false };
+
   // Forward pass: pick up anything newer than what we have. Skipped only
   // when the table is completely empty (nothing to start from).
   if (hasData) {
-    await paginate({
+    fwd = await paginate({
       username,
       mode: "incremental",
       cursor: bounds.newest!,
       token: opts.token,
+      outOfTime,
       onInserted,
     });
   }
 
   // Backward pass: continue from one second before our oldest listen
   // (or from "now" if the table is empty). Stops as soon as LB returns
-  // an empty/short page.
-  const back = await paginate({
-    username,
-    mode: "backfill",
-    cursor: hasData ? bounds.oldest! - 1 : null,
-    token: opts.token,
-    onInserted,
-  });
+  // an empty/short page, OR when our time budget runs out — the chain
+  // will spawn another invocation to keep going.
+  if (!outOfTime()) {
+    back = await paginate({
+      username,
+      mode: "backfill",
+      cursor: hasData ? bounds.oldest! - 1 : null,
+      token: opts.token,
+      outOfTime,
+      onInserted,
+    });
+  } else {
+    back.timedOut = true;
+  }
   if (back.firstNewest > newestSeen) newestSeen = back.firstNewest;
+
+  const completed = !fwd.timedOut && !back.timedOut;
 
   const newLastListenedAt = newestSeen ? new Date(newestSeen * 1000) : state?.lastListenedAt ?? null;
   const newTotal = (state?.totalListens ?? 0) + totalAdded;
@@ -141,7 +168,12 @@ export async function syncUser(
       }),
   );
 
-  return { added: totalAdded, pages: totalPages, mode: hasData ? "incremental" : "backfill" };
+  return {
+    added: totalAdded,
+    pages: totalPages,
+    mode: hasData ? "incremental" : "backfill",
+    completed,
+  };
 }
 
 /**
@@ -154,12 +186,18 @@ async function paginate(args: {
   cursor: number | null;
   token?: string;
   onInserted: (n: number, newestSeenInPage: number) => void;
-}): Promise<{ reachedOrigin: boolean; firstNewest: number }> {
+  outOfTime: () => boolean;
+}): Promise<{ reachedOrigin: boolean; firstNewest: number; timedOut: boolean }> {
   let { cursor } = args;
   let reachedOrigin = false;
   let firstNewest = 0;
+  let timedOut = false;
 
   while (true) {
+    if (args.outOfTime()) {
+      timedOut = true;
+      break;
+    }
     const listens = await fetchPageWithFallback({
       username: args.username,
       mode: args.mode,
@@ -195,7 +233,7 @@ async function paginate(args: {
     }
   }
 
-  return { reachedOrigin, firstNewest };
+  return { reachedOrigin, firstNewest, timedOut };
 }
 
 async function fetchPageWithFallback(opts: {
