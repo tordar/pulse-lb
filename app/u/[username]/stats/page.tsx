@@ -37,31 +37,35 @@ export default async function StatsPage({
   const { username } = await params;
   const sp = await searchParams;
 
-  const state = await withRetry(() =>
-    db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
-  );
-  const allTime = await allTimeStats(username);
-  const today = await todayStats(username);
-  const yearly = await yearlyListening(username);
-  const hourly = await hourlyDistribution(username);
-  const recent = await withRetry(() =>
-    db.execute<{
-      listened_at: string;
-      track_name: string;
-      artist_name: string;
-      release_name: string | null;
-    }>(sql`
-      SELECT listened_at, track_name, artist_name, release_name
-      FROM ${schema.listens}
-      WHERE user_name = ${username}
-      ORDER BY listened_at DESC LIMIT 10
-    `),
-  );
+  // Year-independent queries run in parallel. Cached ones (allTime, yearly,
+  // hourly, availableYears) hit the per-user tag cache; uncached ones (state,
+  // todayStats, recent listens) hit the DB but in parallel rather than serial.
+  const [state, allTime, today, yearly, hourly, recent, years] = await Promise.all([
+    withRetry(() =>
+      db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
+    ),
+    allTimeStats(username),
+    todayStats(username),
+    yearlyListening(username),
+    hourlyDistribution(username),
+    withRetry(() =>
+      db.execute<{
+        listened_at: string;
+        track_name: string;
+        artist_name: string;
+        release_name: string | null;
+      }>(sql`
+        SELECT listened_at, track_name, artist_name, release_name
+        FROM ${schema.listens}
+        WHERE user_name = ${username}
+        ORDER BY listened_at DESC LIMIT 10
+      `),
+    ),
+    availableYears(username),
+  ]);
   const recentRows = (recent as unknown as { rows: { listened_at: string; track_name: string; artist_name: string; release_name: string | null }[] }).rows;
 
   const empty = allTime.total_plays === 0;
-
-  const years = empty ? [] : await availableYears(username);
   const selectedYear = years.length
     ? Math.max(years[years.length - 1], Math.min(years[0], parseInt(sp.year ?? "", 10) || years[0]))
     : null;
@@ -120,66 +124,9 @@ export default async function StatsPage({
             />
           </section>
 
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card title="Today">
-              <div className="flex items-baseline gap-6">
-                <div>
-                  <div className="text-3xl font-semibold tabular-nums">{today.plays.toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">plays</div>
-                </div>
-                <div>
-                  <div className="text-3xl font-semibold tabular-nums">
-                    {fmtHours(today.effective_ms / 1000 / 3600)}
-                  </div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">listening time</div>
-                </div>
-              </div>
-            </Card>
-
-            <Card title="Coverage">
-              <div className="space-y-1">
-                <div className="text-sm">
-                  Listening time is estimated from MusicBrainz track lengths for plays missing duration. Coverage grows as you click into more albums and artists (the cache fills opportunistically).
-                </div>
-                <div className="text-xs text-muted-foreground tabular-nums pt-1">
-                  {allTime.duration_coverage_pct?.toFixed(1) ?? "0"}% of your plays have a known duration.
-                </div>
-              </div>
-            </Card>
-          </section>
-
-          <section className="space-y-3">
-            <SectionHeading icon={TrendingUp}>Listening by year</SectionHeading>
-            <YearlyChart data={yearly} height={260} />
-          </section>
-
-          <section className="space-y-3">
-            <SectionHeading icon={Clock} extra="(hour of day, all-time)">When you listen</SectionHeading>
-            <HourlyChart data={hourly} height={200} />
-          </section>
-
-          {selectedYear !== null && (
-            <section className="space-y-4">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <SectionHeading icon={Calendar}>{selectedYear}</SectionHeading>
-                <YearNav year={selectedYear} prevYear={prevYear} nextYear={nextYear} />
-              </div>
-              <Heatmap
-                days={daily}
-                activeDate={sp.day ?? null}
-                hrefFor={(date) => {
-                  const next = new URLSearchParams({ year: String(selectedYear) });
-                  next.set("day", date);
-                  return `?${next}`;
-                }}
-              />
-              {daySummary && <DayDetailBlock username={username} day={daySummary} year={selectedYear} />}
-            </section>
-          )}
-
           {selectedYear !== null && years.length > 0 && (
             <section className="rounded-lg border border-card-border bg-card">
-              <div className="p-5 border-b border-card-border space-y-4">
+              <div className="p-5 pb-0 space-y-4">
                 <h2 className="text-lg font-semibold">Top Songs, Artists &amp; Albums by Year</h2>
                 <YearTabs years={years} active={selectedYear} />
               </div>
@@ -261,6 +208,63 @@ export default async function StatsPage({
             </section>
           )}
 
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card title="Today">
+              <div className="flex items-baseline gap-6">
+                <div>
+                  <div className="text-3xl font-semibold tabular-nums">{today.plays.toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">plays</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-semibold tabular-nums">
+                    {fmtHours(today.effective_ms / 1000 / 3600)}
+                  </div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">listening time</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card title="Coverage">
+              <div className="space-y-1">
+                <div className="text-sm">
+                  Listening time is estimated from MusicBrainz track lengths for plays missing duration. Coverage grows as you click into more albums and artists (the cache fills opportunistically).
+                </div>
+                <div className="text-xs text-muted-foreground tabular-nums pt-1">
+                  {allTime.duration_coverage_pct?.toFixed(1) ?? "0"}% of your plays have a known duration.
+                </div>
+              </div>
+            </Card>
+          </section>
+
+          <section className="space-y-3">
+            <SectionHeading icon={TrendingUp}>Listening by year</SectionHeading>
+            <YearlyChart data={yearly} height={260} />
+          </section>
+
+          <section className="space-y-3">
+            <SectionHeading icon={Clock} extra="(hour of day, all-time)">When you listen</SectionHeading>
+            <HourlyChart data={hourly} height={200} />
+          </section>
+
+          {selectedYear !== null && (
+            <section className="rounded-lg border border-card-border bg-card p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <SectionHeading icon={Calendar}>{selectedYear}</SectionHeading>
+                <YearNav year={selectedYear} prevYear={prevYear} nextYear={nextYear} />
+              </div>
+              <Heatmap
+                days={daily}
+                activeDate={sp.day ?? null}
+                hrefFor={(date) => {
+                  const next = new URLSearchParams({ year: String(selectedYear) });
+                  next.set("day", date);
+                  return `?${next}`;
+                }}
+              />
+              {daySummary && <DayDetailBlock username={username} day={daySummary} year={selectedYear} />}
+            </section>
+          )}
+
           <section className="space-y-3">
             <SectionHeading icon={Clock}>Recent listens</SectionHeading>
             <ul className="divide-y divide-border text-sm">
@@ -303,7 +307,7 @@ function DayDetailBlock({
   const closeHref = `?${new URLSearchParams({ year: String(year) })}`;
 
   return (
-    <div key={day.date} className="fade-in rounded-lg border border-card-border bg-card p-5 space-y-4">
+    <div key={day.date} className="fade-in mt-2 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wide text-primary inline-flex items-center gap-1.5">
@@ -336,7 +340,7 @@ function DayDetailBlock({
       {day.listens.length === 0 ? (
         <p className="text-sm text-subtle-foreground italic">No listens this day.</p>
       ) : (
-        <ul className="divide-y divide-border text-sm">
+        <ul className="divide-y divide-border text-sm max-h-[420px] overflow-y-auto pr-1">
           {day.listens.map((l, i) => {
             const time = new Date(l.listened_at).toISOString().slice(11, 16);
             const href = l.recording_mbid

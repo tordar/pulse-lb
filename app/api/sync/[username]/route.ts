@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
+import { revalidateTag } from "next/cache";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, schema } from "@/lib/db/client";
@@ -113,6 +114,9 @@ export async function POST(
               .set({ lastAggregatedAt: new Date() })
               .where(eq(schema.syncState.userName, username)),
           );
+          // Drop the per-user query cache so stats/list pages pick up new
+          // aggregates on next render instead of serving the previous snapshot.
+          revalidateTag(`user:${username}`, "default");
         }
       }
 
