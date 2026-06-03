@@ -7,6 +7,8 @@ import {
   uuid,
   primaryKey,
   index,
+  date,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 
 export const listens = pgTable(
@@ -59,6 +61,110 @@ export const releases = pgTable(
   (t) => [index("releases_rgid").on(t.releaseGroupMbid)],
 );
 
+export const aggAlltime = pgTable("agg_alltime", {
+  userName: text("user_name").primaryKey(),
+  totalPlays: integer("total_plays").notNull(),
+  effectiveMs: bigint("effective_ms", { mode: "number" }).notNull(),
+  distinctArtists: integer("distinct_artists").notNull(),
+  distinctAlbums: integer("distinct_albums").notNull(),
+  distinctSongs: integer("distinct_songs").notNull(),
+  firstPlayed: timestamp("first_played", { withTimezone: true }),
+  lastPlayed: timestamp("last_played", { withTimezone: true }),
+  durationCoveragePct: doublePrecision("duration_coverage_pct"),
+  computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const aggYear = pgTable(
+  "agg_year",
+  {
+    userName: text("user_name").notNull(),
+    year: integer("year").notNull(),
+    plays: integer("plays").notNull(),
+    hours: doublePrecision("hours").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userName, t.year] })],
+);
+
+export const aggHour = pgTable(
+  "agg_hour",
+  {
+    userName: text("user_name").notNull(),
+    hour: integer("hour").notNull(),
+    plays: integer("plays").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userName, t.hour] })],
+);
+
+export const aggDay = pgTable(
+  "agg_day",
+  {
+    userName: text("user_name").notNull(),
+    date: date("date").notNull(),
+    plays: integer("plays").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userName, t.date] })],
+);
+
+export const aggSong = pgTable(
+  "agg_song",
+  {
+    userName: text("user_name").notNull(),
+    scope: integer("scope"),
+    groupKey: text("group_key").notNull(),
+    trackName: text("track_name").notNull(),
+    artistName: text("artist_name"),
+    plays: integer("plays").notNull(),
+    effectiveMs: bigint("effective_ms", { mode: "number" }).notNull(),
+    caaId: bigint("caa_id", { mode: "number" }),
+    caaReleaseMbid: uuid("caa_release_mbid"),
+    recordingMbid: uuid("recording_mbid"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userName, t.scope, t.groupKey] }),
+    index("agg_song_top").on(t.userName, t.scope, t.plays),
+  ],
+);
+
+export const aggArtist = pgTable(
+  "agg_artist",
+  {
+    userName: text("user_name").notNull(),
+    scope: integer("scope"),
+    artistName: text("artist_name").notNull(),
+    plays: integer("plays").notNull(),
+    effectiveMs: bigint("effective_ms", { mode: "number" }).notNull(),
+    distinctSongs: integer("distinct_songs").notNull(),
+    distinctAlbums: integer("distinct_albums").notNull(),
+    artistMbid: uuid("artist_mbid"),
+    caaId: bigint("caa_id", { mode: "number" }),
+    caaReleaseMbid: uuid("caa_release_mbid"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userName, t.scope, t.artistName] }),
+    index("agg_artist_top").on(t.userName, t.scope, t.plays),
+  ],
+);
+
+export const aggAlbum = pgTable(
+  "agg_album",
+  {
+    userName: text("user_name").notNull(),
+    scope: integer("scope"),
+    groupKey: text("group_key").notNull(),
+    releaseName: text("release_name").notNull(),
+    artistName: text("artist_name"),
+    plays: integer("plays").notNull(),
+    effectiveMs: bigint("effective_ms", { mode: "number" }).notNull(),
+    caaId: bigint("caa_id", { mode: "number" }),
+    caaReleaseMbid: uuid("caa_release_mbid"),
+    releaseMbid: uuid("release_mbid"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userName, t.scope, t.groupKey] }),
+    index("agg_album_top").on(t.userName, t.scope, t.plays),
+  ],
+);
+
 export const syncState = pgTable("sync_state", {
   userName: text("user_name").primaryKey(),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
@@ -69,6 +175,7 @@ export const syncState = pgTable("sync_state", {
   // to compute a sync-progress percentage in the UI. Refreshed on every
   // sync invocation. Null until the first sync runs.
   targetListens: integer("target_listens"),
+  lastAggregatedAt: timestamp("last_aggregated_at", { withTimezone: true }),
 });
 
 export const syncJobs = pgTable(
