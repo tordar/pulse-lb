@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Music2, Disc3, Users } from "lucide-react";
+import { BarChart3, Music2, Disc3, Users, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const TABS: { slug: string; label: string; Icon: LucideIcon }[] = [
@@ -12,7 +12,7 @@ const TABS: { slug: string; label: string; Icon: LucideIcon }[] = [
   { slug: "artists", label: "Artists", Icon: Users },
 ];
 
-export function PillNav({ username }: { username: string }) {
+export function PillNav({ username, showAccount }: { username: string; showAccount?: boolean }) {
   const pathname = usePathname();
   const base = `/u/${encodeURIComponent(username)}`;
 
@@ -37,6 +37,21 @@ export function PillNav({ username }: { username: string }) {
           </Link>
         );
       })}
+      {showAccount && (
+        <Link
+          href="/account"
+          aria-label="Account settings"
+          title="Account settings"
+          className={`inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            pathname?.startsWith("/account")
+              ? "bg-primary text-primary-foreground"
+              : "text-foreground/80 hover:bg-muted"
+          }`}
+        >
+          <Settings size={15} strokeWidth={2} />
+          <span className="hidden sm:inline">Account</span>
+        </Link>
+      )}
     </nav>
   );
 }

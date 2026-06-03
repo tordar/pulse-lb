@@ -281,16 +281,22 @@ export default async function StatsPage({
           <section className="space-y-3">
             <SectionHeading icon={Clock}>Recent listens</SectionHeading>
             <ul className="divide-y divide-border text-sm">
-              {recentRows.map((r, i) => (
-                <li key={i} className="flex gap-3 py-1.5">
-                  <span className="text-subtle-foreground tabular-nums w-36">{fmtDateTime(r.listened_at)}</span>
-                  <span className="truncate">
-                    {r.track_name}
-                    <span className="text-subtle-foreground"> · {r.artist_name}</span>
-                    {r.release_name && <span className="text-subtle-foreground"> · {r.release_name}</span>}
-                  </span>
-                </li>
-              ))}
+              {recentRows.map((r, i) => {
+                const { date, time } = splitDateTime(r.listened_at);
+                return (
+                  <li key={i} className="flex gap-3 py-2 items-baseline">
+                    <span className="text-subtle-foreground tabular-nums shrink-0 text-xs leading-tight whitespace-nowrap">
+                      <span className="block">{date}</span>
+                      <span className="block">{time}</span>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="text-foreground">{r.track_name}</span>
+                      <span className="text-subtle-foreground"> · {r.artist_name}</span>
+                      {r.release_name && <span className="text-subtle-foreground"> · {r.release_name}</span>}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         </>
@@ -519,8 +525,9 @@ function fmtDate(s: string): string {
   return new Date(s).toISOString().slice(0, 10);
 }
 
-function fmtDateTime(s: string): string {
-  return new Date(s).toISOString().slice(0, 16).replace("T", " ");
+function splitDateTime(s: string): { date: string; time: string } {
+  const iso = new Date(s).toISOString();
+  return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
 }
 
 function fmtHours(h: number): string {
