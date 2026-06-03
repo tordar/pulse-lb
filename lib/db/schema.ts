@@ -192,3 +192,25 @@ export const syncJobs = pgTable(
   },
   (t) => [index("sync_jobs_user_started").on(t.userName, t.startedAt)],
 );
+
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  mbAccountId: integer("mb_account_id").notNull().unique(),
+  listenbrainzUsername: text("listenbrainz_username").notNull().unique(),
+  email: text("email"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  subscriptionStatus: text("subscription_status").$type<
+    "trial" | "active" | "canceled" | "lifetime"
+  >(),
+  subscriptionKind: text("subscription_kind").$type<"annual" | "lifetime">(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+});
+
+export const stripeEvents = pgTable("stripe_events", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).defaultNow().notNull(),
+});

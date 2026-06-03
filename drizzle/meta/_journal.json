@@ -36,6 +36,13 @@
       "when": 1780482876239,
       "tag": "0004_steep_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780489352047,
+      "tag": "0005_parched_the_liberteens",
+      "breakpoints": true
     }
   ]
 }
