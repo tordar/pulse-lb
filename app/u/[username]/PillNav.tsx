@@ -25,14 +25,15 @@ export function PillNav({ username }: { username: string }) {
           <Link
             key={slug}
             href={href}
-            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            aria-label={label}
+            className={`inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               active
                 ? "bg-primary text-primary-foreground"
                 : "text-foreground/80 hover:bg-muted"
             }`}
           >
             <Icon size={15} strokeWidth={2} />
-            <span>{label}</span>
+            <span className="hidden sm:inline">{label}</span>
           </Link>
         );
       })}
