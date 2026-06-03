@@ -18,6 +18,8 @@ import {
 } from "@/lib/db/queries/stats";
 import { SyncButton } from "./SyncButton";
 import { YearNav } from "./YearNav";
+import { getSession } from "@/lib/auth/session";
+import { SignInButton } from "@/components/SignInButton";
 import { YearlyChart } from "@/components/YearlyChart";
 import { HourlyChart } from "@/components/HourlyChart";
 import { Heatmap } from "@/components/Heatmap";
@@ -36,6 +38,9 @@ export default async function StatsPage({
 }) {
   const { username } = await params;
   const sp = await searchParams;
+
+  const session = await getSession();
+  const isOwner = session?.lbUsername === username;
 
   // Year-independent queries run in parallel. Cached ones (allTime, yearly,
   // hourly, availableYears) hit the per-user tag cache; uncached ones (state,
@@ -93,7 +98,15 @@ export default async function StatsPage({
             ? <>Last synced {relTime(state.lastSyncedAt)}</>
             : <>Not synced yet</>}
         </p>
-        <SyncButton username={username} />
+        {isOwner ? (
+          <SyncButton username={username} />
+        ) : session ? (
+          <p className="text-sm text-muted-foreground">
+            Viewing @{username}&apos;s profile. <Link href={`/u/${session.lbUsername}/stats`} className="underline">Your dashboard</Link>.
+          </p>
+        ) : (
+          <SignInButton returnTo={`/u/${username}/stats`} label="Sign in to sync your own listens" />
+        )}
       </header>
 
       {empty ? (

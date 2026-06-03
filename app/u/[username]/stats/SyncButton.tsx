@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -46,6 +47,7 @@ export function SyncButton({ username }: { username: string }) {
   const [error, setError] = useState<string | null>(null);
   const [stream, setStream] = useState<RecentInsert[]>([]);
   const [synced, setSynced] = useState(false);
+  const [gate, setGate] = useState<null | "signin" | "paywall" | "forbidden">(null);
   const router = useRouter();
   const pollIdRef = useRef<number>(0);
   const seenRef = useRef<Set<string>>(new Set());
@@ -162,7 +164,20 @@ export function SyncButton({ username }: { username: string }) {
     setPages(0);
     setError(null);
     setSynced(false);
-    await fetch(`/api/sync/${username}`, { method: "POST" });
+    setGate(null);
+    const res = await fetch(`/api/sync/${username}`, { method: "POST" });
+    if (res.status === 401) {
+      setGate("signin");
+      return;
+    }
+    if (res.status === 402) {
+      setGate("paywall");
+      return;
+    }
+    if (res.status === 403) {
+      setGate("forbidden");
+      return;
+    }
     startPolling();
   }
 
@@ -199,10 +214,28 @@ export function SyncButton({ username }: { username: string }) {
         )}
         {error && <span className="text-sm text-destructive">{error}</span>}
         <span className="ml-auto" />
-        <Button onClick={trigger} disabled={running} size="sm">
-          <RefreshCw size={14} className={running ? "animate-spin" : ""} />
-          {running ? "Syncing…" : "Sync now"}
-        </Button>
+        {gate === "signin" ? (
+          <Link
+            href={`/auth/login?return=${encodeURIComponent(`/u/${username}/stats`)}`}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Sign in to sync →
+          </Link>
+        ) : gate === "paywall" ? (
+          <Link
+            href="/pricing"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
+          >
+            Subscribe to sync
+          </Link>
+        ) : gate === "forbidden" ? (
+          <span className="text-sm text-muted-foreground">Sign in as @{username} to sync</span>
+        ) : (
+          <Button onClick={trigger} disabled={running} size="sm">
+            <RefreshCw size={14} className={running ? "animate-spin" : ""} />
+            {running ? "Syncing…" : "Sync now"}
+          </Button>
+        )}
       </div>
 
       {pct != null && !(synced && !running) && (
