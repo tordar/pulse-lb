@@ -140,7 +140,7 @@ export async function GET(
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
-  const [latest, state, recentRes, countRes] = await Promise.all([
+  const [latest, state, countRes] = await Promise.all([
     withRetry(() =>
       db.query.syncJobs.findFirst({
         where: eq(schema.syncJobs.userName, username),
@@ -150,7 +150,22 @@ export async function GET(
     withRetry(() =>
       db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
     ),
+    // Source of truth for dbCount: actual row count. state.totalListens is
+    // only written at start/end of sync, so it goes stale during a chain.
     withRetry(() =>
+      db.execute<{ c: number }>(sql`
+        SELECT COUNT(*)::int AS c FROM ${schema.listens} WHERE user_name = ${username}
+      `),
+    ),
+  ]);
+  const dbCount = (countRes as unknown as { rows: { c: number }[] }).rows[0]?.c ?? 0;
+
+  // Only stream rows inserted DURING THE CURRENT JOB — otherwise re-clicking
+  // Sync after a backfill replays the tail of historical 2009 inserts. When
+  // there's no active job (done/error/never), return an empty stream.
+  let recent: RecentInsert[] = [];
+  if (latest && (latest.status === "queued" || latest.status === "running")) {
+    const recentRes = await withRetry(() =>
       db.execute<RecentInsert>(sql`
         SELECT
           listened_at::text AS listened_at,
@@ -160,23 +175,15 @@ export async function GET(
           caa_id,
           caa_release_mbid::text AS caa_release_mbid
         FROM ${schema.listens}
-        WHERE user_name = ${username} AND inserted_at IS NOT NULL
-        -- secondary sort gives a stable order within a batch (where many
-        -- rows share the same inserted_at) so the client can dedupe properly
+        WHERE user_name = ${username}
+          AND inserted_at IS NOT NULL
+          AND inserted_at >= ${latest.startedAt}
         ORDER BY inserted_at DESC, listened_at DESC
         LIMIT 40
       `),
-    ),
-    // Source of truth for dbCount: actual row count. state.totalListens is
-    // only written at start/end of sync, so it goes stale during a chain.
-    withRetry(() =>
-      db.execute<{ c: number }>(sql`
-        SELECT COUNT(*)::int AS c FROM ${schema.listens} WHERE user_name = ${username}
-      `),
-    ),
-  ]);
-  const recent = (recentRes as unknown as { rows: RecentInsert[] }).rows ?? [];
-  const dbCount = (countRes as unknown as { rows: { c: number }[] }).rows[0]?.c ?? 0;
+    );
+    recent = (recentRes as unknown as { rows: RecentInsert[] }).rows ?? [];
+  }
 
   if (!latest) {
     return NextResponse.json({

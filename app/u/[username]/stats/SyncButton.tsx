@@ -45,6 +45,7 @@ export function SyncButton({ username }: { username: string }) {
   const [pages, setPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [stream, setStream] = useState<RecentInsert[]>([]);
+  const [synced, setSynced] = useState(false);
   const router = useRouter();
   const pollIdRef = useRef<number>(0);
   const seenRef = useRef<Set<string>>(new Set());
@@ -56,8 +57,14 @@ export function SyncButton({ username }: { username: string }) {
       if (cancelled) return;
       setDbCount(snap.dbCount ?? 0);
       setTarget(snap.target ?? null);
-      // Seed the stream with whatever's there so users see SOMETHING at mount
-      if (snap.recent && snap.recent.length > 0) {
+      setSynced(snap.status === "done" && (snap.added ?? 0) === 0 && (snap.dbCount ?? 0) > 0);
+      // Seed only when a sync is actually in flight — otherwise we'd replay
+      // historical inserts from the backfill tail.
+      if (
+        snap.recent &&
+        snap.recent.length > 0 &&
+        (snap.status === "queued" || snap.status === "running")
+      ) {
         const seeded = snap.recent.slice(0, VISIBLE_MAX);
         seenRef.current = new Set(seeded.map(keyOf));
         setStream(seeded);
@@ -138,6 +145,7 @@ export function SyncButton({ username }: { username: string }) {
           if (doneSeenAt === null) doneSeenAt = Date.now();
           if (Date.now() - doneSeenAt >= CHAIN_GRACE_MS) {
             setRunning(false);
+            setSynced((snap.added ?? 0) === 0 && (snap.dbCount ?? 0) > 0);
             router.refresh();
             return;
           }
@@ -153,6 +161,7 @@ export function SyncButton({ username }: { username: string }) {
     setStream([]);
     setPages(0);
     setError(null);
+    setSynced(false);
     await fetch(`/api/sync/${username}`, { method: "POST" });
     startPolling();
   }
@@ -170,17 +179,21 @@ export function SyncButton({ username }: { username: string }) {
   return (
     <div className="w-full space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
-        {pct != null && (
+        {synced && !running ? (
+          <span className="text-sm text-muted-foreground tabular-nums">
+            <span className="text-primary">✓ Synced</span>
+            <span className="text-subtle-foreground"> · {dbCount.toLocaleString()} listens</span>
+          </span>
+        ) : pct != null ? (
           <span className="text-sm text-muted-foreground tabular-nums">
             {dbCount.toLocaleString()} / {target!.toLocaleString()}
             <span className="text-subtle-foreground"> · {pct.toFixed(1)}%</span>
           </span>
-        )}
-        {pct == null && dbCount > 0 && (
+        ) : dbCount > 0 ? (
           <span className="text-sm text-muted-foreground tabular-nums">
             {dbCount.toLocaleString()} listens
           </span>
-        )}
+        ) : null}
         {running && pages > 0 && (
           <span className="text-xs text-subtle-foreground tabular-nums">{pages} pages</span>
         )}
@@ -192,7 +205,7 @@ export function SyncButton({ username }: { username: string }) {
         </Button>
       </div>
 
-      {pct != null && (
+      {pct != null && !(synced && !running) && (
         <div className="relative w-full h-1.5 bg-muted rounded-full overflow-hidden">
           <div
             className="absolute inset-y-0 left-0 bg-primary transition-all duration-500 ease-out"
