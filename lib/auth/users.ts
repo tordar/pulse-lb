@@ -28,6 +28,10 @@ export type MbProfile = {
   email: string | null;
 };
 
+// LB usernames that get lifetime status on first sign-in instead of a trial.
+// These accounts existed before paid signup launched.
+const GRANDFATHERED_USERNAMES = new Set(["tordar", "powerole"]);
+
 /**
  * Find-or-create. New row → trial starts now + 7 days. Existing row →
  * refresh lb_username/email only; preserve subscription_status, trial_ends_at,
@@ -45,6 +49,7 @@ export async function findOrCreateUserFromProfile(p: MbProfile): Promise<DbUser>
     );
     return { ...existing, listenbrainzUsername: p.lbUsername, email: p.email };
   }
+  const isGrandfathered = GRANDFATHERED_USERNAMES.has(p.lbUsername);
   const inserted = await withRetry(() =>
     db
       .insert(schema.users)
@@ -52,8 +57,9 @@ export async function findOrCreateUserFromProfile(p: MbProfile): Promise<DbUser>
         mbAccountId: p.mbAccountId,
         listenbrainzUsername: p.lbUsername,
         email: p.email,
-        trialEndsAt: sql`now() + interval '7 days'`,
-        subscriptionStatus: "trial",
+        ...(isGrandfathered
+          ? { subscriptionStatus: "lifetime" as const, subscriptionKind: "lifetime" as const }
+          : { subscriptionStatus: "trial" as const, trialEndsAt: sql`now() + interval '7 days'` }),
       })
       .returning(),
   );
