@@ -19,7 +19,7 @@
 The implementer cannot complete Task 3 without an MB OAuth app registered, and Task 7 without a Stripe account. These are 10-minute one-time setup steps the user (Tordar) does manually.
 
 1. **Register MetaBrainz OAuth application:**
-   - Sign in at https://metabrainz.org/account/applications/
+   - Sign in at https://musicbrainz.org/account/applications
    - Create application: name "pulse-lb", type "Confidential", redirect URIs:
      - `http://localhost:3000/auth/callback`
      - `https://pulse-lb.vercel.app/auth/callback`
