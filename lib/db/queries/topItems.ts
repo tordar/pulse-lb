@@ -28,17 +28,11 @@ export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSo
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
     db.execute<TopSong>(sql`
-      SELECT
-        track_name,
-        artist_name,
-        COUNT(*)::int AS plays,
-        (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
-        (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
-        mode() WITHIN GROUP (ORDER BY recording_mbid) FILTER (WHERE recording_mbid IS NOT NULL)::text AS recording_mbid
-      FROM ${schema.listens}
-      WHERE user_name = ${opts.username}
+      SELECT track_name, artist_name, plays,
+             caa_id, caa_release_mbid, recording_mbid
+      FROM ${schema.aggSong}
+      WHERE user_name = ${opts.username} AND scope = 0
         ${pat ? sql`AND (track_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql``}
-      GROUP BY track_name, artist_name
       ORDER BY plays DESC, track_name
       LIMIT ${limit} OFFSET ${offset}
     `),
@@ -62,17 +56,11 @@ export async function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopA
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
     db.execute<TopAlbum>(sql`
-      SELECT
-        release_name,
-        artist_name,
-        COUNT(*)::int AS plays,
-        (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
-        (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
-        mode() WITHIN GROUP (ORDER BY release_mbid) FILTER (WHERE release_mbid IS NOT NULL)::text AS release_mbid
-      FROM ${schema.listens}
-      WHERE user_name = ${opts.username} AND release_name IS NOT NULL
+      SELECT release_name, artist_name, plays,
+             caa_id, caa_release_mbid, release_mbid
+      FROM ${schema.aggAlbum}
+      WHERE user_name = ${opts.username} AND scope = 0
         ${pat ? sql`AND (release_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql``}
-      GROUP BY release_name, artist_name
       ORDER BY plays DESC, release_name
       LIMIT ${limit} OFFSET ${offset}
     `),
@@ -95,16 +83,13 @@ export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<Top
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
     db.execute<TopArtist>(sql`
-      SELECT
-        artist_name,
-        COUNT(*)::int AS plays,
-        COUNT(DISTINCT track_name)::int AS distinct_tracks,
-        COUNT(DISTINCT release_name)::int AS distinct_albums,
-        mode() WITHIN GROUP (ORDER BY artist_mbids[1]) FILTER (WHERE artist_mbids[1] IS NOT NULL)::text AS artist_mbid
-      FROM ${schema.listens}
-      WHERE user_name = ${opts.username} AND artist_name IS NOT NULL
+      SELECT artist_name, plays,
+             distinct_songs AS distinct_tracks,
+             distinct_albums,
+             artist_mbid
+      FROM ${schema.aggArtist}
+      WHERE user_name = ${opts.username} AND scope = 0
         ${pat ? sql`AND artist_name ILIKE ${pat}` : sql``}
-      GROUP BY artist_name
       ORDER BY plays DESC, artist_name
       LIMIT ${limit} OFFSET ${offset}
     `),
