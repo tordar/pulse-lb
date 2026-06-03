@@ -108,7 +108,7 @@ function buildDay(username: string) {
 }
 
 function buildSong(username: string) {
-  // UNION ALL of year-scoped rows (scope = year) and all-time rows (scope = NULL).
+  // UNION ALL of year-scoped rows (scope = year) and all-time rows (scope = 0).
   // Same SELECT shape; the only differences are the scope expression and the
   // GROUP BY columns.
   return sql`
@@ -141,10 +141,10 @@ function buildSong(username: string) {
 
     UNION ALL
 
-    -- All-time (scope = NULL)
+    -- All-time (scope = 0 (all-time sentinel))
     SELECT
       ${username}::text,
-      NULL::int,
+      0::int,
       COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
       (array_agg(l.track_name ORDER BY l.listened_at DESC))[1],
       l.artist_name,
@@ -194,10 +194,10 @@ function buildArtist(username: string) {
 
     UNION ALL
 
-    -- All-time
+    -- All-time (scope = 0 (all-time sentinel))
     SELECT
       ${username}::text,
-      NULL::int,
+      0::int,
       l.artist_name,
       COUNT(*)::int,
       COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
@@ -244,10 +244,10 @@ function buildAlbum(username: string) {
 
     UNION ALL
 
-    -- All-time
+    -- All-time (scope = 0 (all-time sentinel))
     SELECT
       ${username}::text,
-      NULL::int,
+      0::int,
       l.release_name || '|' || COALESCE(l.artist_name, ''),
       l.release_name,
       l.artist_name,
