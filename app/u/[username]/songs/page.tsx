@@ -4,6 +4,8 @@ import { topSongs } from "@/lib/db/queries/topItems";
 import { SearchBox } from "@/components/SearchBox";
 import { Pagination } from "@/components/Pagination";
 import { CoverArt } from "@/components/CoverArt";
+import { TopItemCard } from "@/components/TopItemCard";
+import { ViewToggle, type View } from "@/components/ViewToggle";
 
 function songHref(
   username: string,
@@ -19,7 +21,7 @@ function songHref(
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type SP = Promise<{ q?: string; page?: string }>;
+type SP = Promise<{ q?: string; page?: string; view?: string }>;
 
 export default async function SongsPage({
   params,
@@ -32,6 +34,7 @@ export default async function SongsPage({
   const sp = await searchParams;
   const page = Math.max(0, parseInt(sp.page ?? "0", 10) || 0);
   const query = sp.q ?? "";
+  const view: View = sp.view === "list" ? "list" : "grid";
 
   const { items, hasMore } = await topSongs({ username, query, page });
 
@@ -41,7 +44,10 @@ export default async function SongsPage({
         <h2 className="text-xl font-semibold inline-flex items-center gap-2">
           <Music2 size={18} className="text-primary" /> Top songs
         </h2>
-        <SearchBox placeholder="Search songs or artists…" />
+        <div className="flex items-center gap-3 flex-wrap">
+          <SearchBox placeholder="Search songs or artists…" />
+          <ViewToggle current={view} />
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -49,6 +55,22 @@ export default async function SongsPage({
           <Music2 size={32} className="text-subtle-foreground" />
           {query ? `No songs match "${query}".` : "No songs yet — try syncing."}
         </div>
+      ) : view === "grid" ? (
+        <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {items.map((s, i) => (
+            <li key={`${s.track_name}-${s.artist_name}`}>
+              <TopItemCard
+                rank={page * 50 + i + 1}
+                art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
+                title={s.track_name}
+                subtitle={s.artist_name}
+                plays={s.plays}
+                effectiveMs={Number(s.effective_ms)}
+                href={songHref(username, s.recording_mbid, s.track_name, s.artist_name)}
+              />
+            </li>
+          ))}
+        </ul>
       ) : (
         <ol className="divide-y divide-border">
           {items.map((s, i) => {

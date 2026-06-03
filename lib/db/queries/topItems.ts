@@ -17,6 +17,7 @@ export type TopSong = {
   track_name: string;
   artist_name: string;
   plays: number;
+  effective_ms: number;
   caa_id: number | null;
   caa_release_mbid: string | null;
   recording_mbid: string | null;
@@ -28,7 +29,7 @@ export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSo
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
     db.execute<TopSong>(sql`
-      SELECT track_name, artist_name, plays,
+      SELECT track_name, artist_name, plays, effective_ms,
              caa_id, caa_release_mbid, recording_mbid
       FROM ${schema.aggSong}
       WHERE user_name = ${opts.username} AND scope = 0
@@ -45,6 +46,7 @@ export type TopAlbum = {
   release_name: string;
   artist_name: string;
   plays: number;
+  effective_ms: number;
   caa_id: number | null;
   caa_release_mbid: string | null;
   release_mbid: string | null;
@@ -56,7 +58,7 @@ export async function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopA
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
     db.execute<TopAlbum>(sql`
-      SELECT release_name, artist_name, plays,
+      SELECT release_name, artist_name, plays, effective_ms,
              caa_id, caa_release_mbid, release_mbid
       FROM ${schema.aggAlbum}
       WHERE user_name = ${opts.username} AND scope = 0
@@ -72,9 +74,12 @@ export async function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopA
 export type TopArtist = {
   artist_name: string;
   plays: number;
+  effective_ms: number;
   distinct_tracks: number;
   distinct_albums: number;
   artist_mbid: string | null;
+  caa_id: number | null;
+  caa_release_mbid: string | null;
 };
 
 export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<TopArtist>> {
@@ -83,10 +88,10 @@ export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<Top
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
     db.execute<TopArtist>(sql`
-      SELECT artist_name, plays,
+      SELECT artist_name, plays, effective_ms,
              distinct_songs AS distinct_tracks,
              distinct_albums,
-             artist_mbid
+             artist_mbid, caa_id, caa_release_mbid
       FROM ${schema.aggArtist}
       WHERE user_name = ${opts.username} AND scope = 0
         ${pat ? sql`AND artist_name ILIKE ${pat}` : sql``}

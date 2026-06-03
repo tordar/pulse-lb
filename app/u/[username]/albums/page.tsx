@@ -4,6 +4,7 @@ import { topAlbums } from "@/lib/db/queries/topItems";
 import { SearchBox } from "@/components/SearchBox";
 import { Pagination } from "@/components/Pagination";
 import { CoverArt } from "@/components/CoverArt";
+import { TopItemCard } from "@/components/TopItemCard";
 import { ViewToggle, type View } from "@/components/ViewToggle";
 
 function albumHref(
@@ -55,36 +56,20 @@ export default async function AlbumsPage({
           {query ? `No albums match "${query}".` : "No albums yet — try syncing."}
         </div>
       ) : view === "grid" ? (
-        <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {items.map((a) => {
-            const href = albumHref(username, a.release_mbid, a.release_name, a.artist_name);
-            const inner = (
-              <>
-                <CoverArt
-                  art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
-                  size={240}
-                  alt={a.release_name}
-                  className="w-full h-auto aspect-square rounded-md"
-                />
-                <div className="space-y-0.5">
-                  <div className="truncate text-sm font-medium">{a.release_name}</div>
-                  <div className="truncate text-xs text-muted-foreground">{a.artist_name}</div>
-                  <div className="text-xs text-subtle-foreground tabular-nums">{a.plays.toLocaleString()} plays</div>
-                </div>
-              </>
-            );
-            return (
-              <li key={`${a.release_name}-${a.artist_name}`} className="space-y-2">
-                {href ? (
-                  <Link href={href} className="block group space-y-2">
-                    {inner}
-                  </Link>
-                ) : (
-                  inner
-                )}
-              </li>
-            );
-          })}
+        <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {items.map((a, i) => (
+            <li key={`${a.release_name}-${a.artist_name}`}>
+              <TopItemCard
+                rank={page * 50 + i + 1}
+                art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
+                title={a.release_name}
+                subtitle={a.artist_name}
+                plays={a.plays}
+                effectiveMs={Number(a.effective_ms)}
+                href={albumHref(username, a.release_mbid, a.release_name, a.artist_name)}
+              />
+            </li>
+          ))}
         </ul>
       ) : (
         <ol className="divide-y divide-border">
