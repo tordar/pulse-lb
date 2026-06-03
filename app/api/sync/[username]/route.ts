@@ -7,6 +7,8 @@ import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { syncUser } from "@/lib/sync/syncUser";
 import { rebuildAll } from "@/lib/db/aggregates/rebuild";
+import { getSession } from "@/lib/auth/session";
+import { getUserByMbId, isAllowedToSync } from "@/lib/auth/users";
 
 export const maxDuration = 300;
 
@@ -32,6 +34,27 @@ export async function POST(
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
+
+  const session = await getSession();
+  const isSelfTriggeredHeader = (req.headers.get("x-pulse-chain") ?? "0") !== "0";
+
+  // The self-continuation chain re-POSTs to the same route from inside Vercel's
+  // after() block. Those re-entrant calls don't carry a session cookie; we
+  // identify them by the chain header and let them through. User-initiated
+  // POSTs (chain header missing or "0") MUST be authenticated and authorized.
+  if (!isSelfTriggeredHeader) {
+    if (!session) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+    if (session.lbUsername !== username) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    const user = await getUserByMbId(session.mbAccountId);
+    if (!isAllowedToSync(user)) {
+      return NextResponse.json({ error: "subscription_required" }, { status: 402 });
+    }
+  }
+
   const jobId = randomUUID();
   const chainDepth = parseInt(req.headers.get("x-pulse-chain") ?? "0", 10) || 0;
   const isSelfTriggered = chainDepth > 0;
