@@ -8,31 +8,56 @@ import { syncUser } from "@/lib/sync/syncUser";
 
 export const maxDuration = 300;
 
+// Soft cap for one Vercel function invocation: leave headroom under the hard
+// timeout so we have time to write the final sync_jobs row + self-trigger
+// the next pass.
+const SOFT_BUDGET_MS = 50_000;
+
+// Hard cap on the self-continuation chain. Bounds runaway invocations if
+// something keeps inserting rows (shouldn't happen with "fill in what's
+// missing", but a safety net).
+const MAX_CHAIN_DEPTH = 50;
+
+function baseUrl(req: NextRequest): string {
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  return req.nextUrl.origin;
+}
+
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
   const jobId = randomUUID();
+  const chainDepth = parseInt(req.headers.get("x-pulse-chain") ?? "0", 10) || 0;
+  const isSelfTriggered = chainDepth > 0;
 
-  // Vercel's function timeout can kill a sync mid-flight, leaving rows stuck
-  // in "running"/"queued" forever. Sweep those to "interrupted" before
-  // starting a new job so the dashboard reflects reality.
-  await withRetry(() =>
-    db
-      .update(schema.syncJobs)
-      .set({ status: "error", finishedAt: new Date(), errorMessage: "interrupted by next sync click" })
-      .where(
-        and(
-          eq(schema.syncJobs.userName, username),
-          inArray(schema.syncJobs.status, ["queued", "running"]),
+  // Sweep stale "running"/"queued" rows for THIS user — only when the click
+  // came from a real user, not from our own self-continuation (those legitimate
+  // running jobs are us). Without this, the chain would mark its own previous
+  // job as "interrupted" on every hop.
+  if (!isSelfTriggered) {
+    await withRetry(() =>
+      db
+        .update(schema.syncJobs)
+        .set({ status: "error", finishedAt: new Date(), errorMessage: "interrupted by next sync click" })
+        .where(
+          and(
+            eq(schema.syncJobs.userName, username),
+            inArray(schema.syncJobs.status, ["queued", "running"]),
+          ),
         ),
-      ),
-  );
+    );
+  }
 
   await withRetry(() =>
     db.insert(schema.syncJobs).values({ id: jobId, userName: username, status: "queued" }),
   );
+
+  const startedAt = Date.now();
+  const origin = baseUrl(req);
 
   after(async () => {
     try {
@@ -59,6 +84,27 @@ export async function POST(
           pagesFetched: result.pages,
         })
         .where(eq(schema.syncJobs.id, jobId));
+
+      // Self-continuation: if this pass added anything, there's probably more
+      // to fetch. Spawn a new POST to ourselves. The new function gets a
+      // fresh 60s/300s budget; chain ends when a pass adds 0.
+      const elapsed = Date.now() - startedAt;
+      const shouldContinue =
+        result.added > 0 && chainDepth < MAX_CHAIN_DEPTH;
+      if (shouldContinue) {
+        // Fire-and-forget — we don't await the response, just trigger it.
+        fetch(`${origin}/api/sync/${encodeURIComponent(username)}`, {
+          method: "POST",
+          headers: {
+            "x-pulse-chain": String(chainDepth + 1),
+            "content-type": "application/json",
+          },
+          // node-fetch / undici will close on its own after a brief delay
+          signal: AbortSignal.timeout(5_000),
+        }).catch(() => {});
+      }
+
+      void elapsed;
     } catch (e) {
       await db
         .update(schema.syncJobs)
@@ -71,7 +117,7 @@ export async function POST(
     }
   });
 
-  return NextResponse.json({ jobId });
+  return NextResponse.json({ jobId, chainDepth });
 }
 
 export async function GET(
