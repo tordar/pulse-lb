@@ -120,7 +120,7 @@ function buildSong(username: string) {
     SELECT
       ${username}::text,
       EXTRACT(YEAR FROM l.listened_at)::int,
-      COALESCE(l.recording_mbid::text, '~' || l.track_name),
+      COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
       (array_agg(l.track_name ORDER BY l.listened_at DESC))[1],
       l.artist_name,
       COUNT(*)::int,
@@ -136,7 +136,7 @@ function buildSong(username: string) {
     WHERE l.user_name = ${username}
     GROUP BY
       EXTRACT(YEAR FROM l.listened_at)::int,
-      COALESCE(l.recording_mbid::text, '~' || l.track_name),
+      COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
       l.artist_name
 
     UNION ALL
@@ -145,7 +145,7 @@ function buildSong(username: string) {
     SELECT
       ${username}::text,
       NULL::int,
-      COALESCE(l.recording_mbid::text, '~' || l.track_name),
+      COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
       (array_agg(l.track_name ORDER BY l.listened_at DESC))[1],
       l.artist_name,
       COUNT(*)::int,
@@ -160,7 +160,7 @@ function buildSong(username: string) {
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
     WHERE l.user_name = ${username}
     GROUP BY
-      COALESCE(l.recording_mbid::text, '~' || l.track_name),
+      COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
       l.artist_name
   `;
 }
