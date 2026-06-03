@@ -53,7 +53,7 @@ export default async function ArtistsPage({
           {items.map((a, i) => (
             <li key={a.artist_name}>
               <TopItemCard
-                rank={page * 50 + i + 1}
+                rank={a.rank}
                 art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
                 artShape="circle"
                 title={a.artist_name}
@@ -67,12 +67,12 @@ export default async function ArtistsPage({
         </ul>
       ) : (
         <ol className="divide-y divide-border">
-          {items.map((a, i) => {
+          {items.map((a) => {
             const href = artistHref(username, a.artist_mbid);
             const row = (
               <>
                 <span className="w-8 text-right text-sm text-subtle-foreground tabular-nums">
-                  {page * 50 + i + 1}
+                  {a.rank}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-sm font-medium">{a.artist_name}</div>

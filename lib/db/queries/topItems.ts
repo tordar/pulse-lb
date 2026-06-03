@@ -14,6 +14,7 @@ function searchPattern(query: string): string | null {
 }
 
 export type TopSong = {
+  rank: number;
   track_name: string;
   artist_name: string;
   plays: number;
@@ -27,14 +28,23 @@ export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSo
   const pat = searchPattern(opts.query);
   const offset = opts.page * PAGE_SIZE;
   const limit = PAGE_SIZE + 1;
+  // ROW_NUMBER is computed over the FULL user/scope set ordered by plays —
+  // matching the unfiltered list's order — so each item's rank is stable
+  // regardless of the search filter applied in the outer query.
   const rows = await withRetry(() =>
     db.execute<TopSong>(sql`
-      SELECT track_name, artist_name, plays, effective_ms,
+      SELECT rank, track_name, artist_name, plays, effective_ms,
              caa_id, caa_release_mbid, recording_mbid
-      FROM ${schema.aggSong}
-      WHERE user_name = ${opts.username} AND scope = 0
-        ${pat ? sql`AND (track_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql``}
-      ORDER BY plays DESC, track_name
+      FROM (
+        SELECT
+          ROW_NUMBER() OVER (ORDER BY plays DESC, track_name)::int AS rank,
+          track_name, artist_name, plays, effective_ms,
+          caa_id, caa_release_mbid, recording_mbid
+        FROM ${schema.aggSong}
+        WHERE user_name = ${opts.username} AND scope = 0
+      ) ranked
+      WHERE ${pat ? sql`(track_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql`TRUE`}
+      ORDER BY rank
       LIMIT ${limit} OFFSET ${offset}
     `),
   );
@@ -43,6 +53,7 @@ export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSo
 }
 
 export type TopAlbum = {
+  rank: number;
   release_name: string;
   artist_name: string;
   plays: number;
@@ -58,12 +69,18 @@ export async function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopA
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
     db.execute<TopAlbum>(sql`
-      SELECT release_name, artist_name, plays, effective_ms,
+      SELECT rank, release_name, artist_name, plays, effective_ms,
              caa_id, caa_release_mbid, release_mbid
-      FROM ${schema.aggAlbum}
-      WHERE user_name = ${opts.username} AND scope = 0
-        ${pat ? sql`AND (release_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql``}
-      ORDER BY plays DESC, release_name
+      FROM (
+        SELECT
+          ROW_NUMBER() OVER (ORDER BY plays DESC, release_name)::int AS rank,
+          release_name, artist_name, plays, effective_ms,
+          caa_id, caa_release_mbid, release_mbid
+        FROM ${schema.aggAlbum}
+        WHERE user_name = ${opts.username} AND scope = 0
+      ) ranked
+      WHERE ${pat ? sql`(release_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql`TRUE`}
+      ORDER BY rank
       LIMIT ${limit} OFFSET ${offset}
     `),
   );
@@ -72,6 +89,7 @@ export async function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopA
 }
 
 export type TopArtist = {
+  rank: number;
   artist_name: string;
   plays: number;
   effective_ms: number;
@@ -88,14 +106,21 @@ export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<Top
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
     db.execute<TopArtist>(sql`
-      SELECT artist_name, plays, effective_ms,
-             distinct_songs AS distinct_tracks,
-             distinct_albums,
+      SELECT rank, artist_name, plays, effective_ms,
+             distinct_tracks, distinct_albums,
              artist_mbid, caa_id, caa_release_mbid
-      FROM ${schema.aggArtist}
-      WHERE user_name = ${opts.username} AND scope = 0
-        ${pat ? sql`AND artist_name ILIKE ${pat}` : sql``}
-      ORDER BY plays DESC, artist_name
+      FROM (
+        SELECT
+          ROW_NUMBER() OVER (ORDER BY plays DESC, artist_name)::int AS rank,
+          artist_name, plays, effective_ms,
+          distinct_songs AS distinct_tracks,
+          distinct_albums,
+          artist_mbid, caa_id, caa_release_mbid
+        FROM ${schema.aggArtist}
+        WHERE user_name = ${opts.username} AND scope = 0
+      ) ranked
+      WHERE ${pat ? sql`artist_name ILIKE ${pat}` : sql`TRUE`}
+      ORDER BY rank
       LIMIT ${limit} OFFSET ${offset}
     `),
   );

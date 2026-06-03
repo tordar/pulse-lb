@@ -60,7 +60,7 @@ export default async function SongsPage({
           {items.map((s, i) => (
             <li key={`${s.track_name}-${s.artist_name}`}>
               <TopItemCard
-                rank={page * 50 + i + 1}
+                rank={s.rank}
                 art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
                 title={s.track_name}
                 subtitle={s.artist_name}
@@ -73,12 +73,12 @@ export default async function SongsPage({
         </ul>
       ) : (
         <ol className="divide-y divide-border">
-          {items.map((s, i) => {
+          {items.map((s) => {
             const href = songHref(username, s.recording_mbid, s.track_name, s.artist_name);
             const row = (
               <>
                 <span className="w-8 text-right text-sm text-subtle-foreground tabular-nums">
-                  {page * 50 + i + 1}
+                  {s.rank}
                 </span>
                 <CoverArt
                   art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
