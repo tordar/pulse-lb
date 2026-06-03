@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
@@ -120,17 +120,63 @@ export async function POST(
   return NextResponse.json({ jobId, chainDepth });
 }
 
+type RecentInsert = {
+  listened_at: string;
+  track_name: string;
+  artist_name: string;
+  release_name: string | null;
+  caa_id: number | null;
+  caa_release_mbid: string | null;
+};
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
-  const latest = await withRetry(() =>
-    db.query.syncJobs.findFirst({
-      where: eq(schema.syncJobs.userName, username),
-      orderBy: desc(schema.syncJobs.startedAt),
-    }),
-  );
-  if (!latest) return NextResponse.json({ status: "never" });
-  return NextResponse.json(latest);
+  const [latest, state, recentRes] = await Promise.all([
+    withRetry(() =>
+      db.query.syncJobs.findFirst({
+        where: eq(schema.syncJobs.userName, username),
+        orderBy: desc(schema.syncJobs.startedAt),
+      }),
+    ),
+    withRetry(() =>
+      db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
+    ),
+    // Most-recently-inserted listens, for the live "stream" UI during sync.
+    // Ordered by inserted_at (when WE wrote them) so backward backfill
+    // contributions float to the top alongside forward incremental ones.
+    withRetry(() =>
+      db.execute<RecentInsert>(sql`
+        SELECT
+          listened_at::text AS listened_at,
+          track_name,
+          artist_name,
+          release_name,
+          caa_id,
+          caa_release_mbid::text AS caa_release_mbid
+        FROM ${schema.listens}
+        WHERE user_name = ${username} AND inserted_at IS NOT NULL
+        ORDER BY inserted_at DESC
+        LIMIT 12
+      `),
+    ),
+  ]);
+  const recent = (recentRes as unknown as { rows: RecentInsert[] }).rows ?? [];
+
+  if (!latest) {
+    return NextResponse.json({
+      status: "never",
+      target: state?.targetListens ?? null,
+      dbCount: state?.totalListens ?? 0,
+      recent,
+    });
+  }
+  return NextResponse.json({
+    ...latest,
+    target: state?.targetListens ?? null,
+    dbCount: state?.totalListens ?? 0,
+    recent,
+  });
 }

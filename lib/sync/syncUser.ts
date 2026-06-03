@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
-import { getListens, LBError, type Listen } from "@/lib/listenbrainz/client";
+import { getListens, getListenCount, LBError, type Listen } from "@/lib/listenbrainz/client";
 
 const PAGE_SIZES = [1000, 500, 200, 100];
 const MAX_RETRIES_PER_SIZE = 3;
@@ -43,6 +43,11 @@ export async function syncUser(
   const bounds = (boundsRes as unknown as { rows: { oldest: number | null; newest: number | null }[] })
     .rows[0] ?? { oldest: null, newest: null };
   const hasData = bounds.newest != null;
+
+  // Fetch LB's current listen-count for this user so the UI can show a
+  // progress percentage. Best-effort: if LB is unreachable, leave the
+  // existing value in sync_state alone.
+  const lbTotal = await getListenCount(username).catch(() => null);
 
   let totalAdded = 0;
   let totalPages = 0;
@@ -90,6 +95,7 @@ export async function syncUser(
         lastSyncedAt: now,
         lastListenedAt: newLastListenedAt,
         totalListens: newTotal,
+        targetListens: lbTotal ?? state?.targetListens ?? null,
       })
       .onConflictDoUpdate({
         target: schema.syncState.userName,
@@ -97,6 +103,9 @@ export async function syncUser(
           lastSyncedAt: now,
           lastListenedAt: newLastListenedAt,
           totalListens: newTotal,
+          // Only overwrite when we successfully fetched; keep the previous
+          // value if LB was unreachable this round.
+          ...(lbTotal != null ? { targetListens: lbTotal } : {}),
         },
       }),
   );

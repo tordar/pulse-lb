@@ -24,6 +24,12 @@ export const listens = pgTable(
     caaId: bigint("caa_id", { mode: "number" }),
     caaReleaseMbid: uuid("caa_release_mbid"),
     durationMs: integer("duration_ms"),
+    // When we inserted this row into our DB (NOT when the user listened).
+    // Used for the live "stream of incoming listens" UI during sync —
+    // ordering by listened_at can't show backfill activity because backfill
+    // is inserting OLDER listens, which never float to the top.
+    // Nullable for pre-existing rows; new inserts get DEFAULT now().
+    insertedAt: timestamp("inserted_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.userName, t.listenedAt, t.trackName] }),
@@ -32,6 +38,7 @@ export const listens = pgTable(
     index("listens_user_artist").on(t.userName, t.artistName),
     index("listens_user_release_name").on(t.userName, t.releaseName),
     index("listens_user_listened_at").on(t.userName, t.listenedAt),
+    index("listens_user_inserted").on(t.userName, t.insertedAt),
   ],
 );
 
@@ -58,6 +65,10 @@ export const syncState = pgTable("sync_state", {
   lastListenedAt: timestamp("last_listened_at", { withTimezone: true }),
   totalListens: integer("total_listens").default(0).notNull(),
   firstSeen: timestamp("first_seen", { withTimezone: true }).defaultNow().notNull(),
+  // LB's listen-count for this user at the start of the latest sync, used
+  // to compute a sync-progress percentage in the UI. Refreshed on every
+  // sync invocation. Null until the first sync runs.
+  targetListens: integer("target_listens"),
 });
 
 export const syncJobs = pgTable(

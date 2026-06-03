@@ -83,7 +83,7 @@ export default async function StatsPage({
 
   return (
     <div className="space-y-8">
-      <header className="flex items-center justify-between gap-3 flex-wrap">
+      <header className="space-y-3">
         <p className="text-sm text-muted-foreground">
           {state?.lastSyncedAt
             ? <>Last synced {relTime(state.lastSyncedAt)}</>
