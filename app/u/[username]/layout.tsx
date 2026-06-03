@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Settings } from "lucide-react";
 import { PillNav } from "./PillNav";
 import { NowPlaying } from "./NowPlaying";
+import { getSession } from "@/lib/auth/session";
 
 export default async function UserLayout({
   children,
@@ -11,6 +12,8 @@ export default async function UserLayout({
   params: Promise<{ username: string }>;
 }) {
   const { username } = await params;
+  const session = await getSession();
+  const isOwner = session?.lbUsername === username;
 
   return (
     <div className="min-h-screen">
@@ -26,7 +29,19 @@ export default async function UserLayout({
             <span>{username}</span>
           </Link>
           <PillNav username={username} />
-          <NowPlaying username={username} />
+          <div className="flex items-center gap-3">
+            <NowPlaying username={username} />
+            {isOwner && (
+              <Link
+                href="/account"
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-muted transition-colors"
+                title="Account settings"
+              >
+                <Settings size={15} />
+                <span className="hidden sm:inline">Account</span>
+              </Link>
+            )}
+          </div>
         </div>
       </header>
       <div className="max-w-7xl mx-auto px-6 py-6">{children}</div>
