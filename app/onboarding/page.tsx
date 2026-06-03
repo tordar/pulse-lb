@@ -54,15 +54,15 @@ const STEPS: Step[] = [
     link: { href: "https://listenbrainz.org/settings/import/", label: "ListenBrainz importer" },
   },
   {
-    title: "Come back here and enter your username",
+    title: "Sign in with ListenBrainz",
     body: (
       <>
-        Type the LB username you just created into pulse. We&apos;ll mirror your listens from LB into
-        our database and show you the dashboard. First sync takes a few minutes for a large library;
-        subsequent visits are instant.
+        Sign in to pulse using your ListenBrainz account. We&apos;ll mirror your listens
+        from LB into our database and show you the dashboard. First sync takes a few
+        minutes for a large library; subsequent visits are instant.
       </>
     ),
-    link: { href: "/", label: "Back to pulse" },
+    link: { href: "/auth/login", label: "Sign in with ListenBrainz" },
   },
 ];
 
@@ -132,9 +132,9 @@ export default async function OnboardingPage({
 
       <div className="mt-16 pt-8 border-t border-border text-sm text-muted-foreground space-y-2">
         <p>
-          Already have a ListenBrainz account with data?{" "}
-          <Link href="/" className="underline">
-            Go to the username form
+          Already have a ListenBrainz account?{" "}
+          <Link href="/auth/login" className="underline">
+            Sign in
           </Link>
           .
         </p>
