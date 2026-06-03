@@ -67,6 +67,29 @@ body {
   animation: content-fade-in 0.22s ease-out;
 }
 
+/* Streaming-listens row: each item drops in from above, briefly tinted with
+ * the primary accent so a flood of new rows actually feels active. */
+@keyframes stream-row-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+    color: var(--color-primary);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(0);
+    color: var(--color-primary);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    color: inherit;
+  }
+}
+.stream-row {
+  animation: stream-row-in 0.55s ease-out;
+}
+
 /* Listening heatmap (GitHub-style 53×7 grid with month strip + day axis) */
 .heatmap-root {
   --heatmap-cell: 14px;

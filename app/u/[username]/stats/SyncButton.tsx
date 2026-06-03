@@ -25,8 +25,18 @@ type SyncSnapshot = {
   recent?: RecentInsert[];
 };
 
-const POLL_MS = 2500;
+// Poll often so the stream feels live. Each poll fetches the latest 40
+// inserted rows; new ones get dribbled into the visible list with a
+// per-item stagger so the visual flow feels continuous instead of batched.
+const POLL_MS = 1000;
+const VISIBLE_MAX = 22;
+const STAGGER_FLOOR_MS = 30;
+const STAGGER_CEIL_MS = 120;
 const CHAIN_GRACE_MS = 8000;
+
+function keyOf(r: RecentInsert): string {
+  return `${r.listened_at}|${r.track_name}|${r.artist_name}`;
+}
 
 export function SyncButton({ username }: { username: string }) {
   const [running, setRunning] = useState(false);
@@ -34,11 +44,11 @@ export function SyncButton({ username }: { username: string }) {
   const [target, setTarget] = useState<number | null>(null);
   const [pages, setPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [recent, setRecent] = useState<RecentInsert[]>([]);
+  const [stream, setStream] = useState<RecentInsert[]>([]);
   const router = useRouter();
   const pollIdRef = useRef<number>(0);
+  const seenRef = useRef<Set<string>>(new Set());
 
-  // Auto-detect a sync already in flight on mount and resume polling.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -46,7 +56,12 @@ export function SyncButton({ username }: { username: string }) {
       if (cancelled) return;
       setDbCount(snap.dbCount ?? 0);
       setTarget(snap.target ?? null);
-      setRecent(snap.recent ?? []);
+      // Seed the stream with whatever's there so users see SOMETHING at mount
+      if (snap.recent && snap.recent.length > 0) {
+        const seeded = snap.recent.slice(0, VISIBLE_MAX);
+        seenRef.current = new Set(seeded.map(keyOf));
+        setStream(seeded);
+      }
       if (snap.status === "queued" || snap.status === "running") {
         startPolling();
       }
@@ -57,6 +72,24 @@ export function SyncButton({ username }: { username: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
+
+  function streamInFresh(items: RecentInsert[]) {
+    if (items.length === 0) return;
+    // Reverse so we prepend oldest-first → newest ends up at the top.
+    const ordered = [...items].reverse();
+    const stagger = Math.max(
+      STAGGER_FLOOR_MS,
+      Math.min(STAGGER_CEIL_MS, Math.floor(POLL_MS / ordered.length)),
+    );
+    ordered.forEach((item, i) => {
+      setTimeout(() => {
+        const k = keyOf(item);
+        if (seenRef.current.has(k)) return;
+        seenRef.current.add(k);
+        setStream((prev) => [item, ...prev].slice(0, VISIBLE_MAX));
+      }, i * stagger);
+    });
+  }
 
   function startPolling() {
     const myId = ++pollIdRef.current;
@@ -81,8 +114,15 @@ export function SyncButton({ username }: { username: string }) {
         setDbCount(snap.dbCount ?? 0);
         if (snap.target != null) setTarget(snap.target);
         setPages(snap.pagesFetched ?? 0);
-        setRecent(snap.recent ?? []);
-        router.refresh();
+
+        if (snap.recent && snap.recent.length > 0) {
+          const fresh = snap.recent.filter((r) => !seenRef.current.has(keyOf(r)));
+          if (fresh.length > 0) streamInFresh(fresh);
+        }
+
+        // Refresh server components less often than we poll the API so the
+        // dashboard charts update but we don't thrash Postgres.
+        if (Math.random() < 0.25) router.refresh();
 
         if (snap.id && snap.id !== lastJobId) {
           lastJobId = snap.id;
@@ -98,6 +138,7 @@ export function SyncButton({ username }: { username: string }) {
           if (doneSeenAt === null) doneSeenAt = Date.now();
           if (Date.now() - doneSeenAt >= CHAIN_GRACE_MS) {
             setRunning(false);
+            router.refresh();
             return;
           }
         } else {
@@ -155,7 +196,7 @@ export function SyncButton({ username }: { username: string }) {
         </div>
       )}
 
-      {running && recent.length > 0 && (
+      {running && stream.length > 0 && (
         <div className="rounded-md border border-card-border bg-card p-3 space-y-1.5 overflow-hidden">
           <div className="text-[10px] uppercase tracking-wide text-subtle-foreground flex items-center gap-1.5">
             <span className="relative w-1.5 h-1.5 inline-block">
@@ -165,10 +206,10 @@ export function SyncButton({ username }: { username: string }) {
             streaming in
           </div>
           <ul className="space-y-1">
-            {recent.map((r) => (
+            {stream.map((r) => (
               <li
-                key={`${r.listened_at}-${r.track_name}`}
-                className="fade-in flex items-baseline gap-3 text-xs"
+                key={keyOf(r)}
+                className="stream-row flex items-baseline gap-3 text-xs"
               >
                 <span className="text-subtle-foreground tabular-nums shrink-0 whitespace-nowrap w-[96px]">
                   {fmtTime(r.listened_at)}
@@ -177,7 +218,10 @@ export function SyncButton({ username }: { username: string }) {
                   <span className="font-medium">{r.track_name}</span>
                   <span className="text-muted-foreground"> · {r.artist_name}</span>
                   {r.release_name && (
-                    <span className="text-subtle-foreground hidden md:inline"> · {r.release_name}</span>
+                    <span className="text-subtle-foreground hidden md:inline">
+                      {" "}
+                      · {r.release_name}
+                    </span>
                   )}
                 </span>
               </li>
@@ -190,7 +234,6 @@ export function SyncButton({ username }: { username: string }) {
 }
 
 function fmtTime(iso: string): string {
-  // The listened_at is ISO with timezone offset; show MM-DD HH:MM
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
   const mo = String(d.getUTCMonth() + 1).padStart(2, "0");

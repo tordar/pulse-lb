@@ -161,8 +161,10 @@ export async function GET(
           caa_release_mbid::text AS caa_release_mbid
         FROM ${schema.listens}
         WHERE user_name = ${username} AND inserted_at IS NOT NULL
-        ORDER BY inserted_at DESC
-        LIMIT 12
+        -- secondary sort gives a stable order within a batch (where many
+        -- rows share the same inserted_at) so the client can dedupe properly
+        ORDER BY inserted_at DESC, listened_at DESC
+        LIMIT 40
       `),
     ),
     // Source of truth for dbCount: actual row count. state.totalListens is
