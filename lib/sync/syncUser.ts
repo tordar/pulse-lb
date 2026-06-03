@@ -49,6 +49,37 @@ export async function syncUser(
   // existing value in sync_state alone.
   const lbTotal = await getListenCount(username).catch(() => null);
 
+  // Write sync_state NOW (start of sync) so the UI immediately sees
+  // targetListens + lastSyncedAt + a current totalListens, even if Vercel
+  // kills the function before we reach the end-of-sync write. totalListens
+  // is best-effort here: use COUNT(*) from listens, the source of truth.
+  const dbCountRes = await withRetry(() =>
+    db.execute<{ c: number }>(sql`
+      SELECT COUNT(*)::int AS c FROM ${schema.listens} WHERE user_name = ${username}
+    `),
+  );
+  const currentDbCount = (dbCountRes as unknown as { rows: { c: number }[] }).rows[0]?.c ?? 0;
+  const syncStartedAt = new Date();
+  await withRetry(() =>
+    db
+      .insert(schema.syncState)
+      .values({
+        userName: username,
+        lastSyncedAt: syncStartedAt,
+        lastListenedAt: state?.lastListenedAt ?? null,
+        totalListens: currentDbCount,
+        targetListens: lbTotal ?? state?.targetListens ?? null,
+      })
+      .onConflictDoUpdate({
+        target: schema.syncState.userName,
+        set: {
+          lastSyncedAt: syncStartedAt,
+          totalListens: currentDbCount,
+          ...(lbTotal != null ? { targetListens: lbTotal } : {}),
+        },
+      }),
+  );
+
   let totalAdded = 0;
   let totalPages = 0;
   let newestSeen = bounds.newest ?? 0;

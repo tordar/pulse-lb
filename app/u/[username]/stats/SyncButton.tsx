@@ -168,18 +168,18 @@ export function SyncButton({ username }: { username: string }) {
             {recent.map((r) => (
               <li
                 key={`${r.listened_at}-${r.track_name}`}
-                className="fade-in flex items-center gap-2 text-xs"
+                className="fade-in flex items-baseline gap-3 text-xs"
               >
-                <span className="text-subtle-foreground tabular-nums shrink-0 w-[68px]">
+                <span className="text-subtle-foreground tabular-nums shrink-0 whitespace-nowrap w-[96px]">
                   {fmtTime(r.listened_at)}
                 </span>
-                <span className="truncate font-medium">{r.track_name}</span>
-                <span className="truncate text-muted-foreground">· {r.artist_name}</span>
-                {r.release_name && (
-                  <span className="truncate text-subtle-foreground hidden md:inline">
-                    · {r.release_name}
-                  </span>
-                )}
+                <span className="truncate min-w-0 flex-1">
+                  <span className="font-medium">{r.track_name}</span>
+                  <span className="text-muted-foreground"> · {r.artist_name}</span>
+                  {r.release_name && (
+                    <span className="text-subtle-foreground hidden md:inline"> · {r.release_name}</span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>

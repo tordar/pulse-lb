@@ -134,7 +134,7 @@ export async function GET(
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
-  const [latest, state, recentRes] = await Promise.all([
+  const [latest, state, recentRes, countRes] = await Promise.all([
     withRetry(() =>
       db.query.syncJobs.findFirst({
         where: eq(schema.syncJobs.userName, username),
@@ -144,9 +144,6 @@ export async function GET(
     withRetry(() =>
       db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
     ),
-    // Most-recently-inserted listens, for the live "stream" UI during sync.
-    // Ordered by inserted_at (when WE wrote them) so backward backfill
-    // contributions float to the top alongside forward incremental ones.
     withRetry(() =>
       db.execute<RecentInsert>(sql`
         SELECT
@@ -162,21 +159,29 @@ export async function GET(
         LIMIT 12
       `),
     ),
+    // Source of truth for dbCount: actual row count. state.totalListens is
+    // only written at start/end of sync, so it goes stale during a chain.
+    withRetry(() =>
+      db.execute<{ c: number }>(sql`
+        SELECT COUNT(*)::int AS c FROM ${schema.listens} WHERE user_name = ${username}
+      `),
+    ),
   ]);
   const recent = (recentRes as unknown as { rows: RecentInsert[] }).rows ?? [];
+  const dbCount = (countRes as unknown as { rows: { c: number }[] }).rows[0]?.c ?? 0;
 
   if (!latest) {
     return NextResponse.json({
       status: "never",
       target: state?.targetListens ?? null,
-      dbCount: state?.totalListens ?? 0,
+      dbCount,
       recent,
     });
   }
   return NextResponse.json({
     ...latest,
     target: state?.targetListens ?? null,
-    dbCount: state?.totalListens ?? 0,
+    dbCount,
     recent,
   });
 }
