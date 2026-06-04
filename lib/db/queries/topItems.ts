@@ -132,3 +132,77 @@ function paginate<T>(rows: T[], page: number): ListPageResult<T> {
   const hasMore = rows.length > PAGE_SIZE;
   return { items: hasMore ? rows.slice(0, PAGE_SIZE) : rows, page, pageSize: PAGE_SIZE, hasMore };
 }
+
+const SEARCH_LIMIT = 5;
+
+export type SearchArtist = {
+  artist_name: string;
+  plays: number;
+  artist_mbid: string | null;
+  caa_id: number | null;
+  caa_release_mbid: string | null;
+};
+export type SearchSong = {
+  track_name: string;
+  artist_name: string;
+  plays: number;
+  recording_mbid: string | null;
+  caa_id: number | null;
+  caa_release_mbid: string | null;
+};
+export type SearchAlbum = {
+  release_name: string;
+  artist_name: string;
+  plays: number;
+  release_mbid: string | null;
+  caa_id: number | null;
+  caa_release_mbid: string | null;
+};
+export type SearchResults = {
+  artists: SearchArtist[];
+  songs: SearchSong[];
+  albums: SearchAlbum[];
+};
+
+// Cross-entity search for the stats dashboard's global search dropdown: top
+// matches per kind, ordered by plays like the top lists.
+export async function searchAll(username: string, query: string): Promise<SearchResults> {
+  const pat = searchPattern(query);
+  if (!pat) return { artists: [], songs: [], albums: [] };
+  const [artists, songs, albums] = await Promise.all([
+    withRetry(() =>
+      db.execute<SearchArtist>(sql`
+        SELECT artist_name, plays, artist_mbid, caa_id, caa_release_mbid
+        FROM ${schema.aggArtist}
+        WHERE user_name = ${username} AND scope = 0 AND artist_name ILIKE ${pat}
+        ORDER BY plays DESC, artist_name
+        LIMIT ${SEARCH_LIMIT}
+      `),
+    ),
+    withRetry(() =>
+      db.execute<SearchSong>(sql`
+        SELECT track_name, artist_name, plays, recording_mbid, caa_id, caa_release_mbid
+        FROM ${schema.aggSong}
+        WHERE user_name = ${username} AND scope = 0
+          AND (track_name ILIKE ${pat} OR artist_name ILIKE ${pat})
+        ORDER BY plays DESC, track_name
+        LIMIT ${SEARCH_LIMIT}
+      `),
+    ),
+    withRetry(() =>
+      db.execute<SearchAlbum>(sql`
+        SELECT release_name, artist_name, plays, release_mbid, caa_id, caa_release_mbid
+        FROM ${schema.aggAlbum}
+        WHERE user_name = ${username} AND scope = 0
+          AND (release_name ILIKE ${pat} OR artist_name ILIKE ${pat})
+        ORDER BY plays DESC, release_name
+        LIMIT ${SEARCH_LIMIT}
+      `),
+    ),
+  ]);
+  return {
+    artists: (artists as unknown as { rows: SearchArtist[] }).rows,
+    songs: (songs as unknown as { rows: SearchSong[] }).rows,
+    albums: (albums as unknown as { rows: SearchAlbum[] }).rows,
+  };
+}

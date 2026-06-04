@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/queries/stats";
 import { SyncButton } from "./SyncButton";
 import { YearNav } from "./YearNav";
+import { GlobalSearch } from "./GlobalSearch";
 import { getSession } from "@/lib/auth/session";
 import { SignInButton } from "@/components/SignInButton";
 import { YearlyChart } from "@/components/YearlyChart";
@@ -116,6 +117,8 @@ export default async function StatsPage({
         </div>
       ) : (
         <>
+          <GlobalSearch username={username} />
+
           <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <StatTile icon={Play} big value={allTime.total_plays.toLocaleString()} label="plays" />
             <StatTile icon={Clock} big value={fmtHours(allTime.effective_ms / 1000 / 3600)} label="listening time" />
