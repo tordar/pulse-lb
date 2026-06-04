@@ -52,6 +52,18 @@ body {
   min-height: 100dvh;
 }
 
+/* iOS Safari zooms the page when a focused input has font-size < 16px.
+   Force all form controls to 16px on touch-sized screens so the auto-zoom
+   never triggers — this beats the maximum-scale viewport hack, which hurts
+   pinch-zoom accessibility. Desktop keeps the compact sizes. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+}
+
 /* Small fade-in for content that swaps on URL params (e.g. year tab content) */
 @keyframes content-fade-in {
   from {
