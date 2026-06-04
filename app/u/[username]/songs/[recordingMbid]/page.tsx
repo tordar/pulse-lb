@@ -40,20 +40,20 @@ export default async function SongDetailPage({
         </Link>
       </div>
 
-      <header className="flex flex-col md:flex-row gap-6 items-start">
+      <header className="flex flex-col md:flex-row gap-6 items-center md:items-start">
         <CoverArt
           art={{ caaId: header.caa_id, caaReleaseMbid: header.caa_release_mbid }}
           size={240}
           alt={header.track_name}
           className="rounded-lg shadow-md"
         />
-        <div className="flex-1 space-y-2">
+        <div className="flex-1 space-y-2 text-center md:text-left">
           <p className="text-xs text-primary uppercase tracking-wide inline-flex items-center gap-1.5">
             <Music2 size={13} /> Song
           </p>
           <h1 className="text-3xl font-bold leading-tight">{header.track_name}</h1>
           <p className="text-lg text-foreground/80">{header.artist_name}</p>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm pt-2 text-muted-foreground">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2 pt-3">
             <Stat label="Plays" value={header.total_plays.toLocaleString()} />
             <Stat label="Listening time" value={fmtHours(totalHours)} />
             <Stat label="First played" value={fmtDate(header.first_played)} />
@@ -97,7 +97,7 @@ export default async function SongDetailPage({
                   {a.release_mbid ? (
                     <Link
                       href={`/u/${encodeURIComponent(username)}/albums/${a.release_mbid}?${new URLSearchParams({ name: a.release_name, artist: header.artist_name })}`}
-                      className="flex items-center gap-3 py-2.5 hover:bg-muted -mx-2 px-2 rounded"
+                      className="flex items-center gap-3 py-2.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded"
                     >
                       {inner}
                     </Link>
@@ -134,10 +134,10 @@ export default async function SongDetailPage({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <span>
-      <strong className="font-medium text-foreground">{value}</strong>{" "}
-      <span className="text-muted-foreground">{label}</span>
-    </span>
+    <div>
+      <div className="text-base font-semibold text-foreground tabular-nums">{value}</div>
+      <div className="text-xs text-muted-foreground uppercase tracking-wide mt-0.5">{label}</div>
+    </div>
   );
 }
 

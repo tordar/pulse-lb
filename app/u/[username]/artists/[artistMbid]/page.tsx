@@ -31,12 +31,12 @@ export default async function ArtistDetailPage({
         </Link>
       </div>
 
-      <header className="space-y-3">
+      <header className="space-y-4 text-center md:text-left">
         <p className="text-xs text-primary uppercase tracking-wide inline-flex items-center gap-1.5">
           <Users size={13} /> Artist
         </p>
         <h1 className="text-4xl font-bold leading-tight">{header.artist_name}</h1>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
           <Stat label="Plays" value={header.total_plays.toLocaleString()} />
           <Stat label="Listening time" value={fmtHours(totalHours)} />
           <Stat label="Songs" value={header.distinct_tracks.toLocaleString()} />
@@ -81,7 +81,7 @@ export default async function ArtistDetailPage({
               );
               return (
                 <li key={a.release_name} className="space-y-2">
-                  {href ? <Link href={href} className="block space-y-2">{inner}</Link> : inner}
+                  {href ? <Link href={href} className="block space-y-2 transition active:scale-[0.98] active:opacity-80">{inner}</Link> : inner}
                 </li>
               );
             })}
@@ -121,7 +121,7 @@ export default async function ArtistDetailPage({
                   {href ? (
                     <Link
                       href={href}
-                      className="flex items-center gap-3 py-2.5 hover:bg-muted -mx-2 px-2 rounded"
+                      className="flex items-center gap-3 py-2.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded"
                     >
                       {row}
                     </Link>
@@ -161,10 +161,10 @@ export default async function ArtistDetailPage({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <span>
-      <strong className="font-medium text-foreground">{value}</strong>{" "}
-      <span className="text-muted-foreground">{label}</span>
-    </span>
+    <div>
+      <div className="text-base font-semibold text-foreground tabular-nums">{value}</div>
+      <div className="text-xs text-muted-foreground uppercase tracking-wide mt-0.5">{label}</div>
+    </div>
   );
 }
 

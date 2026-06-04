@@ -443,7 +443,7 @@ function DayDetailBlock({
                 {href ? (
                   <Link
                     href={href}
-                    className="flex items-center gap-3 py-1.5 hover:bg-muted -mx-2 px-2 rounded"
+                    className="flex items-center gap-3 py-1.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded"
                   >
                     {row}
                   </Link>
@@ -535,7 +535,7 @@ function YearRow({
   return (
     <li>
       {href ? (
-        <Link href={href} className="block p-2 rounded-md hover:bg-muted/50 transition-colors">
+        <Link href={href} className="block p-2 rounded-md hover:bg-muted/50 active:bg-muted transition-colors">
           {inner}
         </Link>
       ) : (

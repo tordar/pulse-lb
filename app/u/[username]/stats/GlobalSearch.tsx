@@ -153,7 +153,7 @@ export function GlobalSearch({ username }: { username: string }) {
                         </span>
                       </>
                     );
-                    const rowClass = `flex items-center gap-3 px-3 py-1.5 ${idx === active ? "bg-muted" : ""}`;
+                    const rowClass = `flex items-center gap-3 px-3 py-1.5 active:bg-muted ${idx === active ? "bg-muted" : ""}`;
                     return (
                       <li key={hit.key} onMouseEnter={() => setActive(idx)}>
                         {hit.href ? (

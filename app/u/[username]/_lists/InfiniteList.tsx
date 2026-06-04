@@ -201,7 +201,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
         {href ? (
           <Link
             href={href}
-            className="flex items-center gap-3 py-2.5 hover:bg-muted -mx-2 px-2 rounded"
+            className="flex items-center gap-3 py-2.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded"
           >
             {row}
           </Link>
@@ -237,7 +237,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
     return (
       <li key={`a-${a.rank}-${a.release_name}-${a.artist_name}`}>
         {href ? (
-          <Link href={href} className="flex items-center gap-3 py-2.5 hover:bg-muted -mx-2 px-2 rounded">
+          <Link href={href} className="flex items-center gap-3 py-2.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
             {row}
           </Link>
         ) : (
@@ -267,7 +267,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
   return (
     <li key={`ar-${ar.rank}-${ar.artist_name}`}>
       {href ? (
-        <Link href={href} className="flex items-center gap-3 py-3 hover:bg-muted -mx-2 px-2 rounded">
+        <Link href={href} className="flex items-center gap-3 py-3 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
           {row}
         </Link>
       ) : (

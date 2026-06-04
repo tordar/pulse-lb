@@ -24,7 +24,7 @@ export function ViewToggle({ current }: { current: View }) {
         className={`px-3 py-1.5 text-sm font-medium transition-colors ${
           current === "grid"
             ? "bg-primary text-primary-foreground"
-            : "text-foreground/80 hover:bg-muted"
+            : "text-foreground/80 hover:bg-muted active:bg-muted"
         }`}
       >
         Grid
@@ -34,7 +34,7 @@ export function ViewToggle({ current }: { current: View }) {
         className={`px-3 py-1.5 text-sm font-medium border-l border-border transition-colors ${
           current === "list"
             ? "bg-primary text-primary-foreground"
-            : "text-foreground/80 hover:bg-muted"
+            : "text-foreground/80 hover:bg-muted active:bg-muted"
         }`}
       >
         List

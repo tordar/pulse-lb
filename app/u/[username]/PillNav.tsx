@@ -26,7 +26,7 @@ export function PillNav({ username, showAccount }: { username: string; showAccou
             key={slug}
             href={href}
             aria-label={label}
-            className={`inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-sm font-medium transition active:scale-95 ${
               active
                 ? "bg-primary text-primary-foreground"
                 : "text-foreground/80 hover:bg-muted"
@@ -42,7 +42,7 @@ export function PillNav({ username, showAccount }: { username: string; showAccou
           href="/account"
           aria-label="Account settings"
           title="Account settings"
-          className={`inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+          className={`inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-sm font-medium transition active:scale-95 ${
             pathname?.startsWith("/account")
               ? "bg-primary text-primary-foreground"
               : "text-foreground/80 hover:bg-muted"

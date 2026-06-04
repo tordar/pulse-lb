@@ -24,7 +24,7 @@ export function TopItemCard({
   href: string | null;
 }) {
   const inner = (
-    <div className="h-full flex flex-col gap-3 p-3 rounded-lg border border-card-border bg-card hover:bg-muted/40 transition-colors">
+    <div className="h-full flex flex-col gap-3 p-3 rounded-lg border border-card-border bg-card hover:bg-muted/40 active:bg-muted/60 active:scale-[0.98] transition">
       <CoverArt
         art={art}
         size={240}
