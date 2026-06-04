@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { syncUser } from "@/lib/sync/syncUser";
+import { getListenCount } from "@/lib/listenbrainz/client";
 import { rebuildAll } from "@/lib/db/aggregates/rebuild";
 import { getSession } from "@/lib/auth/session";
 import { getUserByMbId, isAllowedToSync } from "@/lib/auth/users";
@@ -190,11 +191,15 @@ type RecentInsert = {
 };
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
-  const [latest, state, countRes] = await Promise.all([
+  // Probe mode (initial page-load fetch only, NOT the 1s poll loop): also ask
+  // ListenBrainz for its live listen-count so the client can decide whether
+  // to auto-sync. Kept off the poll path to stay clear of LB rate limits.
+  const probe = req.nextUrl.searchParams.get("probe") === "1";
+  const [latest, state, countRes, lbCount] = await Promise.all([
     withRetry(() =>
       db.query.syncJobs.findFirst({
         where: eq(schema.syncJobs.userName, username),
@@ -211,8 +216,12 @@ export async function GET(
         SELECT COUNT(*)::int AS c FROM ${schema.listens} WHERE user_name = ${username}
       `),
     ),
+    probe ? getListenCount(username).catch(() => null) : Promise.resolve(null),
   ]);
   const dbCount = (countRes as unknown as { rows: { c: number }[] }).rows[0]?.c ?? 0;
+  const aggStale =
+    state?.lastListenedAt != null &&
+    (state.lastAggregatedAt == null || state.lastAggregatedAt < state.lastListenedAt);
 
   // Only stream rows inserted DURING THE CURRENT JOB — otherwise re-clicking
   // Sync after a backfill replays the tail of historical 2009 inserts. When
@@ -244,6 +253,8 @@ export async function GET(
       status: "never",
       target: state?.targetListens ?? null,
       dbCount,
+      lbCount,
+      aggStale,
       recent,
     });
   }
@@ -266,6 +277,8 @@ export async function GET(
       : latest.errorMessage,
     target: state?.targetListens ?? null,
     dbCount,
+    lbCount,
+    aggStale,
     recent,
   });
 }

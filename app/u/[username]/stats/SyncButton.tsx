@@ -23,6 +23,8 @@ type SyncSnapshot = {
   errorMessage?: string | null;
   target?: number | null;
   dbCount?: number;
+  lbCount?: number | null;
+  aggStale?: boolean;
   recent?: RecentInsert[];
 };
 
@@ -51,11 +53,14 @@ export function SyncButton({ username }: { username: string }) {
   const router = useRouter();
   const pollIdRef = useRef<number>(0);
   const seenRef = useRef<Set<string>>(new Set());
+  const autoTriedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const snap: SyncSnapshot = await fetch(`/api/sync/${username}`).then((r) => r.json());
+      const snap: SyncSnapshot = await fetch(`/api/sync/${username}?probe=1`).then((r) =>
+        r.json(),
+      );
       if (cancelled) return;
       setDbCount(snap.dbCount ?? 0);
       setTarget(snap.target ?? null);
@@ -73,6 +78,29 @@ export function SyncButton({ username }: { username: string }) {
       }
       if (snap.status === "queued" || snap.status === "running") {
         startPolling();
+        return;
+      }
+      // Auto-sync: LB reports more listens than we have stored AND more than
+      // the last sync aimed for. The second condition is the loop guard — LB's
+      // listen-count can permanently exceed what /listens paginates out
+      // (private/deleted plays), so a bare lbCount > dbCount would re-sync on
+      // every page load forever. Requiring growth past the last target means
+      // we only fire when LB has actually gained listens since the last sync.
+      const dbc = snap.dbCount ?? 0;
+      if (
+        !autoTriedRef.current &&
+        dbc > 0 &&
+        snap.lbCount != null &&
+        snap.lbCount > dbc &&
+        snap.lbCount > (snap.target ?? 0)
+      ) {
+        autoTriedRef.current = true;
+        void trigger(true);
+      } else if (snap.aggStale) {
+        // The stats page schedules an aggregate rebuild when it renders stale;
+        // refresh a little later so the tiles pick up the rebuilt numbers.
+        setTimeout(() => router.refresh(), 6_000);
+        setTimeout(() => router.refresh(), 15_000);
       }
     })();
     return () => {
@@ -158,7 +186,7 @@ export function SyncButton({ username }: { username: string }) {
     })();
   }
 
-  async function trigger() {
+  async function trigger(auto = false) {
     seenRef.current = new Set();
     setStream([]);
     setPages(0);
@@ -166,16 +194,18 @@ export function SyncButton({ username }: { username: string }) {
     setSynced(false);
     setGate(null);
     const res = await fetch(`/api/sync/${username}`, { method: "POST" });
+    // Auto-triggered syncs fail silently on auth/paywall — don't spring a
+    // sign-in prompt or paywall on someone who didn't click anything.
     if (res.status === 401) {
-      setGate("signin");
+      if (!auto) setGate("signin");
       return;
     }
     if (res.status === 402) {
-      setGate("paywall");
+      if (!auto) setGate("paywall");
       return;
     }
     if (res.status === 403) {
-      setGate("forbidden");
+      if (!auto) setGate("forbidden");
       return;
     }
     startPolling();
@@ -231,7 +261,7 @@ export function SyncButton({ username }: { username: string }) {
         ) : gate === "forbidden" ? (
           <span className="text-sm text-muted-foreground">Sign in as @{username} to sync</span>
         ) : (
-          <Button onClick={trigger} disabled={running} size="sm">
+          <Button onClick={() => trigger()} disabled={running} size="sm">
             <RefreshCw size={14} className={running ? "animate-spin" : ""} />
             {running ? "Syncing…" : "Sync now"}
           </Button>

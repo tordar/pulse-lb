@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { BarChart3, Calendar, Clock, Disc3, Music2, Play, TrendingUp, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { after } from "next/server";
+import { revalidateTag } from "next/cache";
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
+import { rebuildAll } from "@/lib/db/aggregates/rebuild";
 import {
   allTimeStats,
   todayStats,
@@ -70,6 +73,46 @@ export default async function StatsPage({
     availableYears(username),
   ]);
   const recentRows = (recent as unknown as { rows: { listened_at: string; track_name: string; artist_name: string; release_name: string | null }[] }).rows;
+
+  // Self-heal stale aggregates: when listens are newer than the last rebuild
+  // (e.g. a sync chain died before its terminal rebuild), rebuild after the
+  // response so the next render serves fresh tiles. Claim-first stamp: the
+  // UPDATE only returns a row for whoever moves the stamp forward, so
+  // concurrent page loads don't all kick off their own rebuild.
+  const aggStale =
+    state?.lastListenedAt != null &&
+    (state.lastAggregatedAt == null || state.lastAggregatedAt < state.lastListenedAt);
+  if (aggStale) {
+    after(async () => {
+      const claimed = await withRetry(() =>
+        db.execute<{ user_name: string }>(sql`
+          UPDATE ${schema.syncState}
+          SET last_aggregated_at = NOW()
+          WHERE user_name = ${username}
+            AND last_listened_at IS NOT NULL
+            AND (last_aggregated_at IS NULL OR last_aggregated_at < last_listened_at)
+          RETURNING user_name
+        `),
+      );
+      if ((claimed as unknown as { rows: unknown[] }).rows.length === 0) return;
+      try {
+        await rebuildAll(username);
+        revalidateTag(`user:${username}`, "default");
+      } catch (e) {
+        // Put the old stamp back — otherwise a failed rebuild leaves the
+        // claim committed and staleness permanently undetectable (the sync
+        // route's terminal rebuild checks the same condition).
+        await withRetry(() =>
+          db.execute(sql`
+            UPDATE ${schema.syncState}
+            SET last_aggregated_at = ${state!.lastAggregatedAt}
+            WHERE user_name = ${username}
+          `),
+        );
+        throw e;
+      }
+    });
+  }
 
   const empty = allTime.total_plays === 0;
   const selectedYear = years.length
