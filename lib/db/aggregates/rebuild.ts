@@ -1,5 +1,11 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { withRetry } from "@/lib/db/retry";
+import {
+  ALBUM_AGG_INSERT,
+  ALBUM_CLUSTER_CTE,
+  nameKeyExpr,
+  withAlbumClusters,
+} from "./albumCluster";
 
 // We use the raw neon client (not drizzle) for two reasons:
 //   1. drizzle-orm/neon-http does not support db.transaction().
@@ -31,18 +37,21 @@ export async function rebuildAll(username: string): Promise<void> {
 }
 
 function buildAlltime(username: string) {
-  return sql`
+  // distinct_albums counts album CLUSTERS (case variants / reissues merged),
+  // matching the albums list — see albumCluster.ts.
+  return sql.query(
+    `
     INSERT INTO agg_alltime (
       user_name, total_plays, effective_ms,
       distinct_artists, distinct_albums, distinct_songs,
       first_played, last_played, duration_coverage_pct
     )
     SELECT
-      ${username}::text,
+      $1::text,
       COUNT(*)::int,
       COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
       COUNT(DISTINCT l.artist_name)::int,
-      COUNT(DISTINCT l.release_name)::int,
+      (${withAlbumClusters(`SELECT COUNT(DISTINCT cluster_key)::int FROM clustered`)}),
       COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int,
       MIN(l.listened_at),
       MAX(l.listened_at),
@@ -54,9 +63,11 @@ function buildAlltime(username: string) {
       )::float8
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
-    WHERE l.user_name = ${username}
+    WHERE l.user_name = $1
     HAVING COUNT(*) > 0
-  `;
+  `,
+    [username],
+  );
 }
 
 function buildYear(username: string) {
@@ -166,7 +177,14 @@ function buildSong(username: string) {
 }
 
 function buildArtist(username: string) {
-  return sql`
+  // distinct_albums counts album clusters: each listen is mapped to its
+  // cluster key via the shared canon CTE (listens without a release_name
+  // contribute nothing, matching the old DISTINCT release_name semantics).
+  const clusterKey = `CASE WHEN l.release_name IS NULL THEN NULL
+    ELSE COALESCE(c.canon_rg::text, ${nameKeyExpr("l")}) END`;
+  return sql.query(
+    `
+    WITH ${ALBUM_CLUSTER_CTE}
     INSERT INTO agg_artist (
       user_name, scope, artist_name, plays, effective_ms,
       distinct_songs, distinct_albums,
@@ -174,13 +192,13 @@ function buildArtist(username: string) {
     )
     -- Year-scoped
     SELECT
-      ${username}::text,
+      $1::text,
       EXTRACT(YEAR FROM l.listened_at)::int,
       l.artist_name,
       COUNT(*)::int,
       COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
       COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int,
-      COUNT(DISTINCT l.release_name)::int,
+      COUNT(DISTINCT ${clusterKey})::int,
       mode() WITHIN GROUP (ORDER BY l.artist_mbids[1])
         FILTER (WHERE l.artist_mbids[1] IS NOT NULL),
       (array_agg(l.caa_id ORDER BY l.listened_at DESC)
@@ -189,20 +207,21 @@ function buildArtist(username: string) {
         FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1]
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
-    WHERE l.user_name = ${username} AND l.artist_name IS NOT NULL
+    LEFT JOIN canon c ON c.name_key = ${nameKeyExpr("l")}
+    WHERE l.user_name = $1 AND l.artist_name IS NOT NULL
     GROUP BY EXTRACT(YEAR FROM l.listened_at)::int, l.artist_name
 
     UNION ALL
 
     -- All-time (scope = 0 (all-time sentinel))
     SELECT
-      ${username}::text,
+      $1::text,
       0::int,
       l.artist_name,
       COUNT(*)::int,
       COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
       COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int,
-      COUNT(DISTINCT l.release_name)::int,
+      COUNT(DISTINCT ${clusterKey})::int,
       mode() WITHIN GROUP (ORDER BY l.artist_mbids[1])
         FILTER (WHERE l.artist_mbids[1] IS NOT NULL),
       (array_agg(l.caa_id ORDER BY l.listened_at DESC)
@@ -211,57 +230,15 @@ function buildArtist(username: string) {
         FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1]
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
-    WHERE l.user_name = ${username} AND l.artist_name IS NOT NULL
+    LEFT JOIN canon c ON c.name_key = ${nameKeyExpr("l")}
+    WHERE l.user_name = $1 AND l.artist_name IS NOT NULL
     GROUP BY l.artist_name
-  `;
+  `,
+    [username],
+  );
 }
 
 function buildAlbum(username: string) {
-  return sql`
-    INSERT INTO agg_album (
-      user_name, scope, group_key, release_name, artist_name,
-      plays, effective_ms, caa_id, caa_release_mbid, release_mbid
-    )
-    -- Year-scoped
-    SELECT
-      ${username}::text,
-      EXTRACT(YEAR FROM l.listened_at)::int,
-      l.release_name || '|' || COALESCE(l.artist_name, ''),
-      l.release_name,
-      l.artist_name,
-      COUNT(*)::int,
-      COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
-      (array_agg(l.caa_id ORDER BY l.listened_at DESC)
-        FILTER (WHERE l.caa_id IS NOT NULL))[1],
-      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC)
-        FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1],
-      mode() WITHIN GROUP (ORDER BY l.release_mbid)
-        FILTER (WHERE l.release_mbid IS NOT NULL)
-    FROM listens l
-    LEFT JOIN recordings r ON r.mbid = l.recording_mbid
-    WHERE l.user_name = ${username} AND l.release_name IS NOT NULL
-    GROUP BY EXTRACT(YEAR FROM l.listened_at)::int, l.release_name, l.artist_name
-
-    UNION ALL
-
-    -- All-time (scope = 0 (all-time sentinel))
-    SELECT
-      ${username}::text,
-      0::int,
-      l.release_name || '|' || COALESCE(l.artist_name, ''),
-      l.release_name,
-      l.artist_name,
-      COUNT(*)::int,
-      COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
-      (array_agg(l.caa_id ORDER BY l.listened_at DESC)
-        FILTER (WHERE l.caa_id IS NOT NULL))[1],
-      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC)
-        FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1],
-      mode() WITHIN GROUP (ORDER BY l.release_mbid)
-        FILTER (WHERE l.release_mbid IS NOT NULL)
-    FROM listens l
-    LEFT JOIN recordings r ON r.mbid = l.recording_mbid
-    WHERE l.user_name = ${username} AND l.release_name IS NOT NULL
-    GROUP BY l.release_name, l.artist_name
-  `;
+  // Clustered album grouping — see albumCluster.ts for the full rule set.
+  return sql.query(ALBUM_AGG_INSERT, [username]);
 }

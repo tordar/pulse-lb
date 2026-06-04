@@ -54,6 +54,22 @@ export async function searchReleaseGroupDates(mbids: string[]): Promise<ReleaseG
   }));
 }
 
+export type ReleaseRG = { mbid: string; name: string | null; releaseGroupMbid: string | null };
+
+/** Batch-resolve up to 100 releases to their release groups. */
+export async function searchReleaseRGs(mbids: string[]): Promise<ReleaseRG[]> {
+  const rows = await mbSearch<{ id: string; title?: string; "release-group"?: { id?: string } }>(
+    "release",
+    "reid",
+    mbids,
+  );
+  return rows.map((r) => ({
+    mbid: r.id,
+    name: r.title ?? null,
+    releaseGroupMbid: r["release-group"]?.id ?? null,
+  }));
+}
+
 export type RecordingLength = { mbid: string; name: string | null; lengthMs: number | null };
 
 /** Batch-fetch lengths for up to 100 recordings. */

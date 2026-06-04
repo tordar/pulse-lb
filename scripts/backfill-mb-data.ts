@@ -6,7 +6,12 @@
 import "dotenv/config";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { searchReleaseGroupDates, searchRecordingLengths, yearOf } from "@/lib/musicbrainz/client";
+import {
+  searchReleaseGroupDates,
+  searchRecordingLengths,
+  searchReleaseRGs,
+  yearOf,
+} from "@/lib/musicbrainz/client";
 
 const BATCH = 100;
 const PACE_MS = 1100;
@@ -26,12 +31,58 @@ async function withAttempts<T>(fn: () => Promise<T>, label: string): Promise<T |
   return null;
 }
 
-async function backfillReleaseGroups() {
+// LB's listen payloads often carry a release_mbid but no release_group_mbid;
+// resolve release → RG via MB so clustering and dates can reach those listens.
+async function backfillReleaseRGs() {
   const res = (await db.execute(sql`
-    SELECT DISTINCT l.release_group_mbid::text AS mbid
+    SELECT DISTINCT l.release_mbid::text AS mbid
     FROM listens l
-    LEFT JOIN release_groups rg ON rg.mbid = l.release_group_mbid
-    WHERE l.release_group_mbid IS NOT NULL AND rg.mbid IS NULL
+    LEFT JOIN releases rel ON rel.mbid = l.release_mbid
+    WHERE l.release_mbid IS NOT NULL AND (rel.mbid IS NULL OR rel.release_group_mbid IS NULL)
+  `)) as unknown as Rows<{ mbid: string }>;
+  const ids = res.rows.map((r) => r.mbid);
+  console.log(`[rel] missing rg mapping: ${ids.length}`);
+
+  let resolved = 0;
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const batch = ids.slice(i, i + BATCH);
+    const results = await withAttempts(() => searchReleaseRGs(batch), `[rel] batch ${i / BATCH}`);
+    if (results === null) continue;
+    const byId = new Map(results.map((r) => [r.mbid, r]));
+    const values = batch.map((mbid) => {
+      const hit = byId.get(mbid);
+      if (hit?.releaseGroupMbid) resolved++;
+      return sql`(${mbid}::uuid, ${hit?.name ?? null}::text, ${hit?.releaseGroupMbid ?? null}::uuid)`;
+    });
+    await db.execute(sql`
+      INSERT INTO releases (mbid, name, release_group_mbid)
+      VALUES ${sql.join(values, sql`, `)}
+      ON CONFLICT (mbid) DO UPDATE
+        SET name = COALESCE(EXCLUDED.name, releases.name),
+            release_group_mbid = COALESCE(EXCLUDED.release_group_mbid, releases.release_group_mbid)
+    `);
+    if ((i / BATCH) % 10 === 0) {
+      console.log(`[rel] ${Math.min(i + BATCH, ids.length)}/${ids.length} processed, ${resolved} resolved`);
+    }
+    await sleep(PACE_MS);
+  }
+  console.log(`[rel] done: ${resolved}/${ids.length} resolved to a release group`);
+}
+
+async function backfillReleaseGroups() {
+  // Union of RGs named directly on listens and RGs reachable via the
+  // release → RG mapping (filled by backfillReleaseRGs above).
+  const res = (await db.execute(sql`
+    SELECT DISTINCT x.mbid::text AS mbid
+    FROM (
+      SELECT release_group_mbid AS mbid FROM listens WHERE release_group_mbid IS NOT NULL
+      UNION
+      SELECT rel.release_group_mbid
+      FROM listens l JOIN releases rel ON rel.mbid = l.release_mbid
+      WHERE rel.release_group_mbid IS NOT NULL
+    ) x
+    LEFT JOIN release_groups rg ON rg.mbid = x.mbid
+    WHERE rg.mbid IS NULL
   `)) as unknown as Rows<{ mbid: string }>;
   const ids = res.rows.map((r) => r.mbid);
   console.log(`[rg] missing: ${ids.length}`);
@@ -125,6 +176,7 @@ async function report() {
 }
 
 async function main() {
+  await backfillReleaseRGs();
   await backfillReleaseGroups();
   await backfillRecordingLengths();
   // New durations change effective_ms; clearing the aggregate stamp lets the

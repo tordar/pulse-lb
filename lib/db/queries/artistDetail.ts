@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
+import { artistClusteredAlbums, artistClusterCount } from "@/lib/db/aggregates/albumCluster";
 
 export type ArtistHeader = {
   artist_name: string;
@@ -118,21 +119,13 @@ export async function artistDetail(
     `),
   );
 
-  const albumsRes = await withRetry(() =>
-    db.execute<ArtistAlbum>(sql`
-      SELECT
-        release_name,
-        mode() WITHIN GROUP (ORDER BY release_mbid) FILTER (WHERE release_mbid IS NOT NULL)::text AS release_mbid,
-        COUNT(*)::int AS plays,
-        (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
-        (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1]::text AS caa_release_mbid
-      FROM ${schema.listens}
-      WHERE user_name = ${username} AND artist_name = ${artist_name} AND release_name IS NOT NULL
-      GROUP BY release_name
-      ORDER BY plays DESC, release_name
-      LIMIT 12
-    `),
-  );
+  // Clustered album grouping (case variants / reissues merged) — same
+  // definition the albums list uses. Also fixes the header's album count.
+  const [clusteredAlbums, clusterCount] = await Promise.all([
+    artistClusteredAlbums(username, artist_name, 12),
+    artistClusterCount(username, artist_name),
+  ]);
+  header.distinct_albums = clusterCount;
 
   const recentRes = await withRetry(() =>
     db.execute<ArtistListen>(sql`
@@ -172,7 +165,7 @@ export async function artistDetail(
     header,
     years: (yearsRes as unknown as Row<ArtistYear>).rows,
     topSongs: (songsRes as unknown as Row<ArtistSong>).rows,
-    topAlbums: (albumsRes as unknown as Row<ArtistAlbum>).rows,
+    topAlbums: clusteredAlbums,
     recent: (recentRes as unknown as Row<ArtistListen>).rows,
   };
 }

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
+import { nameKey, resolveAlbumCluster } from "@/lib/db/aggregates/albumCluster";
 
 export type AlbumHeader = {
   release_name: string;
@@ -81,6 +82,21 @@ export async function albumDetail(
     artist_name = key.artist_name;
   }
 
+  // Pull in the whole cluster (case variants, reissues — see albumCluster.ts)
+  // so the detail totals match the clustered albums list. Falls back to the
+  // exact name pair when the cluster can't be resolved.
+  const cluster = await resolveAlbumCluster(
+    username,
+    releaseMbid,
+    nameKey(release_name, artist_name),
+  ).catch(() => null);
+  const memberFilter = cluster
+    ? sql`(release_name, artist_name) IN (${sql.join(
+        cluster.members.map((m) => sql`(${m.release_name}, ${m.artist_name})`),
+        sql`, `,
+      )})`
+    : sql`release_name = ${release_name} AND artist_name = ${artist_name}`;
+
   const headerRes = await withRetry(() =>
     db.execute<AlbumHeader>(sql`
       SELECT
@@ -97,25 +113,19 @@ export async function albumDetail(
         MAX(listened_at) AS last_played
       FROM ${schema.listens}
       WHERE user_name = ${username}
-        AND release_name = ${release_name}
-        AND artist_name = ${artist_name}
+        AND ${memberFilter}
     `),
   );
   const header = (headerRes as unknown as Row<AlbumHeader>).rows[0];
   if (!header || !header.total_plays) return null;
 
-  header.first_release_date = null;
-  if (header.release_group_mbid) {
-    const rgRes = await withRetry(() =>
-      db.execute<{ first_release_date: string | null }>(sql`
-        SELECT first_release_date FROM ${schema.releaseGroups}
-        WHERE mbid = ${header.release_group_mbid}
-      `),
-    ).catch(() => null);
-    header.first_release_date =
-      (rgRes as unknown as Row<{ first_release_date: string | null }> | null)?.rows[0]
-        ?.first_release_date ?? null;
+  // Canonical display name + first release date come straight from the
+  // cluster's adopted release group when there is one.
+  if (cluster?.rg_name) {
+    header.release_name = cluster.rg_name;
+    release_name = cluster.rg_name;
   }
+  header.first_release_date = cluster?.first_release_date ?? null;
 
   const yearsRes = await withRetry(() =>
     db.execute<AlbumYear>(sql`
@@ -125,8 +135,7 @@ export async function albumDetail(
         ROUND(COALESCE(SUM(duration_ms),0)/1000.0/3600, 2)::float8 AS hours
       FROM ${schema.listens}
       WHERE user_name = ${username}
-        AND release_name = ${release_name}
-        AND artist_name = ${artist_name}
+        AND ${memberFilter}
       GROUP BY year ORDER BY year
     `),
   );
@@ -143,8 +152,7 @@ export async function albumDetail(
         MIN(listened_at) AS first_played
       FROM ${schema.listens}
       WHERE user_name = ${username}
-        AND release_name = ${release_name}
-        AND artist_name = ${artist_name}
+        AND ${memberFilter}
       GROUP BY COALESCE(recording_mbid::text, '~' || track_name)
       ORDER BY plays DESC, track_name
     `),
