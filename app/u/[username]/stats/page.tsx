@@ -138,17 +138,21 @@ export default async function StatsPage({
     <div className="space-y-8">
       <header className="space-y-3">
         {/* Sync info and search share one row on large screens; flex-wrap
-            drops the full-width search onto its own line below lg. */}
+            drops the full-width search onto its own line below lg. For owners
+            SyncButton owns the whole block so its progress bar and insert
+            stream span the full width. */}
         {isOwner ? (
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <p className="text-sm text-muted-foreground shrink-0">
-              {state?.lastSyncedAt
-                ? <>Last synced {relTime(state.lastSyncedAt)}</>
-                : <>Not synced yet</>}
-            </p>
-            <SyncButton username={username} />
-            {!empty && <GlobalSearch username={username} />}
-          </div>
+          <SyncButton
+            username={username}
+            lastSynced={
+              <p className="text-sm text-muted-foreground shrink-0">
+                {state?.lastSyncedAt
+                  ? <>Last synced {relTime(state.lastSyncedAt)}</>
+                  : <>Not synced yet</>}
+              </p>
+            }
+            search={!empty ? <GlobalSearch username={username} /> : null}
+          />
         ) : (
           <div className="flex items-baseline gap-3 flex-wrap">
             <p className="text-sm text-muted-foreground flex-1 shrink-0">

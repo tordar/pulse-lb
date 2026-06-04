@@ -41,7 +41,15 @@ function keyOf(r: RecentInsert): string {
   return `${r.listened_at}|${r.track_name}|${r.artist_name}`;
 }
 
-export function SyncButton({ username }: { username: string }) {
+export function SyncButton({
+  username,
+  lastSynced,
+  search,
+}: {
+  username: string;
+  lastSynced?: React.ReactNode;
+  search?: React.ReactNode;
+}) {
   const [running, setRunning] = useState(false);
   const [dbCount, setDbCount] = useState<number>(0);
   const [target, setTarget] = useState<number | null>(null);
@@ -222,8 +230,9 @@ export function SyncButton({ username }: { username: string }) {
       : null;
 
   return (
-    <div className="flex-1 min-w-0 space-y-3">
-      <div className="flex items-center gap-3 flex-wrap">
+    <div className="w-full space-y-3">
+      <div className="flex items-baseline gap-3 flex-wrap">
+        {lastSynced}
         {synced && !running ? (
           <span className="text-sm text-muted-foreground tabular-nums">
             <span className="text-primary">✓ Synced</span>
@@ -243,7 +252,6 @@ export function SyncButton({ username }: { username: string }) {
           <span className="text-xs text-subtle-foreground tabular-nums">{pages} pages</span>
         )}
         {error && <span className="text-sm text-destructive">{error}</span>}
-        <span className="ml-auto" />
         {gate === "signin" ? (
           <Link
             href={`/auth/login?return=${encodeURIComponent(`/u/${username}/stats`)}`}
@@ -266,6 +274,7 @@ export function SyncButton({ username }: { username: string }) {
             {running ? "Syncing…" : "Sync now"}
           </Button>
         )}
+        {search && <div className="w-full lg:w-auto lg:ml-auto">{search}</div>}
       </div>
 
       {pct != null && !(synced && !running) && (
