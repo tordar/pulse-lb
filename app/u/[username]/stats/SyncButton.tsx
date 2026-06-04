@@ -56,7 +56,6 @@ export function SyncButton({
   const [pages, setPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [stream, setStream] = useState<RecentInsert[]>([]);
-  const [synced, setSynced] = useState(false);
   const [gate, setGate] = useState<null | "signin" | "paywall" | "forbidden">(null);
   const router = useRouter();
   const pollIdRef = useRef<number>(0);
@@ -72,7 +71,6 @@ export function SyncButton({
       if (cancelled) return;
       setDbCount(snap.dbCount ?? 0);
       setTarget(snap.target ?? null);
-      setSynced(snap.status === "done" && (snap.added ?? 0) === 0 && (snap.dbCount ?? 0) > 0);
       // Seed only when a sync is actually in flight — otherwise we'd replay
       // historical inserts from the backfill tail.
       if (
@@ -183,7 +181,6 @@ export function SyncButton({
           if (doneSeenAt === null) doneSeenAt = Date.now();
           if (Date.now() - doneSeenAt >= CHAIN_GRACE_MS) {
             setRunning(false);
-            setSynced((snap.added ?? 0) === 0 && (snap.dbCount ?? 0) > 0);
             router.refresh();
             return;
           }
@@ -199,7 +196,6 @@ export function SyncButton({
     setStream([]);
     setPages(0);
     setError(null);
-    setSynced(false);
     setGate(null);
     const res = await fetch(`/api/sync/${username}`, { method: "POST" });
     // Auto-triggered syncs fail silently on auth/paywall — don't spring a
@@ -233,17 +229,14 @@ export function SyncButton({
     <div className="w-full space-y-3">
       <div className="flex items-baseline gap-3 flex-wrap">
         {lastSynced}
-        {synced && !running ? (
-          <span className="text-sm text-muted-foreground tabular-nums">
-            <span className="text-primary">✓ Synced</span>
-            <span className="text-subtle-foreground"> · {dbCount.toLocaleString()} listens</span>
-          </span>
-        ) : pct != null ? (
+        {/* Counts only while a sync runs — idle shows just the button so the
+            row stays one line on mobile. */}
+        {running && pct != null ? (
           <span className="text-sm text-muted-foreground tabular-nums">
             {dbCount.toLocaleString()} / {target!.toLocaleString()}
             <span className="text-subtle-foreground"> · {pct.toFixed(1)}%</span>
           </span>
-        ) : dbCount > 0 ? (
+        ) : running && dbCount > 0 ? (
           <span className="text-sm text-muted-foreground tabular-nums">
             {dbCount.toLocaleString()} listens
           </span>
@@ -277,7 +270,7 @@ export function SyncButton({
         {search && <div className="w-full lg:w-auto lg:ml-auto">{search}</div>}
       </div>
 
-      {pct != null && !(synced && !running) && (
+      {running && pct != null && (
         <div className="relative w-full h-1.5 bg-muted rounded-full overflow-hidden">
           <div
             className="absolute inset-y-0 left-0 bg-primary transition-all duration-500 ease-out"
