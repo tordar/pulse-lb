@@ -43,6 +43,13 @@
       "when": 1780489352047,
       "tag": "0005_parched_the_liberteens",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780573981354,
+      "tag": "0006_pretty_mulholland_black",
+      "breakpoints": true
     }
   ]
 }

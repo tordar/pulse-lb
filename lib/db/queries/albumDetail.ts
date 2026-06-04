@@ -9,11 +9,13 @@ export type AlbumHeader = {
   caa_id: number | null;
   caa_release_mbid: string | null;
   canonical_release_mbid: string | null;
+  release_group_mbid: string | null;
   total_plays: number;
   total_minutes: number;
   distinct_recordings: number;
   first_played: string;
   last_played: string;
+  first_release_date: string | null;
 };
 
 export type AlbumYear = { year: number; plays: number; hours: number };
@@ -87,6 +89,7 @@ export async function albumDetail(
         (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
         (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
         mode() WITHIN GROUP (ORDER BY release_mbid) FILTER (WHERE release_mbid IS NOT NULL)::text AS canonical_release_mbid,
+        mode() WITHIN GROUP (ORDER BY release_group_mbid) FILTER (WHERE release_group_mbid IS NOT NULL)::text AS release_group_mbid,
         COUNT(*)::int AS total_plays,
         0::float8 AS total_minutes,
         COUNT(DISTINCT COALESCE(recording_mbid::text, track_name))::int AS distinct_recordings,
@@ -100,6 +103,19 @@ export async function albumDetail(
   );
   const header = (headerRes as unknown as Row<AlbumHeader>).rows[0];
   if (!header || !header.total_plays) return null;
+
+  header.first_release_date = null;
+  if (header.release_group_mbid) {
+    const rgRes = await withRetry(() =>
+      db.execute<{ first_release_date: string | null }>(sql`
+        SELECT first_release_date FROM ${schema.releaseGroups}
+        WHERE mbid = ${header.release_group_mbid}
+      `),
+    ).catch(() => null);
+    header.first_release_date =
+      (rgRes as unknown as Row<{ first_release_date: string | null }> | null)?.rows[0]
+        ?.first_release_date ?? null;
+  }
 
   const yearsRes = await withRetry(() =>
     db.execute<AlbumYear>(sql`

@@ -61,6 +61,19 @@ export const releases = pgTable(
   (t) => [index("releases_rgid").on(t.releaseGroupMbid)],
 );
 
+export const releaseGroups = pgTable(
+  "release_groups",
+  {
+    mbid: uuid("mbid").primaryKey(),
+    name: text("name"),
+    // MB first-release-date can be partial: "1966", "1966-08" or "1966-08-05",
+    // so the raw value is text; the year is derived for range queries.
+    firstReleaseDate: text("first_release_date"),
+    firstReleaseYear: integer("first_release_year"),
+  },
+  (t) => [index("release_groups_year").on(t.firstReleaseYear)],
+);
+
 export const aggAlltime = pgTable("agg_alltime", {
   userName: text("user_name").primaryKey(),
   totalPlays: integer("total_plays").notNull(),

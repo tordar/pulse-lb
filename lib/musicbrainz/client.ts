@@ -16,6 +16,60 @@ export type ReleaseMeta = {
   trackCount: number | null;
 };
 
+export function yearOf(firstReleaseDate: string | null): number | null {
+  const y = firstReleaseDate ? parseInt(firstReleaseDate.slice(0, 4), 10) : NaN;
+  return Number.isFinite(y) && y > 0 ? y : null;
+}
+
+// MB's search API takes batched Lucene queries — rgid:(a OR b OR …) — and
+// returns up to 100 entities per request, which makes bulk lookups ~100×
+// faster than the entity endpoints. Caller paces requests (~1/s).
+async function mbSearch<T>(entity: string, idField: string, mbids: string[]): Promise<T[]> {
+  if (mbids.length === 0) return [];
+  if (mbids.length > 100) throw new Error("mbSearch: max 100 mbids per batch");
+  const query = `${idField}:(${mbids.join(" OR ")})`;
+  const url = `${MB_BASE}/${entity}/?query=${encodeURIComponent(query)}&fmt=json&limit=100`;
+  const r = await fetch(url, {
+    headers: { "User-Agent": UA, Accept: "application/json" },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!r.ok) throw new Error(`MB search ${entity}: ${r.status}`);
+  const j = (await r.json()) as Record<string, unknown>;
+  return (j[`${entity}s`] as T[]) ?? [];
+}
+
+export type ReleaseGroupDate = { mbid: string; name: string | null; firstReleaseDate: string | null };
+
+/** Batch-fetch first-release-dates for up to 100 release groups. */
+export async function searchReleaseGroupDates(mbids: string[]): Promise<ReleaseGroupDate[]> {
+  const rows = await mbSearch<{ id: string; title?: string; "first-release-date"?: string }>(
+    "release-group",
+    "rgid",
+    mbids,
+  );
+  return rows.map((rg) => ({
+    mbid: rg.id,
+    name: rg.title ?? null,
+    firstReleaseDate: rg["first-release-date"] || null,
+  }));
+}
+
+export type RecordingLength = { mbid: string; name: string | null; lengthMs: number | null };
+
+/** Batch-fetch lengths for up to 100 recordings. */
+export async function searchRecordingLengths(mbids: string[]): Promise<RecordingLength[]> {
+  const rows = await mbSearch<{ id: string; title?: string; length?: number }>(
+    "recording",
+    "rid",
+    mbids,
+  );
+  return rows.map((r) => ({
+    mbid: r.id,
+    name: r.title ?? null,
+    lengthMs: typeof r.length === "number" && r.length > 0 ? r.length : null,
+  }));
+}
+
 export async function getReleaseMeta(releaseMbid: string): Promise<ReleaseMeta | null> {
   const cached = await withRetry(() =>
     db.query.releases.findFirst({ where: eq(schema.releases.mbid, releaseMbid) }),
@@ -38,9 +92,31 @@ export async function getReleaseMeta(releaseMbid: string): Promise<ReleaseMeta |
 
   const j = (await r.json()) as {
     title?: string;
-    "release-group"?: { id?: string };
+    "release-group"?: { id?: string; title?: string; "first-release-date"?: string };
     media?: { "track-count"?: number }[];
   };
+
+  // Opportunistic: the release-group sub-object already carries the first
+  // release date, so cache it while we're here. Non-fatal — the caller only
+  // needs the track count.
+  const rg = j["release-group"];
+  if (rg?.id) {
+    const frd = rg["first-release-date"] || null;
+    await withRetry(() =>
+      db
+        .insert(schema.releaseGroups)
+        .values({
+          mbid: rg.id!,
+          name: rg.title ?? null,
+          firstReleaseDate: frd,
+          firstReleaseYear: yearOf(frd),
+        })
+        .onConflictDoUpdate({
+          target: schema.releaseGroups.mbid,
+          set: { name: rg.title ?? null, firstReleaseDate: frd, firstReleaseYear: yearOf(frd) },
+        }),
+    ).catch(() => {});
+  }
 
   const trackCount = j.media?.reduce((s, m) => s + (m["track-count"] ?? 0), 0) ?? null;
   const meta: ReleaseMeta = {

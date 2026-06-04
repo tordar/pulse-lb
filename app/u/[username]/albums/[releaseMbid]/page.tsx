@@ -61,6 +61,9 @@ export default async function AlbumDetailPage({
           <h1 className="text-3xl font-bold leading-tight">{header.release_name}</h1>
           <p className="text-lg text-foreground/80">{header.artist_name}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2 pt-3">
+            {header.first_release_date && (
+              <Stat label="Released" value={header.first_release_date} />
+            )}
             <Stat label="Plays" value={header.total_plays.toLocaleString()} />
             <Stat label="Listening time" value={fmtHours(totalHours)} />
             <Stat
