@@ -7,6 +7,7 @@ import { nameKey, resolveAlbumCluster } from "@/lib/db/aggregates/albumCluster";
 export type AlbumHeader = {
   release_name: string;
   artist_name: string;
+  artist_mbid: string | null;
   caa_id: number | null;
   caa_release_mbid: string | null;
   canonical_release_mbid: string | null;
@@ -106,6 +107,7 @@ export async function albumDetail(
         (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
         mode() WITHIN GROUP (ORDER BY release_mbid) FILTER (WHERE release_mbid IS NOT NULL)::text AS canonical_release_mbid,
         mode() WITHIN GROUP (ORDER BY release_group_mbid) FILTER (WHERE release_group_mbid IS NOT NULL)::text AS release_group_mbid,
+        mode() WITHIN GROUP (ORDER BY artist_mbids[1]) FILTER (WHERE artist_mbids[1] IS NOT NULL)::text AS artist_mbid,
         COUNT(*)::int AS total_plays,
         0::float8 AS total_minutes,
         COUNT(DISTINCT COALESCE(recording_mbid::text, track_name))::int AS distinct_recordings,
