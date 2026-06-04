@@ -38,10 +38,8 @@ export function NowPlaying({ username }: { username: string }) {
     };
   }, [username]);
 
-  if (!np) return null;
-
   const coverUrl =
-    np.caa_id && np.caa_release_mbid
+    np?.caa_id && np.caa_release_mbid
       ? `https://archive.org/download/mbid-${np.caa_release_mbid}/mbid-${np.caa_release_mbid}-${np.caa_id}_thumb250.jpg`
       : null;
 
@@ -52,18 +50,26 @@ export function NowPlaying({ username }: { username: string }) {
         <img src={coverUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
       ) : (
         <span className="w-7 h-7 rounded-full bg-muted grid place-items-center">
-          <Music2 size={13} className="text-primary" />
+          <Music2 size={13} className={np ? "text-primary" : "text-subtle-foreground"} />
         </span>
       )}
       <span className="flex items-center gap-2 min-w-0">
-        <span className="relative w-2 h-2 shrink-0">
-          <span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-60" />
-          <span className="absolute inset-0 rounded-full bg-primary" />
-        </span>
-        <span className="text-xs min-w-0 leading-tight">
-          <span className="block truncate font-medium">{np.track_name}</span>
-          <span className="block truncate text-muted-foreground">{np.artist_name}</span>
-        </span>
+        {np ? (
+          <span className="relative w-2 h-2 shrink-0">
+            <span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-60" />
+            <span className="absolute inset-0 rounded-full bg-primary" />
+          </span>
+        ) : (
+          <span className="w-2 h-2 rounded-full bg-subtle-foreground/40 shrink-0" />
+        )}
+        {np ? (
+          <span className="text-xs min-w-0 leading-tight">
+            <span className="block truncate font-medium">{np.track_name}</span>
+            <span className="block truncate text-muted-foreground">{np.artist_name}</span>
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Nothing playing</span>
+        )}
       </span>
     </div>
   );
