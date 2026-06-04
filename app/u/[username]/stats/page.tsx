@@ -137,14 +137,23 @@ export default async function StatsPage({
   return (
     <div className="space-y-8">
       <header className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          {state?.lastSyncedAt
-            ? <>Last synced {relTime(state.lastSyncedAt)}</>
-            : <>Not synced yet</>}
-        </p>
         {isOwner ? (
-          <SyncButton username={username} />
-        ) : session ? (
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <p className="text-sm text-muted-foreground shrink-0">
+              {state?.lastSyncedAt
+                ? <>Last synced {relTime(state.lastSyncedAt)}</>
+                : <>Not synced yet</>}
+            </p>
+            <SyncButton username={username} />
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {state?.lastSyncedAt
+              ? <>Last synced {relTime(state.lastSyncedAt)}</>
+              : <>Not synced yet</>}
+          </p>
+        )}
+        {isOwner ? null : session ? (
           <p className="text-sm text-muted-foreground">
             Viewing @{username}&apos;s profile. <Link href={`/u/${session.lbUsername}/stats`} className="underline">Your dashboard</Link>.
           </p>

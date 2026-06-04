@@ -222,7 +222,7 @@ export function SyncButton({ username }: { username: string }) {
       : null;
 
   return (
-    <div className="w-full space-y-3">
+    <div className="flex-1 min-w-0 space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
         {synced && !running ? (
           <span className="text-sm text-muted-foreground tabular-nums">
