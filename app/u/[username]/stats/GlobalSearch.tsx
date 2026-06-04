@@ -97,7 +97,7 @@ export function GlobalSearch({ username }: { username: string }) {
   }
 
   return (
-    <div ref={rootRef} className="relative w-full md:w-96">
+    <div ref={rootRef} className="relative w-full lg:w-96 lg:shrink-0">
       <Search
         size={15}
         className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle-foreground pointer-events-none"

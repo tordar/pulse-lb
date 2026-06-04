@@ -137,6 +137,8 @@ export default async function StatsPage({
   return (
     <div className="space-y-8">
       <header className="space-y-3">
+        {/* Sync info and search share one row on large screens; flex-wrap
+            drops the full-width search onto its own line below lg. */}
         {isOwner ? (
           <div className="flex items-baseline gap-3 flex-wrap">
             <p className="text-sm text-muted-foreground shrink-0">
@@ -145,13 +147,17 @@ export default async function StatsPage({
                 : <>Not synced yet</>}
             </p>
             <SyncButton username={username} />
+            {!empty && <GlobalSearch username={username} />}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            {state?.lastSyncedAt
-              ? <>Last synced {relTime(state.lastSyncedAt)}</>
-              : <>Not synced yet</>}
-          </p>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <p className="text-sm text-muted-foreground flex-1 shrink-0">
+              {state?.lastSyncedAt
+                ? <>Last synced {relTime(state.lastSyncedAt)}</>
+                : <>Not synced yet</>}
+            </p>
+            {!empty && <GlobalSearch username={username} />}
+          </div>
         )}
         {isOwner ? null : session ? (
           <p className="text-sm text-muted-foreground">
@@ -169,8 +175,6 @@ export default async function StatsPage({
         </div>
       ) : (
         <>
-          <GlobalSearch username={username} />
-
           <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <StatTile icon={Play} big value={allTime.total_plays.toLocaleString()} label="plays" />
             <StatTile icon={Clock} big value={fmtHours(allTime.effective_ms / 1000 / 3600)} label="listening time" />
