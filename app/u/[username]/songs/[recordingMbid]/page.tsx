@@ -117,14 +117,20 @@ export default async function SongDetailPage({
             <Clock size={15} className="text-primary" /> Recent listens
           </h2>
           <ul className="divide-y divide-border text-sm">
-            {recent.map((r, i) => (
-              <li key={i} className="flex gap-3 py-1.5">
-                <span className="text-subtle-foreground tabular-nums w-36">{fmtDateTime(r.listened_at)}</span>
-                <span className="truncate text-muted-foreground">
-                  {r.release_name ?? "—"}
-                </span>
-              </li>
-            ))}
+            {recent.map((r, i) => {
+              const [date, time] = fmtDateTime(r.listened_at).split(" ");
+              return (
+                <li key={i} className="flex gap-3 py-1.5 items-baseline">
+                  <span className="text-subtle-foreground tabular-nums shrink-0 text-xs leading-tight whitespace-nowrap">
+                    <span className="block">{date}</span>
+                    <span className="block">{time}</span>
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                    {r.release_name ?? "—"}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
