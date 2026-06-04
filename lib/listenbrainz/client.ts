@@ -14,8 +14,48 @@ const AdditionalInfo = z
     release_mbid: z.string().nullish(),
     release_group_mbid: z.string().nullish(),
     artist_mbids: z.array(z.string()).nullish(),
+    music_service: z.string().nullish(),
+    music_service_name: z.string().nullish(),
+    media_player: z.string().nullish(),
+    submission_client: z.string().nullish(),
   })
   .passthrough();
+
+// Importer/scrobbler names that say nothing about where the music played.
+const GENERIC_SUBMITTERS = /listenbrainz|archive importer|scrobbler|^web$/i;
+
+/**
+ * Derive a normalized listening source from a listen's additional_info.
+ * Preference: music_service (the actual service) > media_player (the app)
+ * > submission_client (the scrobbler). Generic importers resolve to null.
+ */
+export function normalizeSource(a: {
+  music_service?: string | null;
+  music_service_name?: string | null;
+  media_player?: string | null;
+  submission_client?: string | null;
+}): string | null {
+  for (const raw of [a.music_service, a.music_service_name, a.media_player, a.submission_client]) {
+    if (!raw) continue;
+    const v = raw.trim().toLowerCase();
+    if (!v || GENERIC_SUBMITTERS.test(v)) continue;
+    if (v.includes("spotify")) return "spotify";
+    if (v.includes("navidrome")) return "navidrome";
+    if (v.includes("apple")) return "apple music";
+    if (v.includes("youtube")) return "youtube music";
+    if (v.includes("tidal")) return "tidal";
+    if (v.includes("deezer")) return "deezer";
+    if (v.includes("jellyfin") || v.includes("finamp")) return "jellyfin";
+    if (v.includes("plex")) return "plex";
+    if (v.includes("soundcloud")) return "soundcloud";
+    if (v.includes("funkwhale")) return "funkwhale";
+    if (v.includes("bandcamp")) return "bandcamp";
+    if (v.includes("last.fm") || v.includes("lastfm")) return "last.fm";
+    // Unknown but specific client — keep it, minus any domain suffix.
+    return v.replace(/\.(com|org|net|io|fm|app)$/, "");
+  }
+  return null;
+}
 
 const MbidMapping = z
   .object({

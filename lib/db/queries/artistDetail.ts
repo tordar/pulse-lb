@@ -36,6 +36,7 @@ export type ArtistListen = {
   listened_at: string;
   track_name: string;
   release_name: string | null;
+  source: string | null;
 };
 
 export type ArtistDetail = {
@@ -129,7 +130,7 @@ export async function artistDetail(
 
   const recentRes = await withRetry(() =>
     db.execute<ArtistListen>(sql`
-      SELECT listened_at, track_name, release_name
+      SELECT listened_at, track_name, release_name, source
       FROM ${schema.listens}
       WHERE user_name = ${username} AND artist_name = ${artist_name}
       ORDER BY listened_at DESC

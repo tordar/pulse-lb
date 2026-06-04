@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Clock, Disc3, Music2, TrendingUp, Users } from "lucide-react";
 import { artistDetail } from "@/lib/db/queries/artistDetail";
+import { getUserByLbUsername } from "@/lib/auth/users";
+import { SourceDot } from "@/components/SourceDot";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
 
@@ -14,7 +16,12 @@ export default async function ArtistDetailPage({
   params: Promise<{ username: string; artistMbid: string }>;
 }) {
   const { username, artistMbid } = await params;
-  const detail = await artistDetail(username, artistMbid);
+  const [detail, showSource] = await Promise.all([
+    artistDetail(username, artistMbid),
+    getUserByLbUsername(username)
+      .then((u) => u?.showListenSource ?? false)
+      .catch(() => false),
+  ]);
   if (!detail) notFound();
 
   const { header, years, topSongs, topAlbums, recent } = detail;
@@ -155,6 +162,7 @@ export default async function ArtistDetailPage({
                       <span className="text-subtle-foreground"> · {r.release_name}</span>
                     )}
                   </span>
+                  {showSource && <SourceDot source={r.source} />}
                 </li>
               );
             })}

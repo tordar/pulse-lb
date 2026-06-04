@@ -23,6 +23,8 @@ import { SyncButton } from "./SyncButton";
 import { YearNav } from "./YearNav";
 import { GlobalSearch } from "./GlobalSearch";
 import { getSession } from "@/lib/auth/session";
+import { getUserByLbUsername } from "@/lib/auth/users";
+import { SourceDot } from "@/components/SourceDot";
 import { SignInButton } from "@/components/SignInButton";
 import { YearlyChart } from "@/components/YearlyChart";
 import { HourlyChart } from "@/components/HourlyChart";
@@ -49,7 +51,7 @@ export default async function StatsPage({
   // Year-independent queries run in parallel. Cached ones (allTime, yearly,
   // hourly, availableYears) hit the per-user tag cache; uncached ones (state,
   // todayStats, recent listens) hit the DB but in parallel rather than serial.
-  const [state, allTime, today, yearly, hourly, recent, years] = await Promise.all([
+  const [state, allTime, today, yearly, hourly, recent, years, showSource] = await Promise.all([
     withRetry(() =>
       db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
     ),
@@ -63,16 +65,21 @@ export default async function StatsPage({
         track_name: string;
         artist_name: string;
         release_name: string | null;
+        source: string | null;
       }>(sql`
-        SELECT listened_at, track_name, artist_name, release_name
+        SELECT listened_at, track_name, artist_name, release_name, source
         FROM ${schema.listens}
         WHERE user_name = ${username}
         ORDER BY listened_at DESC LIMIT 10
       `),
     ),
     availableYears(username),
+    // Profile owner's display preference (not the viewer's) — defaults off.
+    getUserByLbUsername(username)
+      .then((u) => u?.showListenSource ?? false)
+      .catch(() => false),
   ]);
-  const recentRows = (recent as unknown as { rows: { listened_at: string; track_name: string; artist_name: string; release_name: string | null }[] }).rows;
+  const recentRows = (recent as unknown as { rows: { listened_at: string; track_name: string; artist_name: string; release_name: string | null; source: string | null }[] }).rows;
 
   // Self-heal stale aggregates: when listens are newer than the last rebuild
   // (e.g. a sync chain died before its terminal rebuild), rebuild after the
@@ -337,7 +344,7 @@ export default async function StatsPage({
                   return `?${next}`;
                 }}
               />
-              {daySummary && <DayDetailBlock username={username} day={daySummary} year={selectedYear} />}
+              {daySummary && <DayDetailBlock username={username} day={daySummary} year={selectedYear} showSource={showSource} />}
             </section>
           )}
 
@@ -357,6 +364,7 @@ export default async function StatsPage({
                       <span className="text-subtle-foreground"> · {r.artist_name}</span>
                       {r.release_name && <span className="text-subtle-foreground"> · {r.release_name}</span>}
                     </span>
+                    {showSource && <SourceDot source={r.source} />}
                   </li>
                 );
               })}
@@ -372,10 +380,12 @@ function DayDetailBlock({
   username,
   day,
   year,
+  showSource,
 }: {
   username: string;
   day: import("@/lib/db/queries/stats").DaySummary;
   year: number;
+  showSource: boolean;
 }) {
   const date = new Date(`${day.date}T00:00:00Z`);
   const human = date.toLocaleDateString("en-US", {
@@ -436,6 +446,7 @@ function DayDetailBlock({
                   <span className="text-subtle-foreground"> · {l.artist_name}</span>
                   {l.release_name && <span className="text-subtle-foreground"> · {l.release_name}</span>}
                 </span>
+                {showSource && <SourceDot source={l.source} />}
               </>
             );
             return (

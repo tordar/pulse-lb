@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth/session";
 import { getUserByMbId } from "@/lib/auth/users";
 import { paymentsConfigured } from "@/lib/stripe";
 import { AccountActions } from "./AccountActions";
+import { SourceToggle } from "./SourceToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,10 @@ export default async function AccountPage({
 
       <Section title="Subscription">
         <SubscriptionBlock user={user} live={paymentsConfigured()} />
+      </Section>
+
+      <Section title="Display">
+        <SourceToggle initial={user.showListenSource} />
       </Section>
 
       <Section title="Session">

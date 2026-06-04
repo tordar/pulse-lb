@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
-import { getListens, getListenCount, LBError, type Listen } from "@/lib/listenbrainz/client";
+import { getListens, getListenCount, normalizeSource, LBError, type Listen } from "@/lib/listenbrainz/client";
 
 const PAGE_SIZES = [1000, 500, 200, 100];
 const MAX_RETRIES_PER_SIZE = 3;
@@ -282,5 +282,6 @@ function listenToRow(username: string, l: Listen) {
     caaId: m.caa_id ?? null,
     caaReleaseMbid: m.caa_release_mbid ?? null,
     durationMs: a.duration_ms ?? null,
+    source: normalizeSource(a),
   };
 }

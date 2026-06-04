@@ -25,6 +25,7 @@ export type SongAlbum = {
 export type SongListen = {
   listened_at: string;
   release_name: string | null;
+  source: string | null;
 };
 
 export type SongDetail = {
@@ -127,7 +128,7 @@ export async function songDetail(
 
   const recentRes = await withRetry(() =>
     db.execute<SongListen>(sql`
-      SELECT listened_at, release_name
+      SELECT listened_at, release_name, source
       FROM ${schema.listens}
       WHERE user_name = ${username}
         AND track_name = ${track_name}

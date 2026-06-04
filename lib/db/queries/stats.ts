@@ -254,6 +254,7 @@ export type DayListen = {
   recording_mbid: string | null;
   caa_id: number | null;
   caa_release_mbid: string | null;
+  source: string | null;
 };
 
 export type DaySummary = {
@@ -297,7 +298,8 @@ export async function dayDetail(
         release_name,
         recording_mbid::text AS recording_mbid,
         caa_id,
-        caa_release_mbid::text AS caa_release_mbid
+        caa_release_mbid::text AS caa_release_mbid,
+        source
       FROM ${schema.listens}
       WHERE user_name = ${username}
         AND (listened_at + (${tzOffsetMinutes} || ' minutes')::interval)::date = ${date}::date

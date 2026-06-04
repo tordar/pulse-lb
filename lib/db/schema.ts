@@ -9,6 +9,7 @@ import {
   index,
   date,
   doublePrecision,
+  boolean,
 } from "drizzle-orm/pg-core";
 
 export const listens = pgTable(
@@ -26,6 +27,9 @@ export const listens = pgTable(
     caaId: bigint("caa_id", { mode: "number" }),
     caaReleaseMbid: uuid("caa_release_mbid"),
     durationMs: integer("duration_ms"),
+    // Normalized listening source ("spotify", "navidrome", …) derived from
+    // LB's additional_info; null when only a generic importer was named.
+    source: text("source"),
     // When we inserted this row into our DB (NOT when the user listened).
     // Used for the live "stream of incoming listens" UI during sync —
     // ordering by listened_at can't show backfill activity because backfill
@@ -220,6 +224,8 @@ export const users = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  // Profile option: annotate listen rows with a colored source dot.
+  showListenSource: boolean("show_listen_source").default(false).notNull(),
 });
 
 export const stripeEvents = pgTable("stripe_events", {
