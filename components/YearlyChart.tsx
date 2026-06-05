@@ -3,7 +3,11 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type YearPoint = { year: number; plays: number; hours: number };
-type EnrichedPoint = YearPoint & { projected: number | null; remainder: number };
+type EnrichedPoint = YearPoint & {
+  projected: number | null;
+  projectedHours: number | null;
+  remainder: number;
+};
 
 // Pace-based projection for the current year: plays so far ÷ days elapsed ×
 // 365, rendered as a dimmed extension stacked on the actual bar. Skipped in
@@ -15,10 +19,11 @@ function enrich(data: YearPoint[]): EnrichedPoint[] {
     Math.floor((now.getTime() - Date.UTC(year, 0, 1)) / 86_400_000) + 1;
   return data.map((d) => {
     if (d.year !== year || dayOfYear < 14 || d.plays === 0) {
-      return { ...d, projected: null, remainder: 0 };
+      return { ...d, projected: null, projectedHours: null, remainder: 0 };
     }
     const projected = Math.round((d.plays / dayOfYear) * 365);
-    return { ...d, projected, remainder: Math.max(0, projected - d.plays) };
+    const projectedHours = Math.round((d.hours / dayOfYear) * 365);
+    return { ...d, projected, projectedHours, remainder: Math.max(0, projected - d.plays) };
   });
 }
 
@@ -48,7 +53,8 @@ function YearTooltip({
       </div>
       {p.projected != null && (
         <div style={{ color: "var(--color-muted-foreground)", marginTop: 2 }}>
-          ≈ {p.projected.toLocaleString()} projected by year end
+          ≈ {p.projected.toLocaleString()} plays · {(p.projectedHours ?? 0).toLocaleString()}h
+          projected by year end
         </div>
       )}
     </div>
