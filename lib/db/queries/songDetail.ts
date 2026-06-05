@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
@@ -69,6 +69,22 @@ export async function songDetail(
     artist_name = key.artist_name;
   }
 
+  // The song's identity is the recording MBID — different players spell the
+  // same track differently ("Self Control" vs "Self Control Feat. Yung
+  // Lean"), so name equality alone splits plays. Match every listen mapped
+  // to this recording, plus name-matched listens that have no mapping.
+  const songFilter = sql`(
+    recording_mbid = ${recordingMbid}::uuid
+    OR (recording_mbid IS NULL AND track_name = ${track_name} AND artist_name = ${artist_name})
+  )`;
+
+  // Prefer the canonical MB title (cached in recordings) over whichever
+  // spelling happened to be in the clicked URL.
+  const canonical = await withRetry(() =>
+    db.query.recordings.findFirst({ where: eq(schema.recordings.mbid, recordingMbid) }),
+  ).catch(() => null);
+  if (canonical?.name) track_name = canonical.name;
+
   const headerRes = await withRetry(() =>
     db.execute<SongHeader & { plays_with_duration: number; sum_duration_ms: number }>(sql`
       SELECT
@@ -84,8 +100,7 @@ export async function songDetail(
         MAX(listened_at) AS last_played
       FROM ${schema.listens}
       WHERE user_name = ${username}
-        AND track_name = ${track_name}
-        AND artist_name = ${artist_name}
+        AND ${songFilter}
     `),
   );
   const header = (headerRes as unknown as Row<SongHeader & { plays_with_duration: number; sum_duration_ms: number }>).rows[0];
@@ -104,8 +119,7 @@ export async function songDetail(
         ROUND(COALESCE(SUM(duration_ms),0)/1000.0/3600, 2)::float8 AS hours
       FROM ${schema.listens}
       WHERE user_name = ${username}
-        AND track_name = ${track_name}
-        AND artist_name = ${artist_name}
+        AND ${songFilter}
       GROUP BY year ORDER BY year
     `),
   );
@@ -118,8 +132,7 @@ export async function songDetail(
         COUNT(*)::int AS plays
       FROM ${schema.listens}
       WHERE user_name = ${username}
-        AND track_name = ${track_name}
-        AND artist_name = ${artist_name}
+        AND ${songFilter}
         AND release_name IS NOT NULL
       GROUP BY release_name
       ORDER BY plays DESC
@@ -131,8 +144,7 @@ export async function songDetail(
       SELECT listened_at, release_name, source
       FROM ${schema.listens}
       WHERE user_name = ${username}
-        AND track_name = ${track_name}
-        AND artist_name = ${artist_name}
+        AND ${songFilter}
       ORDER BY listened_at DESC
       LIMIT 20
     `),
