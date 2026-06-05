@@ -6,6 +6,7 @@
 import "dotenv/config";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
+import { withRetry } from "@/lib/db/retry";
 import { getListens, normalizeSource } from "@/lib/listenbrainz/client";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -40,7 +41,7 @@ async function backfillUser(username: string) {
       ];
     });
     if (values.length > 0) {
-      const res = (await db.execute(sql`
+      const res = (await withRetry(() => db.execute(sql`
         UPDATE listens SET source = data.source
         FROM (VALUES ${sql.join(values, sql`, `)}) AS data(listened_at, track_name, source)
         WHERE listens.user_name = ${username}
@@ -48,7 +49,7 @@ async function backfillUser(username: string) {
           AND listens.track_name = data.track_name
           AND listens.source IS DISTINCT FROM data.source
         RETURNING 1 AS one
-      `)) as unknown as Rows<unknown>;
+      `))) as unknown as Rows<unknown>;
       updated += res.rows.length;
     }
 
