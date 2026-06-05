@@ -50,7 +50,12 @@ export function nameKey(releaseName: string, artistName: string): string {
   return `${releaseName.trim().toLowerCase()}|${artistName.toLowerCase()}`;
 }
 
-export const ALBUM_CLUSTER_CTE = `
+// The CTE comes in two scopes from ONE generator so the rule logic can't
+// drift: the rebuild computes clusters across the whole user, while runtime
+// detail/artist queries scope to a single artist ($2) — clusters never span
+// artists (the name key embeds the artist), so the result is identical for
+// that artist but ~15× cheaper than scanning every listen per page view.
+const clusterCTE = (artistScoped: boolean) => `
   base AS (
     SELECT l.listened_at, l.track_name, l.release_name, l.artist_name, l.caa_id, l.caa_release_mbid,
            l.release_mbid, l.recording_mbid, l.duration_ms,
@@ -60,6 +65,7 @@ export const ALBUM_CLUSTER_CTE = `
     FROM listens l
     LEFT JOIN releases rel ON rel.mbid = l.release_mbid
     WHERE l.user_name = $1 AND l.release_name IS NOT NULL
+      ${artistScoped ? "AND lower(l.artist_name) = lower($2)" : ""}
   ),
   votes AS (
     SELECT name_key, MIN(name_norm) AS name_norm, rg, COUNT(*)::int AS c
@@ -92,9 +98,16 @@ export const ALBUM_CLUSTER_CTE = `
   )
 `;
 
-/** Wrap a query tail in the cluster CTE. Tail references `clustered`. */
+export const ALBUM_CLUSTER_CTE = clusterCTE(false);
+
+/** Wrap a query tail in the full-user cluster CTE. Tail references `clustered`. */
 export function withAlbumClusters(tail: string): string {
   return `WITH ${ALBUM_CLUSTER_CTE} ${tail}`;
+}
+
+/** Artist-scoped variant for runtime queries — $1 username, $2 artist name. */
+export function withArtistAlbumClusters(tail: string): string {
+  return `WITH ${clusterCTE(true)} ${tail}`;
 }
 
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
@@ -114,45 +127,46 @@ export type AlbumCluster = {
 /**
  * Resolve a clicked album (by release_mbid, with a name-key fallback) to its
  * full cluster: every (release_name, artist_name) variant that belongs to it,
- * plus the release group's canonical title and date when adopted.
+ * plus the release group's canonical title and date when adopted. Scoped to
+ * the album's artist and done in a single round trip.
  */
 export async function resolveAlbumCluster(
   username: string,
+  artistName: string,
   releaseMbid: string | null,
   fallbackNameKey: string | null,
 ): Promise<AlbumCluster | null> {
-  const keyRows = (await withRetry(() =>
-    csql.query(
-      withAlbumClusters(`
-        SELECT cluster_key, COUNT(*)::int AS c
-        FROM clustered
-        WHERE ($2::uuid IS NOT NULL AND release_mbid = $2::uuid)
-           OR ($2::uuid IS NULL AND name_key = $3)
-        GROUP BY cluster_key
-        ORDER BY c DESC
-        LIMIT 1
-      `),
-      [username, releaseMbid, fallbackNameKey],
-    ),
-  )) as { cluster_key: string }[];
-  const cluster_key = keyRows[0]?.cluster_key ?? null;
-  if (!cluster_key) return null;
-
   const rows = (await withRetry(() =>
     csql.query(
-      withAlbumClusters(`
-        SELECT DISTINCT cl.release_name, cl.artist_name, rgm.name AS rg_name, rgm.first_release_date
+      withArtistAlbumClusters(`
+        , target AS (
+          SELECT cluster_key
+          FROM clustered
+          WHERE ($3::uuid IS NOT NULL AND release_mbid = $3::uuid)
+             OR ($3::uuid IS NULL AND name_key = $4)
+          GROUP BY cluster_key
+          ORDER BY COUNT(*) DESC
+          LIMIT 1
+        )
+        SELECT DISTINCT cl.cluster_key, cl.release_name, cl.artist_name,
+               rgm.name AS rg_name, rgm.first_release_date
         FROM clustered cl
+        JOIN target t USING (cluster_key)
         LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
-        WHERE cl.cluster_key = $2
       `),
-      [username, cluster_key],
+      [username, artistName, releaseMbid, fallbackNameKey],
     ),
-  )) as { release_name: string; artist_name: string; rg_name: string | null; first_release_date: string | null }[];
+  )) as {
+    cluster_key: string;
+    release_name: string;
+    artist_name: string;
+    rg_name: string | null;
+    first_release_date: string | null;
+  }[];
   if (rows.length === 0) return null;
 
   return {
-    cluster_key,
+    cluster_key: rows[0].cluster_key,
     members: rows.map((r) => ({ release_name: r.release_name, artist_name: r.artist_name })),
     rg_name: rows[0].rg_name,
     first_release_date: rows[0].first_release_date,
@@ -167,15 +181,19 @@ export type ClusteredArtistAlbum = {
   caa_release_mbid: string | null;
 };
 
-/** Clustered top-albums for an artist page (replaces raw release_name grouping). */
+/**
+ * Clustered top-albums for an artist page plus the total cluster count (the
+ * "albums" stat) in one artist-scoped query — the window count sees every
+ * cluster before LIMIT trims the list.
+ */
 export async function artistClusteredAlbums(
   username: string,
   artistName: string,
   limit: number,
-): Promise<ClusteredArtistAlbum[]> {
-  return (await withRetry(() =>
+): Promise<{ albums: ClusteredArtistAlbum[]; clusterCount: number }> {
+  const rows = (await withRetry(() =>
     csql.query(
-      withAlbumClusters(`
+      withArtistAlbumClusters(`
         SELECT
           COALESCE(MIN(rgm.name), mode() WITHIN GROUP (ORDER BY cl.release_name)) AS release_name,
           mode() WITHIN GROUP (ORDER BY cl.release_mbid)
@@ -184,30 +202,21 @@ export async function artistClusteredAlbums(
           (array_agg(cl.caa_id ORDER BY cl.listened_at DESC)
             FILTER (WHERE cl.caa_id IS NOT NULL))[1] AS caa_id,
           (array_agg(cl.caa_release_mbid ORDER BY cl.listened_at DESC)
-            FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1]::text AS caa_release_mbid
+            FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1]::text AS caa_release_mbid,
+          COUNT(*) OVER ()::int AS cluster_count
         FROM clustered cl
         LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
-        WHERE cl.artist_name = $2
         GROUP BY cl.cluster_key, rgm.name
         ORDER BY plays DESC, release_name
         LIMIT $3
       `),
       [username, artistName, limit],
     ),
-  )) as ClusteredArtistAlbum[];
-}
-
-/** Distinct cluster count for an artist (the artist page's "albums" stat). */
-export async function artistClusterCount(username: string, artistName: string): Promise<number> {
-  const rows = (await withRetry(() =>
-    csql.query(
-      withAlbumClusters(
-        `SELECT COUNT(DISTINCT cluster_key)::int AS c FROM clustered WHERE artist_name = $2`,
-      ),
-      [username, artistName],
-    ),
-  )) as { c: number }[];
-  return rows[0]?.c ?? 0;
+  )) as (ClusteredArtistAlbum & { cluster_count: number })[];
+  return {
+    albums: rows.map(({ cluster_count: _, ...a }) => a),
+    clusterCount: rows[0]?.cluster_count ?? 0,
+  };
 }
 
 // The agg_album INSERT used by the rebuild. Display name prefers the release

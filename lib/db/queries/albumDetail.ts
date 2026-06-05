@@ -88,6 +88,7 @@ export async function albumDetail(
   // exact name pair when the cluster can't be resolved.
   const cluster = await resolveAlbumCluster(
     username,
+    artist_name,
     releaseMbid,
     nameKey(release_name, artist_name),
   ).catch(() => null);
@@ -98,7 +99,9 @@ export async function albumDetail(
       )})`
     : sql`release_name = ${release_name} AND artist_name = ${artist_name}`;
 
-  const headerRes = await withRetry(() =>
+  // header/years/tracks only need the member filter — run them in parallel.
+  const [headerRes, yearsRes, tracksRes] = await Promise.all([
+  withRetry(() =>
     db.execute<AlbumHeader>(sql`
       SELECT
         ${release_name}::text AS release_name,
@@ -117,19 +120,8 @@ export async function albumDetail(
       WHERE user_name = ${username}
         AND ${memberFilter}
     `),
-  );
-  const header = (headerRes as unknown as Row<AlbumHeader>).rows[0];
-  if (!header || !header.total_plays) return null;
-
-  // Canonical display name + first release date come straight from the
-  // cluster's adopted release group when there is one.
-  if (cluster?.rg_name) {
-    header.release_name = cluster.rg_name;
-    release_name = cluster.rg_name;
-  }
-  header.first_release_date = cluster?.first_release_date ?? null;
-
-  const yearsRes = await withRetry(() =>
+  ),
+  withRetry(() =>
     db.execute<AlbumYear>(sql`
       SELECT
         EXTRACT(YEAR FROM listened_at)::int AS year,
@@ -140,9 +132,8 @@ export async function albumDetail(
         AND ${memberFilter}
       GROUP BY year ORDER BY year
     `),
-  );
-
-  const tracksRes = await withRetry(() =>
+  ),
+  withRetry(() =>
     db.execute<AlbumTrack>(sql`
       SELECT
         mode() WITHIN GROUP (ORDER BY recording_mbid) FILTER (WHERE recording_mbid IS NOT NULL)::text AS recording_mbid,
@@ -158,7 +149,19 @@ export async function albumDetail(
       GROUP BY COALESCE(recording_mbid::text, '~' || track_name)
       ORDER BY plays DESC, track_name
     `),
-  );
+  ),
+  ]);
+  const header = (headerRes as unknown as Row<AlbumHeader>).rows[0];
+  if (!header || !header.total_plays) return null;
+
+  // Canonical display name + first release date come straight from the
+  // cluster's adopted release group when there is one.
+  if (cluster?.rg_name) {
+    header.release_name = cluster.rg_name;
+    release_name = cluster.rg_name;
+  }
+  header.first_release_date = cluster?.first_release_date ?? null;
+
   const rawTracks = (tracksRes as unknown as Row<AlbumTrack>).rows;
 
   // Enrich with canonical recording lengths from LB, then fold them into

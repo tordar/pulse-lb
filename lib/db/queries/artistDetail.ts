@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
-import { artistClusteredAlbums, artistClusterCount } from "@/lib/db/aggregates/albumCluster";
+import { artistClusteredAlbums } from "@/lib/db/aggregates/albumCluster";
 
 export type ArtistHeader = {
   artist_name: string;
@@ -92,7 +92,9 @@ export async function artistDetail(
   const header = (headerRes as unknown as Row<ArtistHeader & { plays_with_duration: number; sum_duration_ms: number }>).rows[0];
   if (!header || !header.total_plays) return null;
 
-  const yearsRes = await withRetry(() =>
+  // Everything below only needs (username, artist_name) — run in parallel.
+  const [yearsRes, songsRes, clustered, recentRes, allRecIdsRes] = await Promise.all([
+  withRetry(() =>
     db.execute<ArtistYear>(sql`
       SELECT
         EXTRACT(YEAR FROM listened_at)::int AS year,
@@ -102,9 +104,8 @@ export async function artistDetail(
       WHERE user_name = ${username} AND artist_name = ${artist_name}
       GROUP BY year ORDER BY year
     `),
-  );
-
-  const songsRes = await withRetry(() =>
+  ),
+  withRetry(() =>
     db.execute<ArtistSong>(sql`
       SELECT
         mode() WITHIN GROUP (ORDER BY recording_mbid) FILTER (WHERE recording_mbid IS NOT NULL)::text AS recording_mbid,
@@ -118,17 +119,11 @@ export async function artistDetail(
       ORDER BY plays DESC, track_name
       LIMIT 20
     `),
-  );
-
+  ),
   // Clustered album grouping (case variants / reissues merged) — same
   // definition the albums list uses. Also fixes the header's album count.
-  const [clusteredAlbums, clusterCount] = await Promise.all([
-    artistClusteredAlbums(username, artist_name, 12),
-    artistClusterCount(username, artist_name),
-  ]);
-  header.distinct_albums = clusterCount;
-
-  const recentRes = await withRetry(() =>
+  artistClusteredAlbums(username, artist_name, 12),
+  withRetry(() =>
     db.execute<ArtistListen>(sql`
       SELECT listened_at, track_name, release_name, source
       FROM ${schema.listens}
@@ -136,11 +131,10 @@ export async function artistDetail(
       ORDER BY listened_at DESC
       LIMIT 20
     `),
-  );
-
+  ),
   // Fold canonical recording lengths into the total listening time, since
   // most listens (LB-imported from Spotify) carry no duration_ms.
-  const allRecIdsRes = await withRetry(() =>
+  withRetry(() =>
     db.execute<{ recording_mbid: string; plays: number; plays_with_duration: number }>(sql`
       SELECT
         recording_mbid::text AS recording_mbid,
@@ -150,7 +144,10 @@ export async function artistDetail(
       WHERE user_name = ${username} AND artist_name = ${artist_name} AND recording_mbid IS NOT NULL
       GROUP BY recording_mbid
     `),
-  );
+  ),
+  ]);
+  header.distinct_albums = clustered.clusterCount;
+  const clusteredAlbums = clustered.albums;
   const allRecs = (allRecIdsRes as unknown as Row<{ recording_mbid: string; plays: number; plays_with_duration: number }>).rows;
   const lengths = await ensureRecordingLengths(allRecs.map((r) => r.recording_mbid));
   let extraMs = 0;
