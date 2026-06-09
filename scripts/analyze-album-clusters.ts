@@ -5,6 +5,7 @@
 import "dotenv/config";
 import postgres from "postgres";
 import { withAlbumClusters } from "@/lib/db/aggregates/albumCluster";
+import { sqlClient } from "@/lib/db/client";
 
 const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
 
@@ -66,6 +67,7 @@ async function main() {
       );
   for (const u of users) await analyzeUser(u);
   await sql.end();
+  await sqlClient.end();
 }
 
 main().catch((e) => {

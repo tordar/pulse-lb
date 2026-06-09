@@ -5,7 +5,7 @@
 // Run: npx tsx scripts/backfill-sources.ts
 import "dotenv/config";
 import { sql } from "drizzle-orm";
-import { db } from "@/lib/db/client";
+import { db, sqlClient } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { getListens, normalizeSource } from "@/lib/listenbrainz/client";
 
@@ -78,6 +78,7 @@ async function main() {
   for (const r of cov.rows) {
     console.log(`[coverage] ${r.user_name}: ${r.with_source}/${r.total} listens have a source`);
   }
+  await sqlClient.end();
 }
 
 main().catch((e) => {

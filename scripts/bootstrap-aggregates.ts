@@ -1,6 +1,7 @@
 import "dotenv/config";
 import postgres from "postgres";
 import { rebuildAll } from "../lib/db/aggregates/rebuild";
+import { sqlClient } from "../lib/db/client";
 
 async function main() {
   const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
@@ -10,6 +11,8 @@ async function main() {
 
   if (rows.length === 0) {
     console.log("No users in listens table. Nothing to bootstrap.");
+    await sql.end();
+    await sqlClient.end();
     return;
   }
 
@@ -25,6 +28,7 @@ async function main() {
     console.log(`  ${user_name} — ${Date.now() - t0}ms`);
   }
   await sql.end();
+  await sqlClient.end();
   console.log("Done.");
 }
 

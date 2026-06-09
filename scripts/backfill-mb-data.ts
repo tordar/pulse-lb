@@ -5,7 +5,7 @@
 // of entities in minutes. Run with: npx tsx scripts/backfill-mb-data.ts
 import "dotenv/config";
 import { sql } from "drizzle-orm";
-import { db } from "@/lib/db/client";
+import { db, sqlClient } from "@/lib/db/client";
 import {
   searchReleaseGroupDates,
   searchRecordingLengths,
@@ -184,6 +184,7 @@ async function main() {
   await db.execute(sql`UPDATE sync_state SET last_aggregated_at = NULL`);
   console.log("[done] aggregate stamps cleared — dashboards rebuild on next visit");
   await report();
+  await sqlClient.end();
 }
 
 main().catch((e) => {
