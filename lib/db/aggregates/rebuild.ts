@@ -1,4 +1,5 @@
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import type { TransactionSql } from "postgres";
+import { sqlClient } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import {
   ALBUM_AGG_INSERT,
@@ -7,39 +8,37 @@ import {
   withAlbumClusters,
 } from "./albumCluster";
 
-// We use the raw neon client (not drizzle) for two reasons:
-//   1. drizzle-orm/neon-http does not support db.transaction().
-//   2. neon's HTTP transaction([...]) API bundles multiple statements
-//      into one HTTP round trip with BEGIN/COMMIT. That's how we get
-//      atomicity for the multi-table rebuild.
-const sql = neon(process.env.DATABASE_URL!) as NeonQueryFunction<false, false>;
-
+// One atomic rebuild of every aggregate table for a single user. postgres-js's
+// begin() runs all statements on one connection inside BEGIN/COMMIT, so a
+// mid-rebuild failure never leaves half-updated aggregate tables. (This also
+// removes the old neon-http limitation that forced raw SQL: postgres-js
+// supports real transactions.)
 export async function rebuildAll(username: string): Promise<void> {
   await withRetry(() =>
-    sql.transaction([
-      sql`DELETE FROM agg_alltime WHERE user_name = ${username}`,
-      sql`DELETE FROM agg_year    WHERE user_name = ${username}`,
-      sql`DELETE FROM agg_hour    WHERE user_name = ${username}`,
-      sql`DELETE FROM agg_day     WHERE user_name = ${username}`,
-      sql`DELETE FROM agg_song    WHERE user_name = ${username}`,
-      sql`DELETE FROM agg_artist  WHERE user_name = ${username}`,
-      sql`DELETE FROM agg_album   WHERE user_name = ${username}`,
+    sqlClient.begin(async (tx) => {
+      await tx`DELETE FROM agg_alltime WHERE user_name = ${username}`;
+      await tx`DELETE FROM agg_year    WHERE user_name = ${username}`;
+      await tx`DELETE FROM agg_hour    WHERE user_name = ${username}`;
+      await tx`DELETE FROM agg_day     WHERE user_name = ${username}`;
+      await tx`DELETE FROM agg_song    WHERE user_name = ${username}`;
+      await tx`DELETE FROM agg_artist  WHERE user_name = ${username}`;
+      await tx`DELETE FROM agg_album   WHERE user_name = ${username}`;
 
-      buildAlltime(username),
-      buildYear(username),
-      buildHour(username),
-      buildDay(username),
-      buildSong(username),
-      buildArtist(username),
-      buildAlbum(username),
-    ]),
+      await buildAlltime(tx, username);
+      await buildYear(tx, username);
+      await buildHour(tx, username);
+      await buildDay(tx, username);
+      await buildSong(tx, username);
+      await buildArtist(tx, username);
+      await buildAlbum(tx, username);
+    }),
   );
 }
 
-function buildAlltime(username: string) {
+async function buildAlltime(tx: TransactionSql, username: string) {
   // distinct_albums counts album CLUSTERS (case variants / reissues merged),
   // matching the albums list — see albumCluster.ts.
-  return sql.query(
+  await tx.unsafe(
     `
     INSERT INTO agg_alltime (
       user_name, total_plays, effective_ms,
@@ -70,8 +69,8 @@ function buildAlltime(username: string) {
   );
 }
 
-function buildYear(username: string) {
-  return sql`
+async function buildYear(tx: TransactionSql, username: string) {
+  await tx`
     INSERT INTO agg_year (user_name, year, plays, hours)
     SELECT
       ${username}::text,
@@ -88,8 +87,8 @@ function buildYear(username: string) {
   `;
 }
 
-function buildHour(username: string) {
-  return sql`
+async function buildHour(tx: TransactionSql, username: string) {
+  await tx`
     INSERT INTO agg_hour (user_name, hour, plays)
     SELECT
       ${username}::text,
@@ -105,8 +104,8 @@ function buildHour(username: string) {
   `;
 }
 
-function buildDay(username: string) {
-  return sql`
+async function buildDay(tx: TransactionSql, username: string) {
+  await tx`
     INSERT INTO agg_day (user_name, date, plays)
     SELECT
       ${username}::text,
@@ -118,11 +117,11 @@ function buildDay(username: string) {
   `;
 }
 
-function buildSong(username: string) {
+async function buildSong(tx: TransactionSql, username: string) {
   // UNION ALL of year-scoped rows (scope = year) and all-time rows (scope = 0).
   // Same SELECT shape; the only differences are the scope expression and the
   // GROUP BY columns.
-  return sql`
+  await tx`
     INSERT INTO agg_song (
       user_name, scope, group_key, track_name, artist_name,
       plays, effective_ms, caa_id, caa_release_mbid, recording_mbid
@@ -176,13 +175,13 @@ function buildSong(username: string) {
   `;
 }
 
-function buildArtist(username: string) {
+async function buildArtist(tx: TransactionSql, username: string) {
   // distinct_albums counts album clusters: each listen is mapped to its
   // cluster key via the shared canon CTE (listens without a release_name
   // contribute nothing, matching the old DISTINCT release_name semantics).
   const clusterKey = `CASE WHEN l.release_name IS NULL THEN NULL
     ELSE COALESCE(c.canon_rg::text, ${nameKeyExpr("l")}) END`;
-  return sql.query(
+  await tx.unsafe(
     `
     WITH ${ALBUM_CLUSTER_CTE}
     INSERT INTO agg_artist (
@@ -238,7 +237,7 @@ function buildArtist(username: string) {
   );
 }
 
-function buildAlbum(username: string) {
+async function buildAlbum(tx: TransactionSql, username: string) {
   // Clustered album grouping — see albumCluster.ts for the full rule set.
-  return sql.query(ALBUM_AGG_INSERT, [username]);
+  await tx.unsafe(ALBUM_AGG_INSERT, [username]);
 }
