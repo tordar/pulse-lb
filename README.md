@@ -31,6 +31,42 @@ Phase 1 — vertical slice. Sync + top-10-artists query render against Postgres.
 
 5. **Try it:** open [http://localhost:3000/u/tordar](http://localhost:3000/u/tordar), click "Sync now". First sync takes ~3-5 min for a heavy library; subsequent syncs are sub-second.
 
+## Self-hosting
+
+pulse-lb is a read-only client over the public ListenBrainz and MusicBrainz
+APIs. You can run your own instance with Docker — you only need your own
+Postgres (provided by the compose file) and a MusicBrainz OAuth application.
+
+1. **Register a MusicBrainz OAuth app** at
+   <https://musicbrainz.org/account/applications>. Set the callback URL to
+   `http://localhost:3000/auth/callback` (or `<APP_URL>/auth/callback` for a
+   real deployment). Note the client ID and secret.
+
+2. **Configure env:**
+   ```bash
+   cp .env.example .env
+   # Fill in METABRAINZ_CLIENT_ID, METABRAINZ_CLIENT_SECRET, and a JWT_SECRET
+   # (openssl rand -base64 48). Leave the STRIPE_* vars blank. Keep SELF_HOST=true.
+   # DATABASE_URL is set automatically by docker-compose.
+   ```
+
+3. **Run it:**
+   ```bash
+   docker compose up --build
+   ```
+   The app applies database migrations on boot, then serves on
+   <http://localhost:3000>. `SELF_HOST=true` disables the subscription gate, so
+   there is no paywall.
+
+4. **Behind a reverse proxy** (e.g. Caddy/nginx with TLS), set `APP_URL` to your
+   public URL (`https://pulse.example.com`) and update the MusicBrainz callback
+   URL to match. `APP_URL` is required there so the incremental-sync
+   self-continuation chain targets the right origin.
+
+**Rate limits:** be a good citizen with the upstream APIs —
+[MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting) (≤1 req/s)
+and [ListenBrainz](https://listenbrainz.readthedocs.io/en/latest/users/api/index.html#rate-limiting).
+
 ## Architecture in two paragraphs
 
 ListenBrainz is the source of truth for all listening data. Pulse replicates a user's raw listens into Postgres on demand (manual "sync now" button) and answers every drill-down with a SQL query against the local copy. Cover art comes from MusicBrainz Cover Art Archive via the `caa_id` field that LB enriches every listen with.
@@ -40,7 +76,7 @@ The new repo is a clean break from the legacy Spotify-API codebase. There is no 
 ## Tech
 
 - Next.js 16, React 19, Tailwind 4
-- Neon Postgres (HTTP driver via `@neondatabase/serverless`)
+- Postgres via postgres-js (works against local Postgres or Neon's pooled endpoint)
 - Drizzle ORM + Drizzle Kit migrations
 - Zod for runtime validation at the LB API boundary
 
