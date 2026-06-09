@@ -526,6 +526,7 @@ function SiteFooter() {
           <Link href="/onboarding" className="hover:text-foreground">Get started</Link>
           <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
           <Link href={`/u/${DEMO_USERNAME}/stats`} className="hover:text-foreground">Live demo</Link>
+          <Link href="/self-host" className="hover:text-foreground">Self-host</Link>
         </div>
       </div>
     </footer>
