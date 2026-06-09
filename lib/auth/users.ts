@@ -67,6 +67,9 @@ export async function findOrCreateUserFromProfile(p: MbProfile): Promise<DbUser>
 }
 
 export function isAllowedToSync(user: DbUser | null): boolean {
+  // Self-host: no paywall. Auth/authorization is enforced upstream in the
+  // sync route; this gate is purely about subscription status.
+  if (process.env.SELF_HOST === "true") return true;
   if (!user) return false;
   if (user.subscriptionStatus === "lifetime") return true;
   const now = new Date();
