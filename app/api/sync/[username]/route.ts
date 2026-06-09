@@ -24,6 +24,11 @@ const SOFT_BUDGET_MS = 50_000;
 const MAX_CHAIN_DEPTH = 50;
 
 function baseUrl(req: NextRequest): string {
+  // Explicit override wins (self-host behind a reverse proxy: scheme+host, no
+  // trailing slash). Then Vercel's production URL. Then the request origin.
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/+$/, "");
+  }
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
