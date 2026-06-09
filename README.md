@@ -10,18 +10,22 @@ Phase 1 — vertical slice. Sync + top-10-artists query render against Postgres.
 
 ## Local setup
 
-1. **Get a Neon database.** Sign up at [neon.tech](https://console.neon.tech/) and create a project in `eu-central-1` (Frankfurt). Copy the connection string.
+1. **Get a Postgres database.** Either run one locally with Docker
+   (`docker compose up postgres -d` — see [Self-hosting](#self-hosting)) or use a
+   hosted provider like [Neon](https://console.neon.tech/) (use the **pooled**
+   endpoint + `sslmode=require`). Any standard Postgres works — the app connects
+   via postgres-js.
 
 2. **Configure env:**
    ```bash
    cp .env.example .env
-   # paste your Neon connection string into DATABASE_URL
+   # set DATABASE_URL (local: postgres://pulse:pulse@localhost:5432/pulse)
    ```
 
 3. **Generate + apply migrations:**
    ```bash
    npm run db:generate    # creates ./drizzle/*.sql from the schema
-   npm run db:migrate     # applies them to your Neon DB
+   npm run db:migrate     # applies them to the database in DATABASE_URL
    ```
 
 4. **Run the dev server:**
