@@ -9,7 +9,7 @@
  * (~96% in practice).
  */
 import "dotenv/config";
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 
 const USER = process.argv[2] ?? "tordar";
 const BATCH = 25;
@@ -24,7 +24,7 @@ type MetaResponse = Record<
 >;
 
 async function main() {
-  const sql = neon(process.env.DATABASE_URL!);
+  const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
 
   const [before] = await sql`
     SELECT
@@ -138,6 +138,7 @@ async function main() {
   console.log(`Coverage before:         ${((before.have / before.total) * 100).toFixed(2)}% (${before.have.toLocaleString()}/${before.total.toLocaleString()})`);
   console.log(`Coverage after:          ${((after.have / after.total) * 100).toFixed(2)}% (${after.have.toLocaleString()}/${after.total.toLocaleString()})`);
   console.log(`Delta:                   +${(after.have - before.have).toLocaleString()} listens (+${(((after.have - before.have) / before.total) * 100).toFixed(2)}pp)`);
+  await sql.end();
 }
 
 main().catch((e) => {

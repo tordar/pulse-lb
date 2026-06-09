@@ -1,8 +1,8 @@
 import "dotenv/config";
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 
 async function main() {
-  const sql = neon(process.env.DATABASE_URL!);
+  const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
   const [cov] = await sql`
     SELECT
       COUNT(*)::int AS total,
@@ -14,5 +14,6 @@ async function main() {
     FROM listens WHERE user_name='tordar'
   `;
   console.log("DB coverage:", cov);
+  await sql.end();
 }
 main();

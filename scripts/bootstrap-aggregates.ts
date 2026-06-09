@@ -1,9 +1,9 @@
 import "dotenv/config";
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 import { rebuildAll } from "../lib/db/aggregates/rebuild";
 
 async function main() {
-  const sql = neon(process.env.DATABASE_URL!);
+  const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
   const rows = (await sql`
     SELECT DISTINCT user_name FROM listens ORDER BY user_name
   `) as Array<{ user_name: string }>;
@@ -24,6 +24,7 @@ async function main() {
     `;
     console.log(`  ${user_name} — ${Date.now() - t0}ms`);
   }
+  await sql.end();
   console.log("Done.");
 }
 

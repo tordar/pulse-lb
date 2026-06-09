@@ -3,15 +3,15 @@
 // rebuild will use, so what this reports is what ships.
 // Run: npx tsx scripts/analyze-album-clusters.ts [username]
 import "dotenv/config";
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import postgres from "postgres";
 import { withAlbumClusters } from "@/lib/db/aggregates/albumCluster";
 
-const sql = neon(process.env.DATABASE_URL!) as NeonQueryFunction<false, false>;
+const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
 
 async function analyzeUser(username: string) {
   console.log(`\n===== ${username} =====`);
 
-  const counts = (await sql.query(
+  const counts = (await sql.unsafe(
     withAlbumClusters(`
       SELECT
         COUNT(DISTINCT release_name || '|' || COALESCE(artist_name, ''))::int AS before_groups,
@@ -32,7 +32,7 @@ async function analyzeUser(username: string) {
 
   // Every cluster that merged >1 raw release_name, biggest first — this is
   // the list to eyeball for wrong merges.
-  const merges = (await sql.query(
+  const merges = (await sql.unsafe(
     withAlbumClusters(`
       SELECT
         COALESCE(rgm.name, mode() WITHIN GROUP (ORDER BY cl.release_name)) AS display_name,
@@ -61,10 +61,11 @@ async function main() {
   const arg = process.argv[2];
   const users = arg
     ? [arg]
-    : ((await sql.query(`SELECT DISTINCT user_name FROM listens`, [])) as { user_name: string }[]).map(
+    : ((await sql.unsafe(`SELECT DISTINCT user_name FROM listens`, [])) as { user_name: string }[]).map(
         (r) => r.user_name,
       );
   for (const u of users) await analyzeUser(u);
+  await sql.end();
 }
 
 main().catch((e) => {

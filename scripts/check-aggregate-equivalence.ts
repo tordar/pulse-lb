@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 
-const sql = neon(process.env.DATABASE_URL!);
+const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
 
 const USERNAME = process.argv[2];
 const YEAR = process.argv[3] ? Number(process.argv[3]) : null;
@@ -26,12 +26,12 @@ const checks: Array<{ name: string; old: () => Promise<unknown[]>; nu: () => Pro
         ROUND(100.0 * COUNT(*) FILTER (WHERE l.duration_ms IS NOT NULL OR r.length_ms IS NOT NULL) / NULLIF(COUNT(*), 0), 1)::float8 AS duration_coverage_pct
       FROM listens l LEFT JOIN recordings r ON r.mbid = l.recording_mbid
       WHERE l.user_name = ${USERNAME}
-    `) as unknown[],
+    `) as unknown as unknown[],
     nu: async () => (await sql`
       SELECT total_plays, effective_ms, distinct_artists, distinct_albums, distinct_songs,
              first_played, last_played, duration_coverage_pct
       FROM agg_alltime WHERE user_name = ${USERNAME}
-    `) as unknown[],
+    `) as unknown as unknown[],
   },
   {
     name: "yearlyListening",
@@ -42,10 +42,10 @@ const checks: Array<{ name: string; old: () => Promise<unknown[]>; nu: () => Pro
       FROM listens l LEFT JOIN recordings r ON r.mbid = l.recording_mbid
       WHERE l.user_name = ${USERNAME}
       GROUP BY year ORDER BY year
-    `) as unknown[],
+    `) as unknown as unknown[],
     nu: async () => (await sql`
       SELECT year, plays, hours FROM agg_year WHERE user_name = ${USERNAME} ORDER BY year
-    `) as unknown[],
+    `) as unknown as unknown[],
   },
   {
     name: "hourlyDistribution",
@@ -58,20 +58,20 @@ const checks: Array<{ name: string; old: () => Promise<unknown[]>; nu: () => Pro
       FROM generate_series(0, 23) AS h(hour)
       LEFT JOIN (SELECT hour, COUNT(*)::int AS plays FROM local GROUP BY hour) c USING (hour)
       ORDER BY h.hour
-    `) as unknown[],
+    `) as unknown as unknown[],
     nu: async () => (await sql`
       SELECT hour, plays FROM agg_hour WHERE user_name = ${USERNAME} ORDER BY hour
-    `) as unknown[],
+    `) as unknown as unknown[],
   },
   {
     name: "availableYears",
     old: async () => (await sql`
       SELECT DISTINCT EXTRACT(YEAR FROM listened_at)::int AS year
       FROM listens WHERE user_name = ${USERNAME} ORDER BY year DESC
-    `) as unknown[],
+    `) as unknown as unknown[],
     nu: async () => (await sql`
       SELECT year FROM agg_year WHERE user_name = ${USERNAME} ORDER BY year DESC
-    `) as unknown[],
+    `) as unknown as unknown[],
   },
   {
     name: `topSongsByYear(${sampleYear})`,
@@ -86,12 +86,12 @@ const checks: Array<{ name: string; old: () => Promise<unknown[]>; nu: () => Pro
       GROUP BY COALESCE(l.recording_mbid::text, '~' || l.track_name), l.artist_name
       ORDER BY plays DESC, track_name
       LIMIT 5
-    `) as unknown[],
+    `) as unknown as unknown[],
     nu: async () => (await sql`
       SELECT track_name, artist_name, plays, effective_ms
       FROM agg_song WHERE user_name = ${USERNAME} AND scope = ${sampleYear}
       ORDER BY plays DESC, track_name LIMIT 5
-    `) as unknown[],
+    `) as unknown as unknown[],
   },
   {
     name: `topAlbumsByYear(${sampleYear})`,
@@ -104,12 +104,12 @@ const checks: Array<{ name: string; old: () => Promise<unknown[]>; nu: () => Pro
         AND EXTRACT(YEAR FROM l.listened_at)::int = ${sampleYear}
       GROUP BY l.release_name, l.artist_name
       ORDER BY plays DESC, l.release_name LIMIT 5
-    `) as unknown[],
+    `) as unknown as unknown[],
     nu: async () => (await sql`
       SELECT release_name, artist_name, plays, effective_ms
       FROM agg_album WHERE user_name = ${USERNAME} AND scope = ${sampleYear}
       ORDER BY plays DESC, release_name LIMIT 5
-    `) as unknown[],
+    `) as unknown as unknown[],
   },
   {
     name: `topArtistsByYear(${sampleYear})`,
@@ -123,12 +123,12 @@ const checks: Array<{ name: string; old: () => Promise<unknown[]>; nu: () => Pro
         AND EXTRACT(YEAR FROM l.listened_at)::int = ${sampleYear}
       GROUP BY l.artist_name
       ORDER BY plays DESC, l.artist_name LIMIT 5
-    `) as unknown[],
+    `) as unknown as unknown[],
     nu: async () => (await sql`
       SELECT artist_name, plays, effective_ms, distinct_songs
       FROM agg_artist WHERE user_name = ${USERNAME} AND scope = ${sampleYear}
       ORDER BY plays DESC, artist_name LIMIT 5
-    `) as unknown[],
+    `) as unknown as unknown[],
   },
 ];
 
@@ -165,6 +165,7 @@ async function main() {
     console.error(`\n${fail} check(s) failed.`);
     process.exit(1);
   }
+  await sql.end();
   console.log("\nAll checks passed.");
 }
 
