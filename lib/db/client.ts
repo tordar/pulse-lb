@@ -1,7 +1,22 @@
-import { drizzle } from "drizzle-orm/neon-http";
-import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema";
 
-const sql = neon(process.env.DATABASE_URL!);
-export const db = drizzle(sql, { schema });
+// postgres-js speaks the standard Postgres wire protocol, so the SAME client
+// connects to a self-hoster's local Postgres and to Neon's POOLED endpoint
+// (…-pooler…neon.tech). prepare:false keeps us pooler-safe (Neon pooler /
+// PgBouncer transaction mode reject named prepared statements). Keep `max`
+// small — on Vercel/Fluid each instance holds its own pool.
+const client = postgres(process.env.DATABASE_URL!, {
+  max: Number(process.env.DATABASE_POOL_MAX ?? 5),
+  prepare: false,
+  idle_timeout: 20,
+  connect_timeout: 10,
+});
+
+export const db = drizzle(client, { schema });
 export { schema };
+// Raw client for the modules that need parameterized dynamic SQL or real
+// transactions (aggregate rebuild, cluster queries). Sharing this one pool
+// is deliberate: never construct a second postgres() in app code.
+export { client as sqlClient };
