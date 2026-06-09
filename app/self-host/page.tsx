@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "Self-host pulse-lb",
   description:
@@ -40,9 +42,9 @@ docker compose up --build`}</code>
           project README
         </a>
         . Or skip the setup and{" "}
-        <a href="/" className="text-primary hover:underline">
+        <Link href="/" className="text-primary hover:underline">
           use the hosted version
-        </a>
+        </Link>
         .
       </p>
     </main>
