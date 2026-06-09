@@ -110,12 +110,8 @@ export function withArtistAlbumClusters(tail: string): string {
   return `WITH ${clusterCTE(true)} ${tail}`;
 }
 
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { sqlClient } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
-
-// Shared raw client for cluster queries (drizzle's neon-http wrapper can't
-// run the $1-parameterised CTE text directly).
-export const csql = neon(process.env.DATABASE_URL!) as NeonQueryFunction<false, false>;
 
 export type AlbumCluster = {
   cluster_key: string;
@@ -137,7 +133,7 @@ export async function resolveAlbumCluster(
   fallbackNameKey: string | null,
 ): Promise<AlbumCluster | null> {
   const rows = (await withRetry(() =>
-    csql.query(
+    sqlClient.unsafe(
       withArtistAlbumClusters(`
         , target AS (
           SELECT cluster_key
@@ -192,7 +188,7 @@ export async function artistClusteredAlbums(
   limit: number,
 ): Promise<{ albums: ClusteredArtistAlbum[]; clusterCount: number }> {
   const rows = (await withRetry(() =>
-    csql.query(
+    sqlClient.unsafe(
       withArtistAlbumClusters(`
         SELECT
           COALESCE(MIN(rgm.name), mode() WITHIN GROUP (ORDER BY cl.release_name)) AS release_name,
