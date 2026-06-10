@@ -57,6 +57,13 @@
       "when": 1780581845615,
       "tag": "0007_magical_slapstick",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781089156608,
+      "tag": "0008_past_sphinx",
+      "breakpoints": true
     }
   ]
 }

@@ -43,7 +43,6 @@ export const listens = pgTable(
     index("listens_user_recording").on(t.userName, t.recordingMbid),
     index("listens_user_artist").on(t.userName, t.artistName),
     index("listens_user_release_name").on(t.userName, t.releaseName),
-    index("listens_user_listened_at").on(t.userName, t.listenedAt),
     index("listens_user_inserted").on(t.userName, t.insertedAt),
   ],
 );
@@ -136,10 +135,10 @@ export const aggSong = pgTable(
     caaReleaseMbid: uuid("caa_release_mbid"),
     recordingMbid: uuid("recording_mbid"),
   },
-  (t) => [
-    primaryKey({ columns: [t.userName, t.scope, t.groupKey] }),
-    index("agg_song_top").on(t.userName, t.scope, t.plays),
-  ],
+  // No primary key: agg rows are fully derived (rebuilt via DELETE-by-user +
+  // INSERT…GROUP BY, which guarantees uniqueness). The PK on group_key was
+  // never read (reads use agg_song_top); dropping it reclaims ~45 MB.
+  (t) => [index("agg_song_top").on(t.userName, t.scope, t.plays)],
 );
 
 export const aggArtist = pgTable(
@@ -156,10 +155,8 @@ export const aggArtist = pgTable(
     caaId: bigint("caa_id", { mode: "number" }),
     caaReleaseMbid: uuid("caa_release_mbid"),
   },
-  (t) => [
-    primaryKey({ columns: [t.userName, t.scope, t.artistName] }),
-    index("agg_artist_top").on(t.userName, t.scope, t.plays),
-  ],
+  // No primary key — see agg_song. Reads use agg_artist_top; reclaims ~8 MB.
+  (t) => [index("agg_artist_top").on(t.userName, t.scope, t.plays)],
 );
 
 export const aggAlbum = pgTable(
@@ -176,10 +173,8 @@ export const aggAlbum = pgTable(
     caaReleaseMbid: uuid("caa_release_mbid"),
     releaseMbid: uuid("release_mbid"),
   },
-  (t) => [
-    primaryKey({ columns: [t.userName, t.scope, t.groupKey] }),
-    index("agg_album_top").on(t.userName, t.scope, t.plays),
-  ],
+  // No primary key — see agg_song. Reads use agg_album_top; reclaims ~40 MB.
+  (t) => [index("agg_album_top").on(t.userName, t.scope, t.plays)],
 );
 
 export const syncState = pgTable("sync_state", {
