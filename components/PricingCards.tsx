@@ -9,13 +9,25 @@ import { CopyButton } from "@/components/CopyButton";
 import { SubscribeButton } from "@/components/SubscribeButton";
 
 const REPO = "https://github.com/tordar/pulse-lb";
-const AGENT_PROMPT = `Set up pulse-lb to run locally on my machine:
+const AGENT_PROMPT = `Set up pulse-lb end-to-end on my machine and walk me through getting my listening history in. Do each step; for the steps only I can do, give me the exact link and wait for me.
+
+PART A — Run the app locally (Docker):
 1. git clone ${REPO} && cd pulse-lb
 2. cp .env.example .env
-3. Register a MusicBrainz OAuth app at https://musicbrainz.org/account/applications (callback http://localhost:3000/auth/callback) and put the client ID + secret into .env (METABRAINZ_CLIENT_ID / METABRAINZ_CLIENT_SECRET).
-4. Generate a JWT_SECRET with: openssl rand -base64 48 — add it to .env
-5. Run: docker compose up --build
-Then open http://localhost:3000 and walk me through signing in and syncing.`;
+3. Help me register a MusicBrainz OAuth application at https://musicbrainz.org/account/applications — set the callback URL to http://localhost:3000/auth/callback — then put the client ID + secret into .env as METABRAINZ_CLIENT_ID and METABRAINZ_CLIENT_SECRET.
+4. Generate a JWT_SECRET with: openssl rand -base64 48 — add it to .env. Keep SELF_HOST=true and leave the STRIPE_* vars blank.
+5. Run: docker compose up --build  (this applies the database migrations on boot, then serves http://localhost:3000)
+
+PART B — Get my listening history into ListenBrainz (pulse reads from ListenBrainz, so my data has to live there first):
+6. If I don't have one, help me create a ListenBrainz account at https://listenbrainz.org/login/ (it uses a MusicBrainz login).
+7. Request my full Spotify history: open https://www.spotify.com/account/privacy/ and request "Extended Streaming History". Spotify takes 5–30 days to email the ZIP — remind me this is the slow part and that I'll resume once it arrives. For ongoing plays, also connect Spotify at https://listenbrainz.org/settings/music-services/details/ so new listens scrobble automatically.
+8. When the ZIP arrives, unzip it and import the JSON files at https://listenbrainz.org/settings/import/. ListenBrainz enriches each listen with MusicBrainz IDs and cover art — that's what pulse displays.
+
+PART C — Use pulse:
+9. Open http://localhost:3000, sign in with my ListenBrainz / MusicBrainz account, and click "Sync now" to mirror my listens into pulse (first sync takes a few minutes on a large library).
+10. Confirm the dashboard renders my stats, and tell me how to re-sync later to pull in new listens.
+
+Pause and ask me whenever you need input (OAuth credentials, the Spotify ZIP, etc.).`;
 
 const HOSTED = [
   "We run it — nothing to set up",
@@ -145,7 +157,7 @@ docker compose up --build`}</code>
               Paste this into Claude (or any coding agent) and it&apos;ll clone, configure, and run
               it for you.
             </p>
-            <pre className="rounded-md border border-card-border bg-black/30 p-4 text-xs font-mono leading-relaxed text-foreground/80 whitespace-pre-wrap break-words">
+            <pre className="rounded-md border border-card-border bg-black/30 p-4 text-xs font-mono leading-relaxed text-foreground/80 whitespace-pre-wrap break-words max-h-72 overflow-y-auto">
               <code>{AGENT_PROMPT}</code>
             </pre>
           </Card>
