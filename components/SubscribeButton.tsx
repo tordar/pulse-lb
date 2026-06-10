@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 
-export function PricingButtons({ plan }: { plan: "annual" | "lifetime" }) {
+// Kicks off Stripe Checkout for the annual plan and redirects to Stripe.
+// (Lifetime is no longer purchasable — granted manually via SQL.)
+export function SubscribeButton({ label = "Subscribe" }: { label?: string }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -13,30 +16,28 @@ export function PricingButtons({ plan }: { plan: "annual" | "lifetime" }) {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan: "annual" }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setErr(body.error ?? `error ${res.status}`);
+        setErr(body.error ?? `Something went wrong (${res.status})`);
         return;
       }
       const body = (await res.json()) as { url: string };
       window.location.href = body.url;
+    } catch {
+      setErr("Network error — please try again.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <>
-      <button
-        onClick={go}
-        disabled={loading}
-        className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60"
-      >
-        {loading ? "Loading…" : "Subscribe"}
-      </button>
+    <div className="space-y-1">
+      <Button className="w-full" onClick={go} disabled={loading}>
+        {loading ? "Loading…" : label}
+      </Button>
       {err && <p className="text-xs text-destructive">{err}</p>}
-    </>
+    </div>
   );
 }

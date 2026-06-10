@@ -85,7 +85,7 @@ function SubscriptionBlock({
     return (
       <div className="text-sm space-y-2">
         <p>Canceled. Sync stops {user.currentPeriodEnd.toISOString().slice(0, 10)}.</p>
-        <Link href="/pricing" className="underline text-primary">Resubscribe</Link>
+        <Link href="/#pricing" className="underline text-primary">Resubscribe</Link>
       </div>
     );
   }
@@ -98,7 +98,7 @@ function SubscriptionBlock({
       <div className="text-sm space-y-2">
         <p>Trial: {daysLeft} day{daysLeft === 1 ? "" : "s"} left.</p>
         {live && (
-          <Link href="/pricing" className="underline text-primary">
+          <Link href="/#pricing" className="underline text-primary">
             Subscribe to keep syncing
           </Link>
         )}
@@ -109,7 +109,7 @@ function SubscriptionBlock({
     <div className="text-sm space-y-2">
       <p>No active subscription. Sync is disabled.</p>
       {live && (
-        <Link href="/pricing" className="underline text-primary">
+        <Link href="/#pricing" className="underline text-primary">
           Subscribe
         </Link>
       )}

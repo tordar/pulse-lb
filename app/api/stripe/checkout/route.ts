@@ -7,7 +7,9 @@ import { getSession } from "@/lib/auth/session";
 import { getUserByMbId } from "@/lib/auth/users";
 import { stripe, priceId, paymentsConfigured } from "@/lib/stripe";
 
-const Body = z.object({ plan: z.enum(["annual", "lifetime"]) });
+// Lifetime is no longer purchasable (granted manually via SQL). The API only
+// accepts "annual"; any other plan is rejected as a bad request.
+const Body = z.object({ plan: z.enum(["annual"]) });
 
 function baseUrl(req: NextRequest): string {
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
     customer: user.stripeCustomerId ?? undefined,
     customer_email: !user.stripeCustomerId && user.email ? user.email : undefined,
     success_url: `${origin}/account?welcome=true`,
-    cancel_url: `${origin}/pricing`,
+    cancel_url: `${origin}/#pricing`,
     metadata: { user_id: user.id, plan: body.plan },
     ...(body.plan === "annual"
       ? { subscription_data: { metadata: { user_id: user.id, plan: body.plan } } }

@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BarChart3,
   CalendarDays,
-  Check,
   Clock,
   Disc3,
   Eye,
@@ -19,6 +18,7 @@ import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SignInButton } from "@/components/SignInButton";
+import { PricingCards } from "@/components/PricingCards";
 import { getSession } from "@/lib/auth/session";
 import { allTimeStats } from "@/lib/db/queries/stats";
 import { paymentsConfigured } from "@/lib/stripe";
@@ -71,7 +71,7 @@ export default async function Home({
       <DemoSection demo={demo} />
       <FeatureGrid />
       <HowItWorks />
-      <Pricing live={live} signedIn={!!session} />
+      <PricingCards live={live} signedIn={!!session} />
       <BrowseForm defaultValue={sp.username ?? ""} />
       <SiteFooter />
     </main>
@@ -349,131 +349,6 @@ function HowItWorks() {
   );
 }
 
-/* ---------------- pricing ---------------- */
-
-function Pricing({ live, signedIn }: { live: boolean; signedIn: boolean }) {
-  const plans: {
-    title: string;
-    price: string;
-    sub: string;
-    features: string[];
-    plan: "annual" | "lifetime";
-    highlight?: boolean;
-  }[] = [
-    {
-      title: "Free",
-      price: "$0",
-      sub: "forever",
-      plan: "annual",
-      features: [
-        "Browse any public profile",
-        "Full drill-downs on the demo",
-        "Heatmap, year tabs, per-day history",
-        "No account needed",
-      ],
-    },
-    {
-      title: "Annual",
-      price: "$10",
-      sub: "/year",
-      plan: "annual",
-      features: [
-        "Sync your own ListenBrainz data",
-        "Your own dashboard, public URL",
-        "7-day free trial",
-        "Cancel any time",
-      ],
-      highlight: true,
-    },
-    {
-      title: "Lifetime",
-      price: "$25",
-      sub: "once",
-      plan: "lifetime",
-      features: [
-        "Pay once, sync forever",
-        "All future features included",
-        "Support a solo project",
-        "Best long-run value",
-      ],
-    },
-  ];
-  return (
-    <section id="pricing" className="max-w-6xl mx-auto px-6 py-20">
-      <div className="space-y-2 mb-10 text-center max-w-2xl mx-auto">
-        <p className="text-xs uppercase tracking-widest text-primary font-medium">Pricing</p>
-        <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-          Free to browse. $10/yr to add your own.
-        </h2>
-        <p className="text-muted-foreground">
-          Visualizations are open. The data-sync layer is what costs to run.
-        </p>
-      </div>
-      {!live ? (
-        <Card padding="lg" className="text-center text-muted-foreground max-w-xl mx-auto">
-          Payments are not configured yet — coming soon.
-        </Card>
-      ) : (
-        <div className="grid md:grid-cols-3 gap-4">
-          {plans.map((p) => (
-            <div
-              key={p.title}
-              className={`relative rounded-lg border p-6 space-y-4 ${
-                p.highlight
-                  ? "border-primary bg-primary/[0.03]"
-                  : "border-card-border bg-card"
-              }`}
-            >
-              {p.highlight && (
-                <span className="absolute -top-3 left-6 text-[10px] uppercase tracking-widest font-bold px-2 py-1 rounded-full bg-primary text-primary-foreground">
-                  Most popular
-                </span>
-              )}
-              <div className="space-y-1">
-                <h3 className="text-lg font-semibold">{p.title}</h3>
-                <p className="text-3xl font-bold font-mono">
-                  {p.price}
-                  <span className="text-base font-normal text-muted-foreground"> {p.sub}</span>
-                </p>
-              </div>
-              <ul className="space-y-2 text-sm">
-                {p.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2">
-                    <Check size={16} className="text-primary mt-0.5 shrink-0" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              {p.title === "Free" ? (
-                <Link href={`/u/${DEMO_USERNAME}/stats`}>
-                  <Button variant="outline" className="w-full">
-                    Browse the demo
-                  </Button>
-                </Link>
-              ) : signedIn ? (
-                <Link href="/pricing">
-                  <Button className="w-full" variant={p.highlight ? "primary" : "outline"}>
-                    Choose {p.title.toLowerCase()}
-                  </Button>
-                </Link>
-              ) : (
-                <Link href={`/auth/login?return=${encodeURIComponent("/pricing")}`}>
-                  <Button className="w-full" variant={p.highlight ? "primary" : "outline"}>
-                    Sign in to subscribe
-                  </Button>
-                </Link>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      <p className="text-xs text-muted-foreground text-center mt-6">
-        Subscription cancellation keeps your data for 30 days, then deletes it. GDPR deletion on request.
-      </p>
-    </section>
-  );
-}
-
 /* ---------------- browse form ---------------- */
 
 function BrowseForm({ defaultValue }: { defaultValue: string }) {
@@ -524,9 +399,8 @@ function SiteFooter() {
         </p>
         <div className="flex gap-5">
           <Link href="/onboarding" className="hover:text-foreground">Get started</Link>
-          <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
+          <Link href="/#pricing" className="hover:text-foreground">Pricing</Link>
           <Link href={`/u/${DEMO_USERNAME}/stats`} className="hover:text-foreground">Live demo</Link>
-          <Link href="/self-host" className="hover:text-foreground">Self-host</Link>
         </div>
       </div>
     </footer>

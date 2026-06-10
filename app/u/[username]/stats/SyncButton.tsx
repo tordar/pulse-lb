@@ -254,7 +254,7 @@ export function SyncButton({
           </Link>
         ) : gate === "paywall" ? (
           <Link
-            href="/pricing"
+            href="/#pricing"
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
           >
             Subscribe to sync
