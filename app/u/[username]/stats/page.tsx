@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { after } from "next/server";
 import { revalidateTag } from "next/cache";
 import { eq, sql } from "drizzle-orm";
-import { db, schema } from "@/lib/db/client";
+import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { rebuildAll } from "@/lib/db/aggregates/rebuild";
 import {
@@ -60,7 +60,7 @@ export default async function StatsPage({
     yearlyListening(username),
     hourlyDistribution(username),
     withRetry(() =>
-      db.execute<{
+      execute<{
         listened_at: string;
         track_name: string;
         artist_name: string;
@@ -92,7 +92,7 @@ export default async function StatsPage({
   if (aggStale) {
     after(async () => {
       const claimed = await withRetry(() =>
-        db.execute<{ user_name: string }>(sql`
+        execute<{ user_name: string }>(sql`
           UPDATE ${schema.syncState}
           SET last_aggregated_at = NOW()
           WHERE user_name = ${username}
@@ -110,7 +110,7 @@ export default async function StatsPage({
         // claim committed and staleness permanently undetectable (the sync
         // route's terminal rebuild checks the same condition).
         await withRetry(() =>
-          db.execute(sql`
+          execute(sql`
             UPDATE ${schema.syncState}
             SET last_aggregated_at = ${state!.lastAggregatedAt}
             WHERE user_name = ${username}

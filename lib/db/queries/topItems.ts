@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { db, schema } from "@/lib/db/client";
+import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 
 const PAGE_SIZE = 50;
@@ -32,7 +32,7 @@ export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSo
   // matching the unfiltered list's order — so each item's rank is stable
   // regardless of the search filter applied in the outer query.
   const rows = await withRetry(() =>
-    db.execute<TopSong>(sql`
+    execute<TopSong>(sql`
       SELECT rank, track_name, artist_name, plays, effective_ms,
              caa_id, caa_release_mbid, recording_mbid
       FROM (
@@ -68,7 +68,7 @@ export async function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopA
   const offset = opts.page * PAGE_SIZE;
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
-    db.execute<TopAlbum>(sql`
+    execute<TopAlbum>(sql`
       SELECT rank, release_name, artist_name, plays, effective_ms,
              caa_id, caa_release_mbid, release_mbid
       FROM (
@@ -105,7 +105,7 @@ export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<Top
   const offset = opts.page * PAGE_SIZE;
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
-    db.execute<TopArtist>(sql`
+    execute<TopArtist>(sql`
       SELECT rank, artist_name, plays, effective_ms,
              distinct_tracks, distinct_albums,
              artist_mbid, caa_id, caa_release_mbid
@@ -171,7 +171,7 @@ export async function searchAll(username: string, query: string): Promise<Search
   if (!pat) return { artists: [], songs: [], albums: [] };
   const [artists, songs, albums] = await Promise.all([
     withRetry(() =>
-      db.execute<SearchArtist>(sql`
+      execute<SearchArtist>(sql`
         SELECT artist_name, plays, artist_mbid, caa_id, caa_release_mbid
         FROM ${schema.aggArtist}
         WHERE user_name = ${username} AND scope = 0 AND artist_name ILIKE ${pat}
@@ -180,7 +180,7 @@ export async function searchAll(username: string, query: string): Promise<Search
       `),
     ),
     withRetry(() =>
-      db.execute<SearchSong>(sql`
+      execute<SearchSong>(sql`
         SELECT track_name, artist_name, plays, recording_mbid, caa_id, caa_release_mbid
         FROM ${schema.aggSong}
         WHERE user_name = ${username} AND scope = 0
@@ -190,7 +190,7 @@ export async function searchAll(username: string, query: string): Promise<Search
       `),
     ),
     withRetry(() =>
-      db.execute<SearchAlbum>(sql`
+      execute<SearchAlbum>(sql`
         SELECT release_name, artist_name, plays, release_mbid, caa_id, caa_release_mbid
         FROM ${schema.aggAlbum}
         WHERE user_name = ${username} AND scope = 0

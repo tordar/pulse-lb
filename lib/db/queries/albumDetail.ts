@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { db, schema } from "@/lib/db/client";
+import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
 import { nameKey, resolveAlbumCluster } from "@/lib/db/aggregates/albumCluster";
@@ -45,7 +45,7 @@ async function resolveAlbumKey(
   releaseMbid: string,
 ): Promise<{ release_name: string; artist_name: string } | null> {
   const res = await withRetry(() =>
-    db.execute<{ release_name: string; artist_name: string }>(sql`
+    execute<{ release_name: string; artist_name: string }>(sql`
       SELECT release_name, artist_name
       FROM ${schema.listens}
       WHERE user_name = ${username} AND release_mbid = ${releaseMbid}::uuid AND release_name IS NOT NULL
@@ -102,7 +102,7 @@ export async function albumDetail(
   // header/years/tracks only need the member filter — run them in parallel.
   const [headerRes, yearsRes, tracksRes] = await Promise.all([
   withRetry(() =>
-    db.execute<AlbumHeader>(sql`
+    execute<AlbumHeader>(sql`
       SELECT
         ${release_name}::text AS release_name,
         ${artist_name}::text AS artist_name,
@@ -122,7 +122,7 @@ export async function albumDetail(
     `),
   ),
   withRetry(() =>
-    db.execute<AlbumYear>(sql`
+    execute<AlbumYear>(sql`
       SELECT
         EXTRACT(YEAR FROM listened_at)::int AS year,
         COUNT(*)::int AS plays,
@@ -134,7 +134,7 @@ export async function albumDetail(
     `),
   ),
   withRetry(() =>
-    db.execute<AlbumTrack>(sql`
+    execute<AlbumTrack>(sql`
       SELECT
         mode() WITHIN GROUP (ORDER BY recording_mbid) FILTER (WHERE recording_mbid IS NOT NULL)::text AS recording_mbid,
         (array_agg(track_name ORDER BY listened_at DESC))[1] AS track_name,

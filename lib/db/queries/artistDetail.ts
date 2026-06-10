@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { db, schema } from "@/lib/db/client";
+import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
 import { artistClusteredAlbums } from "@/lib/db/aggregates/albumCluster";
@@ -56,7 +56,7 @@ async function resolveArtistName(
   artistMbid: string,
 ): Promise<string | null> {
   const res = await withRetry(() =>
-    db.execute<{ artist_name: string }>(sql`
+    execute<{ artist_name: string }>(sql`
       SELECT artist_name
       FROM ${schema.listens}
       WHERE user_name = ${username} AND ${artistMbid}::uuid = ANY(artist_mbids)
@@ -74,7 +74,7 @@ export async function artistDetail(
   if (!artist_name) return null;
 
   const headerRes = await withRetry(() =>
-    db.execute<ArtistHeader & { plays_with_duration: number; sum_duration_ms: number }>(sql`
+    execute<ArtistHeader & { plays_with_duration: number; sum_duration_ms: number }>(sql`
       SELECT
         ${artist_name}::text AS artist_name,
         COUNT(*)::int AS total_plays,
@@ -95,7 +95,7 @@ export async function artistDetail(
   // Everything below only needs (username, artist_name) — run in parallel.
   const [yearsRes, songsRes, clustered, recentRes, allRecIdsRes] = await Promise.all([
   withRetry(() =>
-    db.execute<ArtistYear>(sql`
+    execute<ArtistYear>(sql`
       SELECT
         EXTRACT(YEAR FROM listened_at)::int AS year,
         COUNT(*)::int AS plays,
@@ -106,7 +106,7 @@ export async function artistDetail(
     `),
   ),
   withRetry(() =>
-    db.execute<ArtistSong>(sql`
+    execute<ArtistSong>(sql`
       SELECT
         mode() WITHIN GROUP (ORDER BY recording_mbid) FILTER (WHERE recording_mbid IS NOT NULL)::text AS recording_mbid,
         (array_agg(track_name ORDER BY listened_at DESC))[1] AS track_name,
@@ -124,7 +124,7 @@ export async function artistDetail(
   // definition the albums list uses. Also fixes the header's album count.
   artistClusteredAlbums(username, artist_name, 12),
   withRetry(() =>
-    db.execute<ArtistListen>(sql`
+    execute<ArtistListen>(sql`
       SELECT listened_at, track_name, release_name, source
       FROM ${schema.listens}
       WHERE user_name = ${username} AND artist_name = ${artist_name}
@@ -135,7 +135,7 @@ export async function artistDetail(
   // Fold canonical recording lengths into the total listening time, since
   // most listens (LB-imported from Spotify) carry no duration_ms.
   withRetry(() =>
-    db.execute<{ recording_mbid: string; plays: number; plays_with_duration: number }>(sql`
+    execute<{ recording_mbid: string; plays: number; plays_with_duration: number }>(sql`
       SELECT
         recording_mbid::text AS recording_mbid,
         COUNT(*)::int AS plays,

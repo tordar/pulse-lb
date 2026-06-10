@@ -20,3 +20,16 @@ export { schema };
 // transactions (aggregate rebuild, cluster queries). Sharing this one pool
 // is deliberate: never construct a second postgres() in app code.
 export { client as sqlClient };
+
+// drizzle-orm/postgres-js's db.execute() returns a postgres-js `Result`, which
+// IS an array of rows (and has no `.rows`). The neon-http driver we migrated
+// from returned `{ rows }`, and the raw-SQL read layer is written against that
+// shape. Normalize back to `{ rows }` so every `db.execute().rows` call site
+// keeps working under postgres-js.
+export async function execute<T = Record<string, unknown>>(
+  query: Parameters<typeof db.execute>[0],
+): Promise<{ rows: T[] }> {
+  const res = await db.execute(query);
+  const rows = (Array.isArray(res) ? res : (res as { rows?: unknown[] }).rows ?? []) as T[];
+  return { rows };
+}

@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { db, schema } from "@/lib/db/client";
+import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
 
@@ -45,7 +45,7 @@ async function resolveSongKey(
   recordingMbid: string,
 ): Promise<{ track_name: string; artist_name: string } | null> {
   const res = await withRetry(() =>
-    db.execute<{ track_name: string; artist_name: string }>(sql`
+    execute<{ track_name: string; artist_name: string }>(sql`
       SELECT track_name, artist_name
       FROM ${schema.listens}
       WHERE user_name = ${username} AND recording_mbid = ${recordingMbid}::uuid
@@ -86,7 +86,7 @@ export async function songDetail(
   if (canonical?.name) track_name = canonical.name;
 
   const headerRes = await withRetry(() =>
-    db.execute<SongHeader & { plays_with_duration: number; sum_duration_ms: number }>(sql`
+    execute<SongHeader & { plays_with_duration: number; sum_duration_ms: number }>(sql`
       SELECT
         ${track_name}::text AS track_name,
         ${artist_name}::text AS artist_name,
@@ -112,7 +112,7 @@ export async function songDetail(
   header.total_minutes = (Number(header.sum_duration_ms) + canonicalMs * playsMissing) / 1000 / 60;
 
   const yearsRes = await withRetry(() =>
-    db.execute<SongYear>(sql`
+    execute<SongYear>(sql`
       SELECT
         EXTRACT(YEAR FROM listened_at)::int AS year,
         COUNT(*)::int AS plays,
@@ -125,7 +125,7 @@ export async function songDetail(
   );
 
   const albumsRes = await withRetry(() =>
-    db.execute<SongAlbum>(sql`
+    execute<SongAlbum>(sql`
       SELECT
         release_name,
         mode() WITHIN GROUP (ORDER BY release_mbid) FILTER (WHERE release_mbid IS NOT NULL)::text AS release_mbid,
@@ -140,7 +140,7 @@ export async function songDetail(
   );
 
   const recentRes = await withRetry(() =>
-    db.execute<SongListen>(sql`
+    execute<SongListen>(sql`
       SELECT listened_at, release_name, source
       FROM ${schema.listens}
       WHERE user_name = ${username}

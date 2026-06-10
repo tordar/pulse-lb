@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { db, schema } from "@/lib/db/client";
+import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { getListens, getListenCount, normalizeSource, LBError, type Listen } from "@/lib/listenbrainz/client";
 
@@ -48,7 +48,7 @@ export async function syncUser(
 
   // Source of truth for resume cursors: the listens table itself.
   const boundsRes = await withRetry(() =>
-    db.execute<{ oldest: number | null; newest: number | null }>(sql`
+    execute<{ oldest: number | null; newest: number | null }>(sql`
       SELECT
         EXTRACT(EPOCH FROM MIN(listened_at))::bigint AS oldest,
         EXTRACT(EPOCH FROM MAX(listened_at))::bigint AS newest
@@ -69,7 +69,7 @@ export async function syncUser(
   // kills the function before we reach the end-of-sync write. totalListens
   // is best-effort here: use COUNT(*) from listens, the source of truth.
   const dbCountRes = await withRetry(() =>
-    db.execute<{ c: number }>(sql`
+    execute<{ c: number }>(sql`
       SELECT COUNT(*)::int AS c FROM ${schema.listens} WHERE user_name = ${username}
     `),
   );

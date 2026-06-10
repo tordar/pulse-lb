@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { revalidateTag } from "next/cache";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { db, schema } from "@/lib/db/client";
+import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { syncUser } from "@/lib/sync/syncUser";
 import { getListenCount } from "@/lib/listenbrainz/client";
@@ -217,7 +217,7 @@ export async function GET(
     // Source of truth for dbCount: actual row count. state.totalListens is
     // only written at start/end of sync, so it goes stale during a chain.
     withRetry(() =>
-      db.execute<{ c: number }>(sql`
+      execute<{ c: number }>(sql`
         SELECT COUNT(*)::int AS c FROM ${schema.listens} WHERE user_name = ${username}
       `),
     ),
@@ -234,7 +234,7 @@ export async function GET(
   let recent: RecentInsert[] = [];
   if (latest && (latest.status === "queued" || latest.status === "running")) {
     const recentRes = await withRetry(() =>
-      db.execute<RecentInsert>(sql`
+      execute<RecentInsert>(sql`
         SELECT
           listened_at::text AS listened_at,
           track_name,

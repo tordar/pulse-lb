@@ -1,5 +1,5 @@
 import { inArray, sql } from "drizzle-orm";
-import { db, schema } from "@/lib/db/client";
+import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { lbFetch } from "./client";
 
@@ -51,7 +51,7 @@ export async function ensureRecordingLengths(
   if (inserts.length > 0) {
     // Bulk upsert. Postgres conflict-do-update with ARRAY-of-values input.
     await withRetry(() =>
-      db.execute(sql`
+      execute(sql`
         INSERT INTO recordings (mbid, name, length_ms)
         SELECT * FROM UNNEST(
           ${sql`ARRAY[${sql.join(inserts.map((r) => sql`${r.mbid}::uuid`), sql`, `)}]`}::uuid[],

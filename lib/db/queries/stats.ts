@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
-import { db, schema } from "@/lib/db/client";
+import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 
 type Row<T> = { rows: T[] };
@@ -33,7 +33,7 @@ export type AllTimeStats = {
 export async function allTimeStats(username: string): Promise<AllTimeStats> {
   return userCached(username, ["allTimeStats", username], async () => {
     const res = await withRetry(() =>
-      db.execute<AllTimeStats>(sql`
+      execute<AllTimeStats>(sql`
         SELECT
           total_plays,
           effective_ms,
@@ -68,7 +68,7 @@ export type TodayStats = {
 
 export async function todayStats(username: string, tzOffsetMinutes = 0): Promise<TodayStats> {
   const res = await withRetry(() =>
-    db.execute<TodayStats>(sql`
+    execute<TodayStats>(sql`
       SELECT
         COUNT(*)::int AS plays,
         COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint AS effective_ms
@@ -87,7 +87,7 @@ export type YearlyPoint = { year: number; plays: number; hours: number };
 export async function yearlyListening(username: string): Promise<YearlyPoint[]> {
   return userCached(username, ["yearlyListening", username], async () => {
     const res = await withRetry(() =>
-      db.execute<YearlyPoint>(sql`
+      execute<YearlyPoint>(sql`
         SELECT year, plays, hours
         FROM ${schema.aggYear}
         WHERE user_name = ${username}
@@ -103,7 +103,7 @@ export type HourlyPoint = { hour: number; plays: number };
 export async function hourlyDistribution(username: string): Promise<HourlyPoint[]> {
   return userCached(username, ["hourlyDistribution", username], async () => {
     const res = await withRetry(() =>
-      db.execute<HourlyPoint>(sql`
+      execute<HourlyPoint>(sql`
         SELECT hour, plays
         FROM ${schema.aggHour}
         WHERE user_name = ${username}
@@ -147,7 +147,7 @@ export type TopArtistInYear = {
 export async function availableYears(username: string): Promise<number[]> {
   return userCached(username, ["availableYears", username], async () => {
     const res = await withRetry(() =>
-      db.execute<{ year: number }>(sql`
+      execute<{ year: number }>(sql`
         SELECT year FROM ${schema.aggYear}
         WHERE user_name = ${username}
         ORDER BY year DESC
@@ -164,7 +164,7 @@ export async function topSongsByYear(
 ): Promise<TopSongInYear[]> {
   return userCached(username, ["topSongsByYear", username, year, limit], async () => {
     const res = await withRetry(() =>
-      db.execute<TopSongInYear>(sql`
+      execute<TopSongInYear>(sql`
         SELECT track_name, artist_name, plays, effective_ms,
                caa_id, caa_release_mbid, recording_mbid
         FROM ${schema.aggSong}
@@ -184,7 +184,7 @@ export async function topAlbumsByYear(
 ): Promise<TopAlbumInYear[]> {
   return userCached(username, ["topAlbumsByYear", username, year, limit], async () => {
     const res = await withRetry(() =>
-      db.execute<TopAlbumInYear>(sql`
+      execute<TopAlbumInYear>(sql`
         SELECT release_name, artist_name, plays, effective_ms,
                caa_id, caa_release_mbid, release_mbid
         FROM ${schema.aggAlbum}
@@ -204,7 +204,7 @@ export async function topArtistsByYear(
 ): Promise<TopArtistInYear[]> {
   return userCached(username, ["topArtistsByYear", username, year, limit], async () => {
     const res = await withRetry(() =>
-      db.execute<TopArtistInYear>(sql`
+      execute<TopArtistInYear>(sql`
         SELECT artist_name, plays, effective_ms, distinct_songs,
                artist_mbid, caa_id, caa_release_mbid
         FROM ${schema.aggArtist}
@@ -229,7 +229,7 @@ export async function dailyListeningByYear(
 ): Promise<DailyPoint[]> {
   return userCached(username, ["dailyListeningByYear", username, year], async () => {
     const res = await withRetry(() =>
-      db.execute<DailyPoint>(sql`
+      execute<DailyPoint>(sql`
         SELECT to_char(d.day, 'YYYY-MM-DD') AS date,
                COALESCE(a.plays, 0)::int AS plays
         FROM generate_series(
@@ -274,7 +274,7 @@ export async function dayDetail(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
 
   const summaryRes = await withRetry(() =>
-    db.execute<Omit<DaySummary, "listens">>(sql`
+    execute<Omit<DaySummary, "listens">>(sql`
       SELECT
         ${date}::text AS date,
         COUNT(*)::int AS plays,
@@ -290,7 +290,7 @@ export async function dayDetail(
   const summary = (summaryRes as unknown as Row<Omit<DaySummary, "listens">>).rows[0];
 
   const listensRes = await withRetry(() =>
-    db.execute<DayListen>(sql`
+    execute<DayListen>(sql`
       SELECT
         listened_at,
         track_name,
