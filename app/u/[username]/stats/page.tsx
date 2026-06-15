@@ -435,7 +435,7 @@ function DayDetailBlock({
       ) : (
         <>
         <DayTimeline listens={day.listens} />
-        <ul className="divide-y divide-border text-sm max-h-[420px] overflow-y-auto pr-1">
+        <ul className="divide-y divide-border text-sm max-h-[420px] overflow-y-auto overflow-x-hidden pr-1">
           {day.listens.map((l, i) => {
             const time = new Date(l.listened_at).toISOString().slice(11, 16);
             const href = l.recording_mbid
