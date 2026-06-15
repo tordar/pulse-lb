@@ -22,6 +22,7 @@ import {
 import { SyncButton } from "./SyncButton";
 import { YearNav } from "./YearNav";
 import { GlobalSearch } from "./GlobalSearch";
+import { DayTimeline } from "./DayTimeline";
 import { getSession } from "@/lib/auth/session";
 import { getUserByLbUsername } from "@/lib/auth/users";
 import { SourceDot } from "@/components/SourceDot";
@@ -432,6 +433,8 @@ function DayDetailBlock({
       {day.listens.length === 0 ? (
         <p className="text-sm text-subtle-foreground italic">No listens this day.</p>
       ) : (
+        <>
+        <DayTimeline listens={day.listens} />
         <ul className="divide-y divide-border text-sm max-h-[420px] overflow-y-auto pr-1">
           {day.listens.map((l, i) => {
             const time = new Date(l.listened_at).toISOString().slice(11, 16);
@@ -465,6 +468,7 @@ function DayDetailBlock({
             );
           })}
         </ul>
+        </>
       )}
     </div>
   );
