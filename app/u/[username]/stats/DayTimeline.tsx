@@ -47,14 +47,6 @@ export function DayTimeline({ listens }: { listens: Listen[] }) {
   return (
     <div className="space-y-1.5">
       <div className="relative h-12 select-none">
-        {/* Hour gridlines every 6h */}
-        {[6, 12, 18].map((h) => (
-          <div
-            key={h}
-            className="absolute inset-y-0 w-px bg-border/60"
-            style={{ left: `${(h / 24) * 100}%` }}
-          />
-        ))}
         {/* Play markers */}
         {listens.map((l, i) => {
           const left = (minuteOfDay(l.listened_at) / 1440) * 100;
