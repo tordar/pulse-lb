@@ -245,7 +245,7 @@ export async function GET(
         FROM ${schema.listens}
         WHERE user_name = ${username}
           AND inserted_at IS NOT NULL
-          AND inserted_at >= ${latest.startedAt}
+          AND inserted_at >= ${latest.startedAt.toISOString()}
         ORDER BY inserted_at DESC, listened_at DESC
         LIMIT 40
       `),
