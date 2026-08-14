@@ -22,11 +22,13 @@ import { SearchDock } from "@/components/SearchDock";
  *
  * Below md only; wider screens use <PillNav> in the header.
  */
-export function TabBar({ username, showAccount }: { username: string; showAccount?: boolean }) {
+export function TabBar({ username }: { username: string }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const [searching, setSearching] = useState(false);
-  const tabs = navTabs(username, showAccount);
+  // Account is not a content section — it sits in the header on phone (see
+  // <AccountLink>), which also keeps this row at five cells.
+  const tabs = navTabs(username);
   // A filter survives closing the field, so keep the button lit while one is on
   // — otherwise a filtered list has nothing on screen explaining itself.
   const filtered = !!params.get("q");
@@ -34,14 +36,14 @@ export function TabBar({ username, showAccount }: { username: string; showAccoun
   return (
     <nav
       aria-label="Sections"
-      className="
+      className={`
         md:hidden fixed inset-x-0 bottom-0 z-40
         border-t border-white/10
         bg-background/90 supports-[backdrop-filter]:bg-background/60
         backdrop-blur-2xl backdrop-saturate-150
-        pb-[env(safe-area-inset-bottom)]
         shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]
-      "
+        ${searching ? "" : "pb-[env(safe-area-inset-bottom)]"}
+      `}
     >
       {searching ? (
         <SearchDock username={username} onClose={() => setSearching(false)} />

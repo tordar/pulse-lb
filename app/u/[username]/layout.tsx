@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { PillNav } from "./PillNav";
 import { TabBar } from "@/components/TabBar";
+import { AccountLink } from "@/components/AccountLink";
 import { NowPlaying } from "./NowPlaying";
 import { getSession } from "@/lib/auth/session";
 
@@ -34,8 +35,9 @@ export default async function UserLayout({
           <div className="hidden md:block md:justify-self-center">
             <PillNav username={username} showAccount={isOwner} />
           </div>
-          <div className="min-w-0 md:justify-self-end">
+          <div className="min-w-0 md:justify-self-end flex items-center gap-2">
             <NowPlaying username={username} />
+            {isOwner && <AccountLink />}
           </div>
         </div>
       </header>
@@ -44,7 +46,7 @@ export default async function UserLayout({
       <div className="max-w-7xl mx-auto px-6 py-6 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-6">
         {children}
       </div>
-      <TabBar username={username} showAccount={isOwner} />
+      <TabBar username={username} />
     </div>
   );
 }

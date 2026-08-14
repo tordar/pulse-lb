@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { PillNav } from "../u/[username]/PillNav";
 import { TabBar } from "@/components/TabBar";
+import { AccountLink } from "@/components/AccountLink";
 import { NowPlaying } from "../u/[username]/NowPlaying";
 import { getSession } from "@/lib/auth/session";
 
@@ -31,11 +32,14 @@ export default async function AccountLayout({
             <span>{username}</span>
           </Link>
           <PillNav username={username} showAccount />
-          <NowPlaying username={username} />
+          <div className="min-w-0 flex items-center gap-2">
+            <NowPlaying username={username} />
+            <AccountLink active />
+          </div>
         </div>
       </header>
       <div className="pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-0">{children}</div>
-      <TabBar username={username} showAccount />
+      <TabBar username={username} />
     </div>
   );
 }
