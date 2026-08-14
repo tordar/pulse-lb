@@ -26,7 +26,9 @@ export function SearchBox({ placeholder = "Search…" }: { placeholder?: string 
   }, [q]);
 
   return (
-    <div className="relative">
+    // Phones filter the same list from the tab bar's Search button, so the
+    // inline field only exists from md up.
+    <div className="relative hidden md:block">
       <Search
         size={15}
         className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle-foreground pointer-events-none"
