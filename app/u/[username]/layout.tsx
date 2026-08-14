@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { PillNav } from "./PillNav";
+import { TabBar } from "@/components/TabBar";
 import { NowPlaying } from "./NowPlaying";
 import { getSession } from "@/lib/auth/session";
 
@@ -30,7 +31,7 @@ export default async function UserLayout({
             <span className="text-subtle-foreground mx-0.5">/</span>
             <span>{username}</span>
           </Link>
-          <div className="md:justify-self-center">
+          <div className="hidden md:block md:justify-self-center">
             <PillNav username={username} showAccount={isOwner} />
           </div>
           <div className="min-w-0 md:justify-self-end">
@@ -38,7 +39,12 @@ export default async function UserLayout({
           </div>
         </div>
       </header>
-      <div className="max-w-7xl mx-auto px-6 py-6">{children}</div>
+      {/* Bottom padding clears the fixed phone tab bar (49pt row + the home
+          indicator) so the last row is never trapped under it. */}
+      <div className="max-w-7xl mx-auto px-6 py-6 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-6">
+        {children}
+      </div>
+      <TabBar username={username} showAccount={isOwner} />
     </div>
   );
 }

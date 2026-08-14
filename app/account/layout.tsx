@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { PillNav } from "../u/[username]/PillNav";
+import { TabBar } from "@/components/TabBar";
 import { NowPlaying } from "../u/[username]/NowPlaying";
 import { getSession } from "@/lib/auth/session";
 
@@ -33,7 +34,8 @@ export default async function AccountLayout({
           <NowPlaying username={username} />
         </div>
       </header>
-      {children}
+      <div className="pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-0">{children}</div>
+      <TabBar username={username} showAccount />
     </div>
   );
 }
