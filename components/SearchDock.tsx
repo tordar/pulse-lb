@@ -49,7 +49,9 @@ export function SearchDock({
   const [q, setQ] = useState(section ? (params.get("q") ?? "") : "");
   const [results, setResults] = useState<SearchResults>(EMPTY);
   const [loading, setLoading] = useState(false);
-  const [keyboard, setKeyboard] = useState(0);
+  const [lift, setLift] = useState(0);
+  const [panelMax, setPanelMax] = useState<number | null>(null);
+  const dockRef = useRef<HTMLDivElement | null>(null);
   // Monotonic request id: a response only lands if no newer keystroke
   // superseded it.
   const seqRef = useRef(0);
@@ -61,12 +63,37 @@ export function SearchDock({
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const update = () =>
-      setKeyboard(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    let raf = 0;
+
+    /**
+     * Measure, don't calculate. Deriving the lift from window.innerHeight
+     * left a dead band the height of iOS's accessory + predictive rows,
+     * because those are counted in some heights and not others. Instead we
+     * ask where the dock actually landed and close the gap to the bottom of
+     * the visual viewport — which *is* the top of the keyboard. One
+     * correction converges; the next measurement reads ~0.
+     */
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const el = dockRef.current;
+        if (!el) return;
+        const keyboardTop = vv.offsetTop + vv.height;
+        const delta = el.getBoundingClientRect().bottom - keyboardTop;
+        if (Math.abs(delta) >= 1) {
+          setLift((prev) => Math.max(0, prev + delta));
+        }
+        // Hits scroll inside whatever room is left over the keyboard, rather
+        // than growing off the top of the screen where they can't be reached.
+        setPanelMax(Math.max(140, vv.height - 128));
+      });
+    };
+
     update();
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
     return () => {
+      cancelAnimationFrame(raf);
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
     };
@@ -123,13 +150,22 @@ export function SearchDock({
 
   return (
     <div
+      ref={dockRef}
       className="flex flex-col"
-      style={keyboard ? { transform: `translateY(-${keyboard}px)` } : undefined}
+      style={{
+        transform: lift ? `translateY(-${lift}px)` : undefined,
+        // The home indicator is under the keyboard once it's up, so padding
+        // for it there would just reopen the gap we removed.
+        paddingBottom: lift ? 0 : "env(safe-area-inset-bottom)",
+      }}
     >
       {showHits && (
         // Denser than the bar itself: rows have to stay readable over whatever
         // page is showing through the glass behind them.
-        <div className="max-h-[45vh] overflow-y-auto border-b border-white/10 bg-background/90">
+        <div
+          className="overflow-y-auto border-b border-white/10 bg-background/90"
+          style={{ maxHeight: panelMax ? `${panelMax}px` : "45vh" }}
+        >
           <SearchHits groups={groups} onPick={onClose} />
         </div>
       )}
