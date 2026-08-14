@@ -161,8 +161,11 @@ function fmtDate(s: string): string {
 
 function fmtHours(h: number): string {
   if (h < 1 / 60) return "—";
-  if (h < 1) return `${Math.round(h * 60)}m`;
-  const hr = Math.floor(h);
-  const m = Math.round((h - hr) * 60);
+  // Round to whole minutes BEFORE splitting off the hours — splitting first lets
+  // the remainder round up to a full 60 and print nonsense like "1h 60m".
+  const totalMin = Math.round(h * 60);
+  const hr = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (hr === 0) return `${m}m`;
   return m ? `${hr}h ${m}m` : `${hr}h`;
 }
