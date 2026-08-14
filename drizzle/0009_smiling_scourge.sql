@@ -1,0 +1,1 @@
+ALTER TABLE "agg_day" ADD COLUMN "effective_ms" bigint DEFAULT 0 NOT NULL;

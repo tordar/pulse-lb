@@ -1,0 +1,1 @@
+ALTER TABLE "agg_day" ALTER COLUMN "effective_ms" DROP DEFAULT;

@@ -217,7 +217,7 @@ export async function topArtistsByYear(
   });
 }
 
-export type DailyPoint = { date: string; plays: number };
+export type DailyPoint = { date: string; plays: number; effective_ms: number };
 
 /**
  * One row per day Jan 1 → Dec 31 of `year`. Future days return 0 plays so the
@@ -231,7 +231,10 @@ export async function dailyListeningByYear(
     const res = await withRetry(() =>
       execute<DailyPoint>(sql`
         SELECT to_char(d.day, 'YYYY-MM-DD') AS date,
-               COALESCE(a.plays, 0)::int AS plays
+               COALESCE(a.plays, 0)::int AS plays,
+               -- float8, not bigint: postgres-js hands int8 back as a string,
+               -- and ms totals stay well inside float64's exact-integer range.
+               COALESCE(a.effective_ms, 0)::float8 AS effective_ms
         FROM generate_series(
           make_date(${year}, 1, 1),
           make_date(${year}, 12, 31),

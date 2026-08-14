@@ -106,14 +106,16 @@ async function buildHour(tx: TransactionSql, username: string) {
 
 async function buildDay(tx: TransactionSql, username: string) {
   await tx`
-    INSERT INTO agg_day (user_name, date, plays)
+    INSERT INTO agg_day (user_name, date, plays, effective_ms)
     SELECT
       ${username}::text,
-      listened_at::date,
-      COUNT(*)::int
-    FROM listens
-    WHERE user_name = ${username}
-    GROUP BY listened_at::date
+      l.listened_at::date,
+      COUNT(*)::int,
+      COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint
+    FROM listens l
+    LEFT JOIN recordings r ON r.mbid = l.recording_mbid
+    WHERE l.user_name = ${username}
+    GROUP BY l.listened_at::date
   `;
 }
 

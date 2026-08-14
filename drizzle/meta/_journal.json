@@ -64,6 +64,27 @@
       "when": 1781089156608,
       "tag": "0008_past_sphinx",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786703777087,
+      "tag": "0009_smiling_scourge",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786704278093,
+      "tag": "0010_backfill_agg_day_effective_ms",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786705876090,
+      "tag": "0011_flat_marvex",
+      "breakpoints": true
     }
   ]
 }

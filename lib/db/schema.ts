@@ -117,6 +117,11 @@ export const aggDay = pgTable(
     userName: text("user_name").notNull(),
     date: date("date").notNull(),
     plays: integer("plays").notNull(),
+    // No DEFAULT, deliberately. 0009 needed one to add the column to existing
+    // rows and 0010 backfilled them; 0011 then dropped it. With a default, any
+    // INSERT that forgets the column silently fills a whole year with zeros —
+    // which reads as "duration unknown" everywhere instead of erroring.
+    effectiveMs: bigint("effective_ms", { mode: "number" }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.userName, t.date] })],
 );
