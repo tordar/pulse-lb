@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { coverArtUrl, type CoverArtRef } from "@/lib/listenbrainz/coverArt";
+import { coverArtSrc, type CoverArtRef } from "@/lib/listenbrainz/coverArt";
 
 export function CoverArt({
   art,
@@ -16,7 +16,7 @@ export function CoverArt({
   className?: string;
 }) {
   const px = size <= 96 ? 250 : size <= 300 ? 500 : 1200;
-  const url = coverArtUrl(art, px);
+  const url = coverArtSrc(art, px);
 
   // Track the URL that failed rather than a bare boolean: list rows recycle
   // this component as you scroll, and a stale `true` would blank out the next
@@ -45,6 +45,10 @@ export function CoverArt({
       alt={alt}
       width={size}
       height={size}
+      // /api/cover already serves the right thumbnail behind an immutable
+      // cache; running it through the optimizer on top only spends a billed
+      // transformation to re-encode it.
+      unoptimized
       className={`shrink-0 bg-muted ${className}`}
       onError={() => setFailedUrl(url)}
     />
