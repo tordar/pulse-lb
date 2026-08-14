@@ -6,10 +6,15 @@ type YearPoint = { year: number; plays: number; hours: number };
 type EnrichedPoint = YearPoint & {
   projected: number | null;
   projectedHours: number | null;
-  remainder: number;
+  remainderHours: number;
 };
 
-// Pace-based projection for the current year: plays so far ÷ days elapsed ×
+// Bars are measured in HOURS, matching the year heatmap / day-bar views. Play
+// count rides along in the tooltip only: the two rank years differently (a year
+// of short tracks out-plays a year of long ones), and mixing the encodings is
+// what makes a taller bar look like it contradicts the tooltip.
+//
+// Pace-based projection for the current year: hours so far ÷ days elapsed ×
 // 365, rendered as a dimmed extension stacked on the actual bar. Skipped in
 // the first two weeks of January, where the extrapolation is mostly noise.
 function enrich(data: YearPoint[]): EnrichedPoint[] {
@@ -19,11 +24,16 @@ function enrich(data: YearPoint[]): EnrichedPoint[] {
     Math.floor((now.getTime() - Date.UTC(year, 0, 1)) / 86_400_000) + 1;
   return data.map((d) => {
     if (d.year !== year || dayOfYear < 14 || d.plays === 0) {
-      return { ...d, projected: null, projectedHours: null, remainder: 0 };
+      return { ...d, projected: null, projectedHours: null, remainderHours: 0 };
     }
     const projected = Math.round((d.plays / dayOfYear) * 365);
     const projectedHours = Math.round((d.hours / dayOfYear) * 365);
-    return { ...d, projected, projectedHours, remainder: Math.max(0, projected - d.plays) };
+    return {
+      ...d,
+      projected,
+      projectedHours,
+      remainderHours: Math.max(0, projectedHours - d.hours),
+    };
   });
 }
 
@@ -49,11 +59,11 @@ function YearTooltip({
     >
       <div style={{ fontWeight: 600 }}>{p.year}</div>
       <div>
-        {p.plays.toLocaleString()} plays · {Math.round(p.hours).toLocaleString()}h
+        {Math.round(p.hours).toLocaleString()}h · {p.plays.toLocaleString()} plays
       </div>
       {p.projected != null && (
         <div style={{ color: "var(--color-muted-foreground)", marginTop: 2 }}>
-          ≈ {p.projected.toLocaleString()} plays · {(p.projectedHours ?? 0).toLocaleString()}h
+          ≈ {(p.projectedHours ?? 0).toLocaleString()}h · {p.projected.toLocaleString()} plays
           projected by year end
         </div>
       )}
@@ -80,14 +90,15 @@ export function YearlyChart({
         />
         <YAxis
           tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+          tickFormatter={(v) => `${v}h`}
           tickLine={false}
           axisLine={false}
-          width={40}
+          width={44}
         />
         <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }} content={<YearTooltip />} />
-        <Bar dataKey="plays" stackId="y" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="hours" stackId="y" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
         <Bar
-          dataKey="remainder"
+          dataKey="remainderHours"
           stackId="y"
           fill="var(--color-primary)"
           fillOpacity={0.25}
