@@ -6,10 +6,10 @@ import { revalidateTag } from "next/cache";
 import { eq, sql } from "drizzle-orm";
 import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
+import { fmtHours } from "@/lib/format";
 import { rebuildAll } from "@/lib/db/aggregates/rebuild";
 import {
   allTimeStats,
-  todayStats,
   yearlyListening,
   hourlyDistribution,
   dailyListeningByYear,
@@ -29,7 +29,7 @@ import { SourceDot } from "@/components/SourceDot";
 import { SignInButton } from "@/components/SignInButton";
 import { YearlyChart } from "@/components/YearlyChart";
 import { HourlyChart } from "@/components/HourlyChart";
-import { Heatmap } from "@/components/Heatmap";
+import { YearActivity } from "@/components/YearActivity";
 import { YearTabs } from "@/components/YearTabs";
 import { CoverArt } from "@/components/CoverArt";
 
@@ -51,13 +51,12 @@ export default async function StatsPage({
 
   // Year-independent queries run in parallel. Cached ones (allTime, yearly,
   // hourly, availableYears) hit the per-user tag cache; uncached ones (state,
-  // todayStats, recent listens) hit the DB but in parallel rather than serial.
-  const [state, allTime, today, yearly, hourly, recent, years, showSource] = await Promise.all([
+  // recent listens) hit the DB but in parallel rather than serial.
+  const [state, allTime, yearly, hourly, recent, years, showSource] = await Promise.all([
     withRetry(() =>
       db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
     ),
     allTimeStats(username),
-    todayStats(username),
     yearlyListening(username),
     hourlyDistribution(username),
     withRetry(() =>
@@ -292,36 +291,8 @@ export default async function StatsPage({
             </section>
           )}
 
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card title="Today">
-              <div className="flex items-baseline gap-6">
-                <div>
-                  <div className="text-3xl font-semibold tabular-nums">{today.plays.toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">plays</div>
-                </div>
-                <div>
-                  <div className="text-3xl font-semibold tabular-nums">
-                    {fmtHours(today.effective_ms / 1000 / 3600)}
-                  </div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mt-1">listening time</div>
-                </div>
-              </div>
-            </Card>
-
-            <Card title="Coverage">
-              <div className="space-y-1">
-                <div className="text-sm">
-                  Listening time is estimated from MusicBrainz track lengths for plays missing duration. Coverage grows as you click into more albums and artists (the cache fills opportunistically).
-                </div>
-                <div className="text-xs text-muted-foreground tabular-nums pt-1">
-                  {allTime.duration_coverage_pct?.toFixed(1) ?? "0"}% of your plays have a known duration.
-                </div>
-              </div>
-            </Card>
-          </section>
-
           <section className="space-y-3">
-            <SectionHeading icon={TrendingUp}>Listening by year</SectionHeading>
+            <SectionHeading icon={TrendingUp} extra="(hours listened)">Listening by year</SectionHeading>
             <YearlyChart data={yearly} height={260} />
           </section>
 
@@ -332,18 +303,12 @@ export default async function StatsPage({
 
           {selectedYear !== null && (
             <section className="rounded-lg border border-card-border bg-card p-5 space-y-4">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <SectionHeading icon={Calendar}>{selectedYear}</SectionHeading>
-                <YearNav year={selectedYear} prevYear={prevYear} nextYear={nextYear} />
-              </div>
-              <Heatmap
+              <YearActivity
                 days={daily}
+                year={selectedYear}
                 activeDate={sp.day ?? null}
-                hrefFor={(date) => {
-                  const next = new URLSearchParams({ year: String(selectedYear) });
-                  next.set("day", date);
-                  return `?${next}`;
-                }}
+                heading={<SectionHeading icon={Calendar}>{selectedYear}</SectionHeading>}
+                nav={<YearNav year={selectedYear} prevYear={prevYear} nextYear={nextYear} />}
               />
               {daySummary && <DayDetailBlock username={username} day={daySummary} year={selectedYear} showSource={showSource} />}
             </section>
@@ -590,15 +555,6 @@ function SectionHeading({ icon: Icon, children, extra }: { icon: LucideIcon; chi
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-card-border bg-card p-4 space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
 function fmtDate(s: string): string {
   return new Date(s).toISOString().slice(0, 10);
 }
@@ -606,17 +562,6 @@ function fmtDate(s: string): string {
 function splitDateTime(s: string): { date: string; time: string } {
   const iso = new Date(s).toISOString();
   return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
-}
-
-function fmtHours(h: number): string {
-  if (!isFinite(h) || h <= 0) return "—";
-  if (h < 1) return `${Math.round(h * 60)}m`;
-  if (h < 100) {
-    const hr = Math.floor(h);
-    const m = Math.round((h - hr) * 60);
-    return m ? `${hr}h ${m}m` : `${hr}h`;
-  }
-  return `${Math.round(h).toLocaleString()}h`;
 }
 
 function relTime(d: Date | string): string {
