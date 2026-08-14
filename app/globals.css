@@ -245,6 +245,160 @@ body {
   box-shadow: 0 0 0 2px var(--color-primary);
 }
 
+/* Instant hover tooltip shared by the heatmap and the day-bar chart.
+   Fixed-positioned so neither plot's horizontal scroller can clip it. */
+.day-tip {
+  position: fixed;
+  z-index: 60;
+  transform: translate(-50%, calc(-100% - 10px));
+  pointer-events: none;
+  white-space: nowrap;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.day-tip .day-tip-date {
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+.day-tip .day-tip-stat {
+  font-family: var(--font-mono);
+  color: var(--color-muted-foreground);
+  margin-top: 1px;
+}
+
+/* Day-of-year bar chart (alternate view of the same daily data) */
+.daybars-root {
+  --daybars-height: 170px;
+  /* Mirrors the heatmap's gutter/label metrics so the plot doesn't shift
+     sideways when you toggle between the two views. */
+  --daybars-axis-col: 32px;
+  --daybars-label-row: 22px;
+  --daybars-label-color: var(--color-muted-foreground);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 6px;
+}
+
+@media (max-width: 720px) {
+  .daybars-root {
+    --daybars-height: 140px;
+    --daybars-axis-col: 28px;
+    --daybars-label-row: 18px;
+  }
+}
+
+@media (max-width: 420px) {
+  .daybars-root {
+    --daybars-axis-col: 26px;
+  }
+}
+
+.daybars-area {
+  display: grid;
+  grid-template-columns: var(--daybars-axis-col) 1fr;
+  grid-template-rows: var(--daybars-height) var(--daybars-label-row);
+  column-gap: 8px;
+  /* 2px per day keeps bars legible; narrower viewports scroll instead. */
+  min-width: calc(var(--daybars-axis-col) + 8px + var(--days-count) * 2px);
+}
+
+.daybars-axis {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--daybars-label-color);
+}
+
+.daybars-plot {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--days-count), minmax(0, 1fr));
+  align-items: end;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.daybars-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: color-mix(in oklab, var(--color-border) 60%, transparent);
+}
+
+.daybars-plot .daybar-col {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 100%;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 3px 3px 0 0;
+}
+.daybars-plot .daybar-col.future {
+  cursor: default;
+}
+.daybars-plot .daybar-col:hover {
+  background: color-mix(in oklab, var(--color-foreground) 8%, transparent);
+}
+.daybars-plot .daybar-col.active {
+  background: color-mix(in oklab, var(--color-foreground) 14%, transparent);
+}
+.daybars-plot .daybar-col:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.daybars-plot .daybar {
+  /* 1px of surface between neighbours — the most a ~2px pitch can spare. */
+  width: calc(100% - 1px);
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-heatmap-fill);
+}
+.daybars-plot .daybar.unknown {
+  height: 3px;
+  background: color-mix(in oklab, var(--color-heatmap-fill) 40%, transparent);
+}
+.daybars-plot .daybar-col.active .daybar {
+  filter: brightness(1.2);
+}
+
+.daybars-months {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: repeat(var(--days-count), minmax(0, 1fr));
+  align-items: start;
+  padding-top: 4px;
+}
+.daybars-months .month-label {
+  grid-row: 1;
+  justify-self: start;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--daybars-label-color);
+}
+
 .heatmap-legend {
   display: flex;
   align-items: center;

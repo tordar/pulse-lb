@@ -1,6 +1,5 @@
 import Link from "next/link";
-
-type Day = { date: string; plays: number };
+import type { DayPoint } from "./DayTooltip";
 
 export function Heatmap({
   days,
@@ -8,15 +7,16 @@ export function Heatmap({
   hrefFor,
   activeDate,
 }: {
-  days: Day[];
+  days: DayPoint[];
   max?: number;
   hrefFor?: (date: string) => string;
   activeDate?: string | null;
 }) {
   if (days.length === 0) return null;
 
-  const limit = max ?? Math.max(1, ...days.map((d) => d.plays));
-  const byDate = new Map(days.map((d) => [d.date, d.plays]));
+  // Shading tracks listening TIME, matching the bar view's bar heights.
+  const limit = max ?? Math.max(1, ...days.map((d) => d.effective_ms));
+  const byDate = new Map(days.map((d) => [d.date, d]));
 
   const first = parseDate(days[0].date);
   const last = parseDate(days[days.length - 1].date);
@@ -27,15 +27,25 @@ export function Heatmap({
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const cells: { date: string; plays: number; inRange: boolean; future: boolean; col: number; row: number }[] = [];
+  const cells: {
+    date: string;
+    plays: number;
+    ms: number;
+    inRange: boolean;
+    future: boolean;
+    col: number;
+    row: number;
+  }[] = [];
   for (let i = 0; i < weeks * 7; i++) {
     const d = new Date(start);
     d.setUTCDate(d.getUTCDate() + i);
     const iso = d.toISOString().slice(0, 10);
     const inRange = d >= first && d <= last;
+    const point = byDate.get(iso);
     cells.push({
       date: iso,
-      plays: byDate.get(iso) ?? 0,
+      plays: point?.plays ?? 0,
+      ms: point?.effective_ms ?? 0,
       inRange,
       future: iso > today,
       col: Math.floor(i / 7) + 1,
@@ -98,15 +108,16 @@ export function Heatmap({
                   key={i}
                   className="cell future"
                   style={{ gridColumn: c.col, gridRow: c.row }}
-                  title={c.date}
                   aria-hidden
                 />
               );
             }
-            const level = bucket(c.plays, limit);
-            const title = `${c.date} · ${c.plays} ${c.plays === 1 ? "play" : "plays"}`;
+            const level = bucket(c.ms, limit, c.plays);
+            const label = `${c.date} · ${c.plays} ${c.plays === 1 ? "play" : "plays"}`;
             const active = activeDate === c.date;
             const className = `cell${active ? " active" : ""}`;
+            // No `title` — the browser's ~1s delay is what the custom tooltip
+            // in DayTooltip replaces. aria-label still carries the same text.
             if (hrefFor) {
               return (
                 <Link
@@ -114,9 +125,9 @@ export function Heatmap({
                   href={hrefFor(c.date)}
                   className={className}
                   data-level={level}
+                  data-day={c.date}
                   style={{ gridColumn: c.col, gridRow: c.row }}
-                  title={title}
-                  aria-label={title}
+                  aria-label={label}
                   scroll={false}
                 />
               );
@@ -127,9 +138,9 @@ export function Heatmap({
                 type="button"
                 className={className}
                 data-level={level}
+                data-day={c.date}
                 style={{ gridColumn: c.col, gridRow: c.row }}
-                title={title}
-                aria-label={title}
+                aria-label={label}
               />
             );
           })}
@@ -144,9 +155,12 @@ function parseDate(s: string): Date {
   return new Date(`${s}T00:00:00Z`);
 }
 
-function bucket(plays: number, max: number): number {
-  if (plays === 0) return 0;
-  const r = plays / max;
+// `plays` only breaks the ms === 0 tie: days we know were listened to but have
+// no duration coverage yet still get the faintest fill instead of reading as
+// silence.
+function bucket(ms: number, max: number, plays: number): number {
+  if (ms === 0) return plays > 0 ? 1 : 0;
+  const r = ms / max;
   if (r < 0.15) return 1;
   if (r < 0.35) return 2;
   if (r < 0.65) return 3;
