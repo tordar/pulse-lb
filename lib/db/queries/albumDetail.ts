@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db, schema, execute } from "@/lib/db/client";
+import { userCached } from "./cache";
 import { withRetry } from "@/lib/db/retry";
 import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
 import { nameKey, resolveAlbumCluster } from "@/lib/db/aggregates/albumCluster";
@@ -64,7 +65,7 @@ export type AlbumDetail = {
   tracks: AlbumTrack[];
 };
 
-export async function albumDetail(
+async function albumDetailUncached(
   username: string,
   releaseMbid: string,
   hints: { releaseName?: string; artistName?: string } = {},
@@ -187,4 +188,17 @@ export async function albumDetail(
     years: (yearsRes as unknown as Row<AlbumYear>).rows,
     tracks,
   };
+}
+
+/** Cached entry point — see ./cache and songDetail for why. */
+export function albumDetail(
+  username: string,
+  releaseMbid: string,
+  hints: { releaseName?: string; artistName?: string } = {},
+): Promise<AlbumDetail | null> {
+  return userCached(
+    username,
+    ["albumDetail", username, releaseMbid, hints.releaseName, hints.artistName],
+    () => albumDetailUncached(username, releaseMbid, hints),
+  );
 }

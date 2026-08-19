@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db, schema, execute } from "@/lib/db/client";
+import { userCached } from "./cache";
 import { withRetry } from "@/lib/db/retry";
 
 const PAGE_SIZE = 50;
@@ -24,7 +25,7 @@ export type TopSong = {
   recording_mbid: string | null;
 };
 
-export async function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSong>> {
+async function topSongsUncached(opts: ListPageOpts): Promise<ListPageResult<TopSong>> {
   const pat = searchPattern(opts.query);
   const offset = opts.page * PAGE_SIZE;
   const limit = PAGE_SIZE + 1;
@@ -63,7 +64,7 @@ export type TopAlbum = {
   release_mbid: string | null;
 };
 
-export async function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopAlbum>> {
+async function topAlbumsUncached(opts: ListPageOpts): Promise<ListPageResult<TopAlbum>> {
   const pat = searchPattern(opts.query);
   const offset = opts.page * PAGE_SIZE;
   const limit = PAGE_SIZE + 1;
@@ -100,7 +101,7 @@ export type TopArtist = {
   caa_release_mbid: string | null;
 };
 
-export async function topArtists(opts: ListPageOpts): Promise<ListPageResult<TopArtist>> {
+async function topArtistsUncached(opts: ListPageOpts): Promise<ListPageResult<TopArtist>> {
   const pat = searchPattern(opts.query);
   const offset = opts.page * PAGE_SIZE;
   const limit = PAGE_SIZE + 1;
@@ -166,7 +167,7 @@ export type SearchResults = {
 
 // Cross-entity search for the stats dashboard's global search dropdown: top
 // matches per kind, ordered by plays like the top lists.
-export async function searchAll(username: string, query: string): Promise<SearchResults> {
+async function searchAllUncached(username: string, query: string): Promise<SearchResults> {
   const pat = searchPattern(query);
   if (!pat) return { artists: [], songs: [], albums: [] };
   const [artists, songs, albums] = await Promise.all([
@@ -205,4 +206,34 @@ export async function searchAll(username: string, query: string): Promise<Search
     songs: (songs as unknown as { rows: SearchSong[] }).rows,
     albums: (albums as unknown as { rows: SearchAlbum[] }).rows,
   };
+}
+
+/*
+ * Public read API. Every list a visitor (or a crawler) can reach is served from
+ * the per-user tag cache first — see ./cache. The uncached bodies above stay
+ * private so nothing can accidentally route around it and wake Neon.
+ */
+
+export function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSong>> {
+  return userCached(opts.username, ["topSongs", opts.username, opts.query, opts.page], () =>
+    topSongsUncached(opts),
+  );
+}
+
+export function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopAlbum>> {
+  return userCached(opts.username, ["topAlbums", opts.username, opts.query, opts.page], () =>
+    topAlbumsUncached(opts),
+  );
+}
+
+export function topArtists(opts: ListPageOpts): Promise<ListPageResult<TopArtist>> {
+  return userCached(opts.username, ["topArtists", opts.username, opts.query, opts.page], () =>
+    topArtistsUncached(opts),
+  );
+}
+
+export function searchAll(username: string, query: string): Promise<SearchResults> {
+  return userCached(username, ["searchAll", username, query], () =>
+    searchAllUncached(username, query),
+  );
 }

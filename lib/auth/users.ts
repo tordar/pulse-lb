@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
+import { userCached } from "@/lib/db/queries/cache";
 
 export type DbUser = typeof schema.users.$inferSelect;
 
@@ -13,13 +14,24 @@ export async function getUserByMbId(mbAccountId: number): Promise<DbUser | null>
   return row ?? null;
 }
 
-export async function getUserByLbUsername(lbUsername: string): Promise<DbUser | null> {
-  const row = await withRetry(() =>
-    db.query.users.findFirst({
-      where: eq(schema.users.listenbrainzUsername, lbUsername),
-    }),
-  );
-  return row ?? null;
+/**
+ * Display-only read for the "listen source" dots, called on every detail and
+ * stats render — i.e. on every page a crawler can reach. Cached under the
+ * user tag (see lib/db/queries/cache) so those renders don't wake Neon; it
+ * selects the one column on purpose rather than caching the whole users row,
+ * which carries subscription and Stripe fields. app/account/actions.ts drops
+ * the tag when the toggle changes.
+ */
+export function getShowListenSource(lbUsername: string): Promise<boolean> {
+  return userCached(lbUsername, ["showListenSource", lbUsername], async () => {
+    const row = await withRetry(() =>
+      db.query.users.findFirst({
+        columns: { showListenSource: true },
+        where: eq(schema.users.listenbrainzUsername, lbUsername),
+      }),
+    );
+    return row?.showListenSource ?? false;
+  });
 }
 
 export type MbProfile = {

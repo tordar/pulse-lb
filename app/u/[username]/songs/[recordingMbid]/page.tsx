@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Clock, Disc3, Music2, TrendingUp } from "lucide-react";
 import { songDetail } from "@/lib/db/queries/songDetail";
-import { getUserByLbUsername } from "@/lib/auth/users";
+import { getShowListenSource } from "@/lib/auth/users";
 import { SourceDot } from "@/components/SourceDot";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
@@ -24,9 +24,7 @@ export default async function SongDetailPage({
       trackName: sp.name,
       artistName: sp.artist,
     }),
-    getUserByLbUsername(username)
-      .then((u) => u?.showListenSource ?? false)
-      .catch(() => false),
+    getShowListenSource(username).catch(() => false),
   ]);
   if (!detail) notFound();
 

@@ -1,23 +1,9 @@
 import { sql } from "drizzle-orm";
-import { unstable_cache } from "next/cache";
 import { db, schema, execute } from "@/lib/db/client";
+import { userCached } from "./cache";
 import { withRetry } from "@/lib/db/retry";
 
 type Row<T> = { rows: T[] };
-
-// Cache aggregate reads behind a per-user tag. Invalidated by the sync route
-// after rebuildAll completes, so year tabs hit cache between syncs instead
-// of re-running 8 sequential Neon HTTP round trips per click.
-function userCached<T>(
-  username: string,
-  keys: (string | number)[],
-  fn: () => Promise<T>,
-): Promise<T> {
-  return unstable_cache(fn, keys.map(String), {
-    tags: [`user:${username}`],
-    revalidate: false,
-  })();
-}
 
 export type AllTimeStats = {
   total_plays: number;

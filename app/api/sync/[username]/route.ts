@@ -10,6 +10,7 @@ import { getListenCount } from "@/lib/listenbrainz/client";
 import { rebuildAll } from "@/lib/db/aggregates/rebuild";
 import { getSession } from "@/lib/auth/session";
 import { getUserByMbId, isAllowedToSync } from "@/lib/auth/users";
+import { signChain, verifyChain } from "@/lib/sync/chainToken";
 
 export const maxDuration = 300;
 
@@ -41,14 +42,23 @@ export async function POST(
 ) {
   const { username } = await params;
 
-  const session = await getSession();
-  const isSelfTriggeredHeader = (req.headers.get("x-pulse-chain") ?? "0") !== "0";
+  const chainDepth = parseInt(req.headers.get("x-pulse-chain") ?? "0", 10) || 0;
 
   // The self-continuation chain re-POSTs to the same route from inside Vercel's
-  // after() block. Those re-entrant calls don't carry a session cookie; we
-  // identify them by the chain header and let them through. User-initiated
-  // POSTs (chain header missing or "0") MUST be authenticated and authorized.
-  if (!isSelfTriggeredHeader) {
+  // after() block, with no session cookie — so it has to be let through on
+  // something other than auth. That something is an HMAC over (username, depth)
+  // that only this deployment can produce; the header alone proves nothing.
+  // User-initiated POSTs (no chain header) MUST be authenticated and authorized.
+  const isSelfTriggered =
+    chainDepth > 0 &&
+    verifyChain(username, chainDepth, req.headers.get("x-pulse-chain-sig"));
+
+  if (chainDepth > 0 && !isSelfTriggered) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const session = await getSession();
+  if (!isSelfTriggered) {
     if (!session) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
@@ -62,8 +72,6 @@ export async function POST(
   }
 
   const jobId = randomUUID();
-  const chainDepth = parseInt(req.headers.get("x-pulse-chain") ?? "0", 10) || 0;
-  const isSelfTriggered = chainDepth > 0;
 
   // Sweep stale "running"/"queued" rows for THIS user — only when the click
   // came from a real user, not from our own self-continuation (those legitimate
@@ -163,6 +171,7 @@ export async function POST(
           method: "POST",
           headers: {
             "x-pulse-chain": String(chainDepth + 1),
+            "x-pulse-chain-sig": signChain(username, chainDepth + 1),
             "content-type": "application/json",
           },
           // node-fetch / undici will close on its own after a brief delay
@@ -200,7 +209,19 @@ export async function GET(
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
-  // Probe mode (initial page-load fetch only, NOT the 1s poll loop): also ask
+
+  // Owner-only. This endpoint runs a COUNT(*) over the user's listens on every
+  // call and hands back their most recent plays — leaving it open meant anyone
+  // could both read that and spend the account's Neon compute at will.
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (session.lbUsername !== username) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // Probe mode (initial page-load fetch only, NOT the poll loop): also ask
   // ListenBrainz for its live listen-count so the client can decide whether
   // to auto-sync. Kept off the poll path to stay clear of LB rate limits.
   const probe = req.nextUrl.searchParams.get("probe") === "1";

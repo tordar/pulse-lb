@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { db, schema, execute } from "@/lib/db/client";
+import { userCached } from "./cache";
 import { withRetry } from "@/lib/db/retry";
 import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
 
@@ -55,7 +56,7 @@ async function resolveSongKey(
   return (res as unknown as Row<{ track_name: string; artist_name: string }>).rows[0] ?? null;
 }
 
-export async function songDetail(
+async function songDetailUncached(
   username: string,
   recordingMbid: string,
   hints: { trackName?: string; artistName?: string } = {},
@@ -159,4 +160,21 @@ export async function songDetail(
     albums: (albumsRes as unknown as Row<SongAlbum>).rows,
     recent: (recentRes as unknown as Row<SongListen>).rows,
   };
+}
+
+/**
+ * Cached entry point. /u/<user>/songs/<mbid> is one URL per track in the
+ * library, so a crawler enumerating them is what kept Neon awake — see
+ * ./cache. Hints are part of the key: they change which listens get matched.
+ */
+export function songDetail(
+  username: string,
+  recordingMbid: string,
+  hints: { trackName?: string; artistName?: string } = {},
+): Promise<SongDetail | null> {
+  return userCached(
+    username,
+    ["songDetail", username, recordingMbid, hints.trackName, hints.artistName],
+    () => songDetailUncached(username, recordingMbid, hints),
+  );
 }

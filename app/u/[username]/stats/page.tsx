@@ -24,7 +24,7 @@ import { YearNav } from "./YearNav";
 import { GlobalSearch } from "./GlobalSearch";
 import { DayTimeline } from "./DayTimeline";
 import { getSession } from "@/lib/auth/session";
-import { getUserByLbUsername } from "@/lib/auth/users";
+import { getShowListenSource } from "@/lib/auth/users";
 import { SourceDot } from "@/components/SourceDot";
 import { SignInButton } from "@/components/SignInButton";
 import { YearlyChart } from "@/components/YearlyChart";
@@ -75,9 +75,7 @@ export default async function StatsPage({
     ),
     availableYears(username),
     // Profile owner's display preference (not the viewer's) — defaults off.
-    getUserByLbUsername(username)
-      .then((u) => u?.showListenSource ?? false)
-      .catch(() => false),
+    getShowListenSource(username).catch(() => false),
   ]);
   const recentRows = (recent as unknown as { rows: { listened_at: string; track_name: string; artist_name: string; release_name: string | null; source: string | null }[] }).rows;
 

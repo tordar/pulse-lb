@@ -31,7 +31,19 @@ type SyncSnapshot = {
 // Poll often so the stream feels live. Each poll fetches the latest 40
 // inserted rows; new ones get dribbled into the visible list with a
 // per-item stagger so the visual flow feels continuous instead of batched.
-const POLL_MS = 1000;
+// Sync progress polling. Every poll runs a COUNT(*) over the user's listens
+// plus two more reads, and a chain can run for the better part of an hour —
+// at the old flat 1s that was ~2,500 round trips against Neon for one click,
+// which is most of how we burned the compute quota. Start slower, and back off
+// while the count is standing still (the chain spends long stretches paging
+// ListenBrainz without inserting anything).
+const POLL_MIN_MS = 2500;
+const POLL_MAX_MS = 10_000;
+const POLL_BACKOFF = 1.5;
+// router.refresh() re-renders the whole dashboard. Used to fire on ~25% of
+// polls; now rate-limited, since the streaming list already gives live feedback
+// and the final refresh on completion is what actually has to be correct.
+const REFRESH_EVERY_MS = 30_000;
 const VISIBLE_MAX = 22;
 const STAGGER_FLOOR_MS = 30;
 const STAGGER_CEIL_MS = 120;
@@ -116,13 +128,28 @@ export function SyncButton({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
+  // Resolves immediately when the tab is visible, otherwise once it is again.
+  function whileVisible(): Promise<void> {
+    if (typeof document === "undefined" || document.visibilityState === "visible") {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      function onChange() {
+        if (document.visibilityState !== "visible") return;
+        document.removeEventListener("visibilitychange", onChange);
+        resolve();
+      }
+      document.addEventListener("visibilitychange", onChange);
+    });
+  }
+
   function streamInFresh(items: RecentInsert[]) {
     if (items.length === 0) return;
     // Reverse so we prepend oldest-first → newest ends up at the top.
     const ordered = [...items].reverse();
     const stagger = Math.max(
       STAGGER_FLOOR_MS,
-      Math.min(STAGGER_CEIL_MS, Math.floor(POLL_MS / ordered.length)),
+      Math.min(STAGGER_CEIL_MS, Math.floor(POLL_MIN_MS / ordered.length)),
     );
     ordered.forEach((item, i) => {
       setTimeout(() => {
@@ -142,9 +169,16 @@ export function SyncButton({
     (async () => {
       let lastJobId: string | undefined;
       let doneSeenAt: number | null = null;
+      let delay = POLL_MIN_MS;
+      let lastCount = -1;
+      let lastRefresh = 0;
 
       while (pollIdRef.current === myId) {
-        await new Promise((r) => setTimeout(r, POLL_MS));
+        await new Promise((r) => setTimeout(r, delay));
+        if (pollIdRef.current !== myId) return;
+        // The chain runs server-side whether or not anyone is watching, so a
+        // hidden tab has no reason to keep asking. Park until it comes back.
+        await whileVisible();
         if (pollIdRef.current !== myId) return;
 
         let snap: SyncSnapshot;
@@ -152,6 +186,16 @@ export function SyncButton({
           snap = await fetch(`/api/sync/${username}`).then((r) => r.json());
         } catch {
           continue;
+        }
+
+        // Back off while the row count is standing still; snap straight back to
+        // the fast cadence the moment listens start landing again.
+        const count = snap.dbCount ?? 0;
+        if (count !== lastCount) {
+          lastCount = count;
+          delay = POLL_MIN_MS;
+        } else {
+          delay = Math.min(POLL_MAX_MS, Math.round(delay * POLL_BACKOFF));
         }
 
         setDbCount(snap.dbCount ?? 0);
@@ -163,9 +207,12 @@ export function SyncButton({
           if (fresh.length > 0) streamInFresh(fresh);
         }
 
-        // Refresh server components less often than we poll the API so the
-        // dashboard charts update but we don't thrash Postgres.
-        if (Math.random() < 0.25) router.refresh();
+        // Refresh server components far less often than we poll the API so the
+        // dashboard charts still move without thrashing Postgres.
+        if (Date.now() - lastRefresh >= REFRESH_EVERY_MS) {
+          lastRefresh = Date.now();
+          router.refresh();
+        }
 
         if (snap.id && snap.id !== lastJobId) {
           lastJobId = snap.id;
