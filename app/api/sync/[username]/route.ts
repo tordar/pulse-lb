@@ -8,6 +8,7 @@ import { withRetry } from "@/lib/db/retry";
 import { syncUser } from "@/lib/sync/syncUser";
 import { getListenCount } from "@/lib/listenbrainz/client";
 import { rebuildAll } from "@/lib/db/aggregates/rebuild";
+import { countListens } from "@/lib/db/queries/listenCount";
 import { getSession } from "@/lib/auth/session";
 import { getUserByMbId, isAllowedToSync } from "@/lib/auth/users";
 import { signChain, verifyChain } from "@/lib/sync/chainToken";
@@ -225,7 +226,7 @@ export async function GET(
   // ListenBrainz for its live listen-count so the client can decide whether
   // to auto-sync. Kept off the poll path to stay clear of LB rate limits.
   const probe = req.nextUrl.searchParams.get("probe") === "1";
-  const [latest, state, countRes, lbCount] = await Promise.all([
+  const [latest, state, dbCount, lbCount] = await Promise.all([
     withRetry(() =>
       db.query.syncJobs.findFirst({
         where: eq(schema.syncJobs.userName, username),
@@ -237,14 +238,10 @@ export async function GET(
     ),
     // Source of truth for dbCount: actual row count. state.totalListens is
     // only written at start/end of sync, so it goes stale during a chain.
-    withRetry(() =>
-      execute<{ c: number }>(sql`
-        SELECT COUNT(*)::int AS c FROM ${schema.listens} WHERE user_name = ${username}
-      `),
-    ),
+    // Briefly cached — see lib/db/queries/listenCount.
+    countListens(username),
     probe ? getListenCount(username).catch(() => null) : Promise.resolve(null),
   ]);
-  const dbCount = (countRes as unknown as { rows: { c: number }[] }).rows[0]?.c ?? 0;
   const aggStale =
     state?.lastListenedAt != null &&
     (state.lastAggregatedAt == null || state.lastAggregatedAt < state.lastListenedAt);

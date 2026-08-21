@@ -44,6 +44,12 @@ export const listens = pgTable(
     index("listens_user_artist").on(t.userName, t.artistName),
     index("listens_user_release_name").on(t.userName, t.releaseName),
     index("listens_user_inserted").on(t.userName, t.insertedAt),
+    // artist_mbids is a uuid[], so the artist-detail lookup has to test array
+    // containment — with no GIN index that was a full scan of the whole table
+    // (512k rows, ~55MB read, 75ms) on every miss, i.e. on every probe of an
+    // MBID we don't have. Measured on production: 75ms -> 0.05ms, 4MB index.
+    // Requires the query to use `@>`; `= ANY(...)` cannot use GIN.
+    index("listens_artist_mbids_gin").using("gin", t.artistMbids),
   ],
 );
 

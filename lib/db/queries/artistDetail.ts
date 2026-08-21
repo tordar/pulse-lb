@@ -56,11 +56,14 @@ async function resolveArtistName(
   username: string,
   artistMbid: string,
 ): Promise<string | null> {
+  // Containment rather than "= ANY(...)": only @> can use the GIN index on
+  // artist_mbids. Same result, but a miss costs one index probe instead of a
+  // full scan of the table (see the index in lib/db/schema.ts).
   const res = await withRetry(() =>
     execute<{ artist_name: string }>(sql`
       SELECT artist_name
       FROM ${schema.listens}
-      WHERE user_name = ${username} AND ${artistMbid}::uuid = ANY(artist_mbids)
+      WHERE user_name = ${username} AND artist_mbids @> ARRAY[${artistMbid}::uuid]
       LIMIT 1
     `),
   );
