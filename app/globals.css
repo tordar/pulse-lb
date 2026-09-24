@@ -102,6 +102,48 @@ body {
   animation: stream-row-in 0.55s ease-out;
 }
 
+/* A stat value that just counted up to a new number stays briefly tinted with
+ * the primary accent, so the reader's eye is drawn to what actually moved. */
+@keyframes value-flash {
+  0%,
+  45% {
+    color: var(--color-primary);
+  }
+  100% {
+    color: inherit;
+  }
+}
+.value-flash {
+  animation: value-flash 1.6s ease-out;
+}
+
+/* A row that entered a top-list this render (FlipList). Rows that MOVED are
+ * animated imperatively with transforms instead — see components/FlipList.tsx. */
+@keyframes flip-enter-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.flip-enter {
+  animation: flip-enter-in 0.4s cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Motion here is decorative: every value and position is already correct in the
+ * static render, so dropping the animation loses nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .stream-row,
+  .value-flash,
+  .flip-enter {
+    animation: none;
+  }
+}
+
 /* Listening heatmap (GitHub-style 53×7 grid with month strip + day axis) */
 .heatmap-root {
   --heatmap-cell: 14px;

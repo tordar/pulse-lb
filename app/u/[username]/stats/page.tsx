@@ -32,6 +32,8 @@ import { HourlyChart } from "@/components/HourlyChart";
 import { YearActivity } from "@/components/YearActivity";
 import { YearTabs } from "@/components/YearTabs";
 import { CoverArt } from "@/components/CoverArt";
+import { AnimatedNumber } from "@/components/AnimatedNumber";
+import { FlipList } from "@/components/FlipList";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -185,11 +187,16 @@ export default async function StatsPage({
       ) : (
         <>
           <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <StatTile icon={Play} big value={allTime.total_plays.toLocaleString()} label="plays" />
-            <StatTile icon={Clock} big value={fmtHours(allTime.effective_ms / 1000 / 3600)} label="listening time" />
-            <StatTile icon={Users} value={allTime.distinct_artists.toLocaleString()} label="artists" />
-            <StatTile icon={Disc3} value={allTime.distinct_albums.toLocaleString()} label="albums" />
-            <StatTile icon={Music2} value={allTime.distinct_songs.toLocaleString()} label="songs" />
+            <StatTile icon={Play} big value={<AnimatedNumber value={allTime.total_plays} />} label="plays" />
+            <StatTile
+              icon={Clock}
+              big
+              value={<AnimatedNumber value={allTime.effective_ms / 1000 / 3600} format="hours" />}
+              label="listening time"
+            />
+            <StatTile icon={Users} value={<AnimatedNumber value={allTime.distinct_artists} />} label="artists" />
+            <StatTile icon={Disc3} value={<AnimatedNumber value={allTime.distinct_albums} />} label="albums" />
+            <StatTile icon={Music2} value={<AnimatedNumber value={allTime.distinct_songs} />} label="songs" />
             <StatTile
               icon={Calendar}
               value={
@@ -223,9 +230,13 @@ export default async function StatsPage({
                       const href = s.recording_mbid
                         ? `/u/${encodeURIComponent(username)}/songs/${s.recording_mbid}?${new URLSearchParams({ name: s.track_name, artist: s.artist_name })}`
                         : null;
+                      // Identity, not position: keyed by rank, React would rewrite text
+                      // in place and the card would never visibly move.
+                      const key = s.recording_mbid ?? `${s.track_name}|${s.artist_name}`;
                       return (
                         <YearRow
-                          key={i}
+                          key={key}
+                          flipKey={key}
                           rank={i + 1}
                           art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
                           title={s.track_name}
@@ -246,9 +257,13 @@ export default async function StatsPage({
                       const href = a.artist_mbid
                         ? `/u/${encodeURIComponent(username)}/artists/${a.artist_mbid}?${new URLSearchParams({ name: a.artist_name, artist: a.artist_name })}`
                         : null;
+                      // Identity, not position: keyed by rank, React would rewrite text
+                      // in place and the card would never visibly move.
+                      const key = a.artist_mbid ?? a.artist_name;
                       return (
                         <YearRow
-                          key={i}
+                          key={key}
+                          flipKey={key}
                           rank={i + 1}
                           art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
                           artShape="circle"
@@ -270,9 +285,13 @@ export default async function StatsPage({
                       const href = a.release_mbid
                         ? `/u/${encodeURIComponent(username)}/albums/${a.release_mbid}?${new URLSearchParams({ name: a.release_name, artist: a.artist_name })}`
                         : null;
+                      // Identity, not position: keyed by rank, React would rewrite text
+                      // in place and the card would never visibly move.
+                      const key = a.release_mbid ?? `${a.release_name}|${a.artist_name}`;
                       return (
                         <YearRow
-                          key={i}
+                          key={key}
+                          flipKey={key}
                           rank={i + 1}
                           art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
                           title={a.release_name}
@@ -452,7 +471,7 @@ function YearColumn({
         <Icon className="w-5 h-5 text-muted-foreground" />
         <h3 className="font-semibold text-lg">{title}</h3>
       </div>
-      <ol className="space-y-2">{children}</ol>
+      <FlipList className="space-y-2">{children}</FlipList>
     </div>
   );
 }
@@ -470,6 +489,7 @@ function YearRow({
   plays,
   ms,
   href,
+  flipKey,
 }: {
   rank: number;
   art: { caaId: number | null; caaReleaseMbid: string | null };
@@ -479,6 +499,9 @@ function YearRow({
   plays: number;
   ms: number;
   href: string | null;
+  // Stable identity for this entry, independent of its current rank — this is
+  // what lets FlipList tell "moved from #3 to #1" apart from "different song".
+  flipKey: string;
 }) {
   const hours = ms / 1000 / 3600;
   const inner = (
@@ -511,7 +534,7 @@ function YearRow({
     </div>
   );
   return (
-    <li>
+    <li data-flip-key={flipKey}>
       {href ? (
         <Link href={href} className="block p-2 rounded-md hover:bg-muted/50 active:bg-muted transition-colors">
           {inner}
@@ -530,7 +553,9 @@ function StatTile({
   big = false,
 }: {
   icon?: LucideIcon;
-  value: string;
+  // A node, not a string: the numeric tiles pass <AnimatedNumber>, which counts
+  // from the old figure to the new one when a sync lands fresh aggregates.
+  value: React.ReactNode;
   label: string;
   big?: boolean;
 }) {
