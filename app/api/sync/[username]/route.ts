@@ -146,15 +146,19 @@ export async function POST(
             state.lastAggregatedAt < state.lastListenedAt);
         if (stale) {
           await rebuildAll(username);
+          // Drop the per-user query cache so stats/list pages pick up new
+          // aggregates on next render instead of serving the previous snapshot.
+          // Must happen BEFORE the stamp: the stamp is what clears aggStale in
+          // GET, and that is the client's cue to call router.refresh(). Stamp
+          // first and there is a window where the refresh lands on the old
+          // cached snapshot and the user sees nothing change.
+          revalidateTag(`user:${username}`, "default");
           await withRetry(() =>
             db
               .update(schema.syncState)
               .set({ lastAggregatedAt: new Date() })
               .where(eq(schema.syncState.userName, username)),
           );
-          // Drop the per-user query cache so stats/list pages pick up new
-          // aggregates on next render instead of serving the previous snapshot.
-          revalidateTag(`user:${username}`, "default");
         }
       }
 

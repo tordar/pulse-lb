@@ -44,6 +44,13 @@ const POLL_BACKOFF = 1.5;
 // polls; now rate-limited, since the streaming list already gives live feedback
 // and the final refresh on completion is what actually has to be correct.
 const REFRESH_EVERY_MS = 30_000;
+// The terminal chain hop marks the job "done" BEFORE it rebuilds aggregates,
+// so "done" alone is not "the page will render new numbers". Wait for the
+// server to report aggregates caught up (aggStale=false) before the final
+// refresh — otherwise we re-render onto the previous snapshot and the user has
+// to reload by hand. Bounded, because a chain that dies at MAX_CHAIN_DEPTH
+// never runs its terminal rebuild.
+const AGG_WAIT_MAX_MS = 120_000;
 const VISIBLE_MAX = 22;
 const STAGGER_FLOOR_MS = 30;
 const STAGGER_CEIL_MS = 120;
@@ -226,9 +233,20 @@ export function SyncButton({
         }
         if (snap.status === "done") {
           if (doneSeenAt === null) doneSeenAt = Date.now();
-          if (Date.now() - doneSeenAt >= CHAIN_GRACE_MS) {
+          const waited = Date.now() - doneSeenAt;
+          // Poll at full speed while we wait for the rebuild; the count has
+          // stopped moving by now, so the backoff would otherwise stretch this
+          // tail out to 10s of dead time per check.
+          if (waited >= CHAIN_GRACE_MS) delay = POLL_MIN_MS;
+          if (waited >= CHAIN_GRACE_MS && (!snap.aggStale || waited >= AGG_WAIT_MAX_MS)) {
             setRunning(false);
             router.refresh();
+            // Rebuild never landed (chain capped out). Rendering the page
+            // schedules a self-heal rebuild in after(); pick its result up.
+            if (snap.aggStale) {
+              setTimeout(() => router.refresh(), 6_000);
+              setTimeout(() => router.refresh(), 15_000);
+            }
             return;
           }
         } else {
