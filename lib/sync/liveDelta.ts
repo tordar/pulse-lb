@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
+import { albumKey, artistKey, songKey } from "@/lib/sync/keys";
 
 /**
  * A client-side projection of a sync that is still running.
@@ -77,28 +78,6 @@ function bump(map: Map<string, Tally>, key: string, ms: number) {
   }
 }
 
-// Mirrors agg_song.group_key in lib/db/aggregates/rebuild.ts, so a projected
-// row lands on the same bucket the server will eventually report.
-export function songKey(
-  recordingMbid: string | null,
-  trackName: string,
-  artistName: string,
-): string {
-  return `${recordingMbid ?? `~${trackName}`}|${artistName ?? ""}`;
-}
-
-// agg_artist groups on artist_name verbatim.
-export function artistKey(artistName: string): string {
-  return artistName ?? "";
-}
-
-// Approximate: agg_album groups on album CLUSTERS (reissues and case variants
-// merged — see albumCluster.ts), which can't be reproduced client-side. Casefold
-// is the cheap half of it and covers the common variant.
-export function albumKey(releaseName: string | null, artistName: string): string {
-  return `${(releaseName ?? "").toLowerCase()}|${(artistName ?? "").toLowerCase()}`;
-}
-
 /** Fold freshly-inserted listens into the running projection. */
 export function recordListens(rows: LiveListen[]) {
   if (rows.length === 0) return;
@@ -154,7 +133,11 @@ function subscribe(fn: () => void): () => void {
  * whatever the server has already counted is never added a second time, and the
  * number never dips backwards between a refresh firing and its data arriving.
  */
-export function useProjected(base: number, read: (c: Counters) => number): number {
+export function useProjected(rawBase: number, read: (c: Counters) => number): number {
+  // Coerced because bigint columns (effective_ms) arrive from postgres-js as
+  // STRINGS. `"40328388000" + 0` concatenates rather than adds, which silently
+  // multiplied listening time by ten.
+  const base = Number(rawBase);
   const delta = useSyncExternalStore(
     subscribe,
     () => read(counters),

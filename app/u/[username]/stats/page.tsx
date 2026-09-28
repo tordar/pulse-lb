@@ -33,7 +33,7 @@ import { YearActivity } from "@/components/YearActivity";
 import { YearTabs } from "@/components/YearTabs";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { TopList, type TopListItem } from "@/components/TopList";
-import { songKey, artistKey, albumKey } from "@/lib/sync/liveDelta";
+import { songKey, artistKey, albumKey } from "@/lib/sync/keys";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -241,7 +241,7 @@ export default async function StatsPage({
               big
               value={
                 <AnimatedNumber
-                  value={allTime.effective_ms}
+                  value={Number(allTime.effective_ms)}
                   format="durationMs"
                   live="durationMs"
                 />
