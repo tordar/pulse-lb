@@ -207,6 +207,11 @@ type RecentInsert = {
   release_name: string | null;
   caa_id: number | null;
   caa_release_mbid: string | null;
+  // Both only exist so the client can project these listens onto the figures
+  // already on screen while the sync runs — aggregates won't reflect them until
+  // the chain's terminal rebuild. See lib/sync/liveDelta.ts.
+  recording_mbid: string | null;
+  duration_ms: number | null;
 };
 
 export async function GET(
@@ -263,7 +268,9 @@ export async function GET(
           artist_name,
           release_name,
           caa_id,
-          caa_release_mbid::text AS caa_release_mbid
+          caa_release_mbid::text AS caa_release_mbid,
+          recording_mbid::text AS recording_mbid,
+          duration_ms
         FROM ${schema.listens}
         WHERE user_name = ${username}
           AND inserted_at IS NOT NULL

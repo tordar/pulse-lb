@@ -2,17 +2,36 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fmtHours } from "@/lib/format";
+import {
+  readTotalMs,
+  readTotalPlays,
+  useProjected,
+  type Counters,
+} from "@/lib/sync/liveDelta";
 
 // Formatting happens client-side rather than via a prop, because these tiles
 // are rendered from a server component and functions can't cross that boundary.
-type Format = "int" | "hours";
+type Format = "int" | "durationMs";
+
+// Which running total from an in-flight sync to add on top of the server value.
+// Omitted for the distinct_* tiles: a new listen tells us nothing about whether
+// its artist or album was already counted.
+type Live = "plays" | "durationMs";
+
+const NO_PROJECTION = () => 0;
+const PROJECTIONS: Record<Live, (c: Counters) => number> = {
+  plays: readTotalPlays,
+  durationMs: readTotalMs,
+};
 
 const DURATION_MS = 600;
 // How long the changed value stays tinted after it lands.
 const FLASH_MS = 1000;
 
 function render(value: number, format: Format): string {
-  return format === "hours" ? fmtHours(value) : Math.round(value).toLocaleString();
+  return format === "durationMs"
+    ? fmtHours(value / 1000 / 3600)
+    : Math.round(value).toLocaleString();
 }
 
 function prefersReducedMotion(): boolean {
@@ -32,14 +51,19 @@ function ease(t: number): number {
  * navigation to the page would replay the count from zero.
  */
 export function AnimatedNumber({
-  value,
+  value: base,
   format = "int",
+  live,
   className,
 }: {
   value: number;
   format?: Format;
+  live?: Live;
   className?: string;
 }) {
+  // While a sync runs the server figure is stale by design, so show it with the
+  // listens the poller has since watched land added on top.
+  const value = useProjected(base, live ? PROJECTIONS[live] : NO_PROJECTION);
   const [displayed, setDisplayed] = useState(value);
   const [flashing, setFlashing] = useState(false);
   // What's on screen right now. A second update landing mid-tween re-aims from

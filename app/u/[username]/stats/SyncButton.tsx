@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { recordListens, resetLive } from "@/lib/sync/liveDelta";
 
 type RecentInsert = {
   listened_at: string;
@@ -13,6 +14,8 @@ type RecentInsert = {
   release_name: string | null;
   caa_id: number | null;
   caa_release_mbid: string | null;
+  recording_mbid: string | null;
+  duration_ms: number | null;
 };
 
 type SyncSnapshot = {
@@ -54,7 +57,14 @@ const AGG_WAIT_MAX_MS = 120_000;
 const VISIBLE_MAX = 22;
 const STAGGER_FLOOR_MS = 30;
 const STAGGER_CEIL_MS = 120;
+// Dead time after the job reports "done", to avoid finalising in the gap
+// between two chain hops. A backfill hops many times and needs the full wait; a
+// routine top-up is a single hop, where 8s of staring at a finished sync is most
+// of what makes it feel slow. Which one we're in is known from the first poll.
 const CHAIN_GRACE_MS = 8000;
+const CHAIN_GRACE_SMALL_MS = 2000;
+// Below this many rows still to fetch, treat the sync as a top-up.
+const SMALL_SYNC_ROWS = 2000;
 
 function keyOf(r: RecentInsert): string {
   return `${r.listened_at}|${r.track_name}|${r.artist_name}`;
@@ -164,6 +174,9 @@ export function SyncButton({
         if (seenRef.current.has(k)) return;
         seenRef.current.add(k);
         setStream((prev) => [item, ...prev].slice(0, VISIBLE_MAX));
+        // Counted as it becomes visible, so the tiles and top lists move in step
+        // with the row appearing rather than jumping a poll's worth at a time.
+        recordListens([item]);
       }, i * stagger);
     });
   }
@@ -179,6 +192,9 @@ export function SyncButton({
       let delay = POLL_MIN_MS;
       let lastCount = -1;
       let lastRefresh = 0;
+      // Settled on the first poll that knows the target, then left alone.
+      let graceMs = CHAIN_GRACE_MS;
+      let graceKnown = false;
 
       while (pollIdRef.current === myId) {
         await new Promise((r) => setTimeout(r, delay));
@@ -209,6 +225,12 @@ export function SyncButton({
         if (snap.target != null) setTarget(snap.target);
         setPages(snap.pagesFetched ?? 0);
 
+        if (!graceKnown && snap.target != null) {
+          graceKnown = true;
+          const remaining = snap.target - (snap.dbCount ?? 0);
+          if (remaining < SMALL_SYNC_ROWS) graceMs = CHAIN_GRACE_SMALL_MS;
+        }
+
         if (snap.recent && snap.recent.length > 0) {
           const fresh = snap.recent.filter((r) => !seenRef.current.has(keyOf(r)));
           if (fresh.length > 0) streamInFresh(fresh);
@@ -237,8 +259,8 @@ export function SyncButton({
           // Poll at full speed while we wait for the rebuild; the count has
           // stopped moving by now, so the backoff would otherwise stretch this
           // tail out to 10s of dead time per check.
-          if (waited >= CHAIN_GRACE_MS) delay = POLL_MIN_MS;
-          if (waited >= CHAIN_GRACE_MS && (!snap.aggStale || waited >= AGG_WAIT_MAX_MS)) {
+          if (waited >= graceMs) delay = POLL_MIN_MS;
+          if (waited >= graceMs && (!snap.aggStale || waited >= AGG_WAIT_MAX_MS)) {
             setRunning(false);
             router.refresh();
             // Rebuild never landed (chain capped out). Rendering the page
@@ -258,6 +280,7 @@ export function SyncButton({
 
   async function trigger(auto = false) {
     seenRef.current = new Set();
+    resetLive();
     setStream([]);
     setPages(0);
     setError(null);

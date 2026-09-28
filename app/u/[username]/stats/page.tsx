@@ -31,9 +31,9 @@ import { YearlyChart } from "@/components/YearlyChart";
 import { HourlyChart } from "@/components/HourlyChart";
 import { YearActivity } from "@/components/YearActivity";
 import { YearTabs } from "@/components/YearTabs";
-import { CoverArt } from "@/components/CoverArt";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
-import { FlipList } from "@/components/FlipList";
+import { TopList, type TopListItem } from "@/components/TopList";
+import { songKey, artistKey, albumKey } from "@/lib/sync/liveDelta";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -141,6 +141,54 @@ export default async function StatsPage({
       ])
     : [[], [], [], [], null];
 
+  const qs = (name: string, artist: string) =>
+    new URLSearchParams({ name, artist }).toString();
+  const u = encodeURIComponent(username);
+
+  // matchKey buckets each row the same way the aggregate tables do, so listens
+  // arriving mid-sync can be added to the right row client-side.
+  const songItems: TopListItem[] = yearSongs.map((s) => ({
+    key: s.recording_mbid ?? `${s.track_name}|${s.artist_name}`,
+    matchKey: songKey(s.recording_mbid, s.track_name, s.artist_name),
+    title: s.track_name,
+    subtitle: s.artist_name,
+    plays: s.plays,
+    effectiveMs: Number(s.effective_ms),
+    caaId: s.caa_id,
+    caaReleaseMbid: s.caa_release_mbid,
+    href: s.recording_mbid
+      ? `/u/${u}/songs/${s.recording_mbid}?${qs(s.track_name, s.artist_name)}`
+      : null,
+  }));
+
+  const artistItems: TopListItem[] = yearArtists.map((a) => ({
+    key: a.artist_mbid ?? a.artist_name,
+    matchKey: artistKey(a.artist_name),
+    title: a.artist_name,
+    subtitle: `${a.distinct_songs.toLocaleString()} songs`,
+    plays: a.plays,
+    effectiveMs: Number(a.effective_ms),
+    caaId: a.caa_id,
+    caaReleaseMbid: a.caa_release_mbid,
+    href: a.artist_mbid
+      ? `/u/${u}/artists/${a.artist_mbid}?${qs(a.artist_name, a.artist_name)}`
+      : null,
+  }));
+
+  const albumItems: TopListItem[] = yearAlbums.map((a) => ({
+    key: a.release_mbid ?? `${a.release_name}|${a.artist_name}`,
+    matchKey: albumKey(a.release_name, a.artist_name),
+    title: a.release_name,
+    subtitle: a.artist_name,
+    plays: a.plays,
+    effectiveMs: Number(a.effective_ms),
+    caaId: a.caa_id,
+    caaReleaseMbid: a.caa_release_mbid,
+    href: a.release_mbid
+      ? `/u/${u}/albums/${a.release_mbid}?${qs(a.release_name, a.artist_name)}`
+      : null,
+  }));
+
   return (
     <div className="space-y-8">
       <header className="space-y-3">
@@ -187,11 +235,17 @@ export default async function StatsPage({
       ) : (
         <>
           <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <StatTile icon={Play} big value={<AnimatedNumber value={allTime.total_plays} />} label="plays" />
+            <StatTile icon={Play} big value={<AnimatedNumber value={allTime.total_plays} live="plays" />} label="plays" />
             <StatTile
               icon={Clock}
               big
-              value={<AnimatedNumber value={allTime.effective_ms / 1000 / 3600} format="hours" />}
+              value={
+                <AnimatedNumber
+                  value={allTime.effective_ms}
+                  format="durationMs"
+                  live="durationMs"
+                />
+              }
               label="listening time"
             />
             <StatTile icon={Users} value={<AnimatedNumber value={allTime.distinct_artists} />} label="artists" />
@@ -223,86 +277,13 @@ export default async function StatsPage({
                 className="p-5 grid gap-8 md:grid-cols-2 lg:grid-cols-3 fade-in"
               >
                 <YearColumn title="Top Songs" icon={Music2}>
-                  {yearSongs.length === 0 ? (
-                    <Empty />
-                  ) : (
-                    yearSongs.map((s, i) => {
-                      const href = s.recording_mbid
-                        ? `/u/${encodeURIComponent(username)}/songs/${s.recording_mbid}?${new URLSearchParams({ name: s.track_name, artist: s.artist_name })}`
-                        : null;
-                      // Identity, not position: keyed by rank, React would rewrite text
-                      // in place and the card would never visibly move.
-                      const key = s.recording_mbid ?? `${s.track_name}|${s.artist_name}`;
-                      return (
-                        <YearRow
-                          key={key}
-                          flipKey={key}
-                          rank={i + 1}
-                          art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
-                          title={s.track_name}
-                          subtitle={s.artist_name}
-                          plays={s.plays}
-                          ms={Number(s.effective_ms)}
-                          href={href}
-                        />
-                      );
-                    })
-                  )}
+                  <TopList kind="song" items={songItems} />
                 </YearColumn>
                 <YearColumn title="Top Artists" icon={Users}>
-                  {yearArtists.length === 0 ? (
-                    <Empty />
-                  ) : (
-                    yearArtists.map((a, i) => {
-                      const href = a.artist_mbid
-                        ? `/u/${encodeURIComponent(username)}/artists/${a.artist_mbid}?${new URLSearchParams({ name: a.artist_name, artist: a.artist_name })}`
-                        : null;
-                      // Identity, not position: keyed by rank, React would rewrite text
-                      // in place and the card would never visibly move.
-                      const key = a.artist_mbid ?? a.artist_name;
-                      return (
-                        <YearRow
-                          key={key}
-                          flipKey={key}
-                          rank={i + 1}
-                          art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
-                          artShape="circle"
-                          title={a.artist_name}
-                          subtitle={`${a.distinct_songs.toLocaleString()} songs`}
-                          plays={a.plays}
-                          ms={Number(a.effective_ms)}
-                          href={href}
-                        />
-                      );
-                    })
-                  )}
+                  <TopList kind="artist" items={artistItems} artShape="circle" />
                 </YearColumn>
                 <YearColumn title="Top Albums" icon={Disc3}>
-                  {yearAlbums.length === 0 ? (
-                    <Empty />
-                  ) : (
-                    yearAlbums.map((a, i) => {
-                      const href = a.release_mbid
-                        ? `/u/${encodeURIComponent(username)}/albums/${a.release_mbid}?${new URLSearchParams({ name: a.release_name, artist: a.artist_name })}`
-                        : null;
-                      // Identity, not position: keyed by rank, React would rewrite text
-                      // in place and the card would never visibly move.
-                      const key = a.release_mbid ?? `${a.release_name}|${a.artist_name}`;
-                      return (
-                        <YearRow
-                          key={key}
-                          flipKey={key}
-                          rank={i + 1}
-                          art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
-                          title={a.release_name}
-                          subtitle={a.artist_name}
-                          plays={a.plays}
-                          ms={Number(a.effective_ms)}
-                          href={href}
-                        />
-                      );
-                    })
-                  )}
+                  <TopList kind="album" items={albumItems} />
                 </YearColumn>
               </div>
             </section>
@@ -471,78 +452,8 @@ function YearColumn({
         <Icon className="w-5 h-5 text-muted-foreground" />
         <h3 className="font-semibold text-lg">{title}</h3>
       </div>
-      <FlipList className="space-y-2">{children}</FlipList>
+      {children}
     </div>
-  );
-}
-
-function Empty() {
-  return <li className="text-sm text-subtle-foreground italic">no plays</li>;
-}
-
-function YearRow({
-  rank,
-  art,
-  artShape = "square",
-  title,
-  subtitle,
-  plays,
-  ms,
-  href,
-  flipKey,
-}: {
-  rank: number;
-  art: { caaId: number | null; caaReleaseMbid: string | null };
-  artShape?: "square" | "circle";
-  title: string;
-  subtitle: string;
-  plays: number;
-  ms: number;
-  href: string | null;
-  // Stable identity for this entry, independent of its current rank — this is
-  // what lets FlipList tell "moved from #3 to #1" apart from "different song".
-  flipKey: string;
-}) {
-  const hours = ms / 1000 / 3600;
-  const inner = (
-    <div className="flex items-start gap-3">
-      <span className="shrink-0 w-8 h-8 rounded-md bg-muted text-xs font-medium text-muted-foreground tabular-nums grid place-items-center mt-0.5">
-        {rank}
-      </span>
-      <CoverArt
-        art={art}
-        size={64}
-        alt={title}
-        className={`mt-0.5 ${artShape === "circle" ? "rounded-full" : "rounded-md"}`}
-      />
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm break-words">{title}</p>
-        <p className="text-xs text-muted-foreground break-words mb-2">{subtitle}</p>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
-          <div className="flex items-center gap-1">
-            <Play className="w-3 h-3" />
-            <span>{plays.toLocaleString()}</span>
-          </div>
-          {hours > 0 && (
-            <div className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              <span>{fmtHours(hours)}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-  return (
-    <li data-flip-key={flipKey}>
-      {href ? (
-        <Link href={href} className="block p-2 rounded-md hover:bg-muted/50 active:bg-muted transition-colors">
-          {inner}
-        </Link>
-      ) : (
-        <div className="p-2 rounded-md">{inner}</div>
-      )}
-    </li>
   );
 }
 
