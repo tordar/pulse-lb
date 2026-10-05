@@ -10,6 +10,7 @@ import { fmtConcertDate, fmtDay, fmtRange } from "@/lib/concerts/format";
 import { ConcertForm } from "./ConcertForm";
 import { FestivalForm } from "./FestivalForm";
 import { DeleteButton } from "./DeleteButton";
+import { SetlistImport } from "./SetlistImport";
 import { deleteConcert, deleteFestival } from "./actions";
 
 export type TimelineProps = {
@@ -22,7 +23,8 @@ export type TimelineProps = {
 type Editing =
   | { kind: "new-concert" } | { kind: "new-festival" }
   | { kind: "concert"; id: string } | { kind: "festival"; id: string }
-  | { kind: "add-to-festival"; festivalId: string };
+  | { kind: "add-to-festival"; festivalId: string }
+  | { kind: "from-setlist"; initial: Partial<Concert> };
 
 type EditCtx = {
   username: string;
@@ -51,7 +53,13 @@ export function Timeline({ username, years, festivals, isOwner }: TimelineProps)
             <button type="button" onClick={() => setEditing({ kind: "new-festival" })}
               className="text-sm rounded-md border border-card-border px-3 py-1.5">Add festival</button>
           </div>
+          <SetlistImport username={username} festivals={festivals}
+            onLoaded={(initial) => setEditing({ kind: "from-setlist", initial })} />
           {editing?.kind === "new-concert" && <ConcertForm username={username} festivals={festivals} onDone={close} />}
+          {editing?.kind === "from-setlist" && (
+            <ConcertForm key={`${editing.initial.setlistUrl}`} username={username} festivals={festivals}
+              initial={editing.initial} onDone={close} />
+          )}
           {editing?.kind === "new-festival" && <FestivalForm username={username} onDone={close} />}
         </div>
       )}
