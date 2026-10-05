@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSetlistUrl, parseSetlistApi, parseSetlistPage, setlistIdFromUrl } from "./setlistfm";
+import { isSetlistUrl, parseSearchResults, parseSetlistApi, parseSetlistPage, setlistIdFromUrl } from "./setlistfm";
 
 const page = (desc: string, title: string) =>
   `<html><head><meta name="description" content="${desc}"/><meta property="og:title" content="${title}"/></head></html>`;
@@ -68,4 +68,32 @@ test("parseSetlistApi maps the API response", () => {
     { artistName: "Raga Rockers", eventDate: "2015-09-12", venue: "Arena Lillomarka", city: "Grorud", country: "Norway", eventName: null },
   );
   assert.equal(parseSetlistApi({ artist: { name: "X" } }), null);
+});
+
+test("parseSearchResults maps hits and paging, skipping unusable entries", () => {
+  const r = parseSearchResults({
+    total: 79, page: 1, itemsPerPage: 20,
+    setlist: [
+      {
+        id: "5bf28f68", eventDate: "25-11-2015",
+        url: "https://www.setlist.fm/setlist/title-fight/2015/west-side-park-nanticoke-pa-5bf28f68.html",
+        artist: { name: "Title Fight" },
+        venue: { name: "West Side Park", city: { name: "Nanticoke", country: { name: "United States" } } },
+      },
+      { id: "bad", artist: { name: "No date" } },
+    ],
+  });
+  assert.equal(r.total, 79);
+  assert.equal(r.hasMore, true);
+  assert.equal(r.items.length, 1);
+  assert.deepEqual(r.items[0], {
+    artistName: "Title Fight", eventDate: "2015-11-25", venue: "West Side Park", city: "Nanticoke",
+    country: "United States", eventName: null,
+    setlistUrl: "https://www.setlist.fm/setlist/title-fight/2015/west-side-park-nanticoke-pa-5bf28f68.html",
+  });
+});
+
+test("parseSearchResults: last page has no more", () => {
+  const r = parseSearchResults({ total: 21, page: 2, itemsPerPage: 20, setlist: [] });
+  assert.equal(r.hasMore, false);
 });

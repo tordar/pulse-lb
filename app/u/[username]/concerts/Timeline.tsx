@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import type { Concert, Festival } from "@/lib/db/schema";
@@ -42,6 +42,11 @@ export function Timeline({ username, years, festivals, isOwner }: TimelineProps)
   const router = useRouter();
   const close = useCallback(() => { setEditing(null); router.refresh(); }, [router]);
   const ctx: EditCtx = { username, festivals, isOwner, editing, setEditing, close };
+  const allConcerts = useMemo(
+    () => years.flatMap((y) => y.entries.flatMap((e) =>
+      e.kind === "concert" ? [e.concert] : e.days.flatMap((d) => d.concerts))),
+    [years],
+  );
 
   return (
     <div className="space-y-8">
@@ -53,7 +58,7 @@ export function Timeline({ username, years, festivals, isOwner }: TimelineProps)
             <button type="button" onClick={() => setEditing({ kind: "new-festival" })}
               className="text-sm rounded-md border border-card-border px-3 py-1.5">Add festival</button>
           </div>
-          <SetlistImport username={username} festivals={festivals}
+          <SetlistImport username={username} festivals={festivals} concerts={allConcerts}
             onLoaded={(initial) => setEditing({ kind: "from-setlist", initial })} />
           {editing?.kind === "new-concert" && <ConcertForm username={username} festivals={festivals} onDone={close} />}
           {editing?.kind === "from-setlist" && (

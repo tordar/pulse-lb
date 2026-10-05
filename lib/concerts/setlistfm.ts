@@ -71,6 +71,8 @@ export function setlistIdFromUrl(url: string): string | null {
 }
 
 type ApiSetlist = {
+  id?: string;
+  url?: string;
   eventDate?: string;
   artist?: { name?: string };
   venue?: { name?: string; city?: { name?: string; country?: { name?: string } } };
@@ -132,5 +134,48 @@ export async function fetchSetlistInfo(url: string): Promise<SetlistResult> {
   } catch (e) {
     console.warn("setlist.fm fetch failed", { url: clean, error: String(e) });
     return { ok: false, error: "Couldn't reach setlist.fm. Add it by hand instead." };
+  }
+}
+
+export type SetlistHit = SetlistInfo & { setlistUrl: string };
+export type SetlistSearch = { items: SetlistHit[]; total: number; hasMore: boolean };
+
+export function parseSearchResults(r: {
+  total?: number; page?: number; itemsPerPage?: number; setlist?: ApiSetlist[];
+}): SetlistSearch {
+  const items: SetlistHit[] = [];
+  for (const s of r.setlist ?? []) {
+    const info = parseSetlistApi(s);
+    if (info && s.url) items.push({ ...info, setlistUrl: s.url });
+  }
+  const total = r.total ?? 0;
+  return { items, total, hasMore: (r.page ?? 1) * (r.itemsPerPage ?? 20) < total };
+}
+
+export type SearchResult = ({ ok: true } & SetlistSearch) | { ok: false; error: string };
+
+// One request per Search/More press: the free key allows ~2 requests/second.
+export async function searchSetlists(artist: string, year: string, page: number): Promise<SearchResult> {
+  const key = process.env.SETLIST_FM_API_KEY;
+  if (!key) return { ok: false, error: "Search needs a setlist.fm API key (SETLIST_FM_API_KEY)." };
+  const q = new URLSearchParams({ artistName: artist.trim(), p: String(page) });
+  if (/^\d{4}$/.test(year.trim())) q.set("year", year.trim());
+  try {
+    const res = await fetch(`https://api.setlist.fm/rest/1.0/search/setlists?${q}`, {
+      headers: { "x-api-key": key, Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+    // The API answers "no matches" with a 404.
+    if (res.status === 404) return { ok: true, items: [], total: 0, hasMore: false };
+    if (res.status === 429) return { ok: false, error: "Too many searches. Wait a few seconds." };
+    if (!res.ok) {
+      console.warn("setlist.fm search failed", { status: res.status });
+      return { ok: false, error: `setlist.fm search failed (status ${res.status}).` };
+    }
+    return { ok: true, ...parseSearchResults(await res.json()) };
+  } catch (e) {
+    console.warn("setlist.fm search failed", { error: String(e) });
+    return { ok: false, error: "Couldn't reach setlist.fm." };
   }
 }
