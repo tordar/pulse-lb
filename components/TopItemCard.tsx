@@ -13,6 +13,7 @@ export function TopItemCard({
   plays,
   effectiveMs,
   href,
+  badge,
 }: {
   rank: number;
   art: CoverArtRef;
@@ -22,6 +23,7 @@ export function TopItemCard({
   plays: number;
   effectiveMs: number;
   href: string | null;
+  badge?: string | null;
 }) {
   const inner = (
     <div className="h-full flex flex-col gap-3 p-3 rounded-lg border border-card-border bg-card hover:bg-muted/40 active:bg-muted/60 active:scale-[0.98] transition">
@@ -32,8 +34,15 @@ export function TopItemCard({
         className={`w-full aspect-square ${artShape === "circle" ? "rounded-full" : "rounded-md"}`}
       />
       <div className="flex flex-col gap-1.5 flex-1">
-        <div className="inline-flex w-fit items-center px-2 py-0.5 rounded-md bg-muted text-xs font-medium tabular-nums">
-          #{rank}
+        <div className="flex flex-wrap gap-1.5">
+          <div className="inline-flex w-fit items-center px-2 py-0.5 rounded-md bg-muted text-xs font-medium tabular-nums">
+            #{rank}
+          </div>
+          {badge && (
+            <div className="inline-flex w-fit items-center px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-medium">
+              {badge}
+            </div>
+          )}
         </div>
         <p
           className="font-semibold text-sm leading-snug line-clamp-2 break-words"

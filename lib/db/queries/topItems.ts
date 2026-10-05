@@ -99,6 +99,7 @@ export type TopArtist = {
   artist_mbid: string | null;
   caa_id: number | null;
   caa_release_mbid: string | null;
+  seen_count: number;
 };
 
 async function topArtistsUncached(opts: ListPageOpts): Promise<ListPageResult<TopArtist>> {
@@ -107,9 +108,10 @@ async function topArtistsUncached(opts: ListPageOpts): Promise<ListPageResult<To
   const limit = PAGE_SIZE + 1;
   const rows = await withRetry(() =>
     execute<TopArtist>(sql`
-      SELECT rank, artist_name, plays, effective_ms,
-             distinct_tracks, distinct_albums,
-             artist_mbid, caa_id, caa_release_mbid
+      SELECT ranked.rank, ranked.artist_name, ranked.plays, ranked.effective_ms,
+             ranked.distinct_tracks, ranked.distinct_albums,
+             ranked.artist_mbid, ranked.caa_id, ranked.caa_release_mbid,
+             COALESCE(seen.n, 0)::int AS seen_count
       FROM (
         SELECT
           ROW_NUMBER() OVER (ORDER BY plays DESC, artist_name)::int AS rank,
@@ -120,8 +122,14 @@ async function topArtistsUncached(opts: ListPageOpts): Promise<ListPageResult<To
         FROM ${schema.aggArtist}
         WHERE user_name = ${opts.username} AND scope = 0
       ) ranked
-      WHERE ${pat ? sql`artist_name ILIKE ${pat}` : sql`TRUE`}
-      ORDER BY rank
+      LEFT JOIN (
+        SELECT artist_mbid, count(*) AS n
+        FROM ${schema.concerts}
+        WHERE user_name = ${opts.username} AND artist_mbid IS NOT NULL
+        GROUP BY artist_mbid
+      ) seen ON seen.artist_mbid = ranked.artist_mbid
+      WHERE ${pat ? sql`ranked.artist_name ILIKE ${pat}` : sql`TRUE`}
+      ORDER BY ranked.rank
       LIMIT ${limit} OFFSET ${offset}
     `),
   );

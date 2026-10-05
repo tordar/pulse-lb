@@ -1,4 +1,4 @@
-import { BarChart3, Music2, Disc3, Users, Settings } from "lucide-react";
+import { BarChart3, Music2, Disc3, Users, Ticket, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type NavTab = { href: string; label: string; Icon: LucideIcon };
@@ -14,6 +14,7 @@ export function navTabs(username: string, showAccount?: boolean): NavTab[] {
     { href: `${base}/songs`, label: "Songs", Icon: Music2 },
     { href: `${base}/albums`, label: "Albums", Icon: Disc3 },
     { href: `${base}/artists`, label: "Artists", Icon: Users },
+    { href: `${base}/concerts`, label: "Concerts", Icon: Ticket },
   ];
   if (showAccount) tabs.push({ href: "/account", label: "Account", Icon: Settings });
   return tabs;

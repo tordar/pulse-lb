@@ -10,7 +10,10 @@ import {
   date,
   doublePrecision,
   boolean,
+  check,
+  unique,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const listens = pgTable(
   "listens",
@@ -239,3 +242,63 @@ export const stripeEvents = pgTable("stripe_events", {
   type: text("type").notNull(),
   processedAt: timestamp("processed_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// A festival is an optional grouping of concerts; deleting one ungroups its
+// concerts (festival_id → null) rather than deleting them.
+export const festivals = pgTable(
+  "festivals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userName: text("user_name").notNull(),
+    name: text("name").notNull(),
+    startDate: date("start_date", { mode: "string" }).notNull(),
+    endDate: date("end_date", { mode: "string" }).notNull(),
+    venue: text("venue"),
+    city: text("city"),
+    country: text("country"),
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("festivals_user_start").on(t.userName, t.startDate),
+    check("festivals_dates_ordered", sql`${t.endDate} >= ${t.startDate}`),
+  ],
+);
+
+// One row per artist per date — the same grain as life-calendar's
+// concerts.events, so a later export is a straight copy.
+export const concerts = pgTable(
+  "concerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userName: text("user_name").notNull(),
+    eventDate: date("event_date", { mode: "string" }).notNull(),
+    artistName: text("artist_name").notNull(),
+    artistMbid: uuid("artist_mbid"),
+    festivalId: uuid("festival_id").references(() => festivals.id, { onDelete: "set null" }),
+    venue: text("venue"),
+    city: text("city"),
+    country: text("country"),
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    notes: text("notes"),
+    setlistUrl: text("setlist_url"),
+    confidence: text("confidence"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    // nulls not distinct: two venue-less rows for the same artist+date collide.
+    unique("concerts_user_date_artist_venue")
+      .on(t.userName, t.eventDate, t.artistName, t.venue)
+      .nullsNotDistinct(),
+    index("concerts_user_mbid").on(t.userName, t.artistMbid),
+    index("concerts_user_date").on(t.userName, t.eventDate),
+  ],
+);
+
+export type Festival = typeof festivals.$inferSelect;
+export type Concert = typeof concerts.$inferSelect;

@@ -167,6 +167,7 @@ function renderCard(item: ListItem, kind: ListKind, username: string) {
         plays={ar.plays}
         effectiveMs={Number(ar.effective_ms)}
         href={artistHref(username, ar.artist_mbid)}
+        badge={ar.seen_count ? `Seen live ${ar.seen_count}×` : null}
       />
     </li>
   );
@@ -257,6 +258,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
         <div className="truncate text-sm font-medium">{ar.artist_name}</div>
         <div className="text-xs text-muted-foreground tabular-nums">
           {ar.distinct_tracks.toLocaleString()} songs · {ar.distinct_albums.toLocaleString()} albums
+          {ar.seen_count > 0 && <span className="text-primary"> · seen live {ar.seen_count}×</span>}
         </div>
       </div>
       <span className="shrink-0 text-sm tabular-nums text-muted-foreground">

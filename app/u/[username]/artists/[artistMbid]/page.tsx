@@ -6,6 +6,8 @@ import { getShowListenSource } from "@/lib/auth/users";
 import { SourceDot } from "@/components/SourceDot";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
+import { SeenLive } from "@/components/SeenLive";
+import { concertsForArtist } from "@/lib/db/queries/concerts";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -16,9 +18,10 @@ export default async function ArtistDetailPage({
   params: Promise<{ username: string; artistMbid: string }>;
 }) {
   const { username, artistMbid } = await params;
-  const [detail, showSource] = await Promise.all([
+  const [detail, showSource, seenLive] = await Promise.all([
     artistDetail(username, artistMbid),
     getShowListenSource(username).catch(() => false),
+    concertsForArtist(username, artistMbid).catch(() => []),
   ]);
   if (!detail) notFound();
 
@@ -50,6 +53,8 @@ export default async function ArtistDetailPage({
           <Stat label="Last played" value={fmtDate(header.last_played)} />
         </div>
       </header>
+
+      <SeenLive concerts={seenLive} />
 
       {years.length > 0 && (
         <section className="space-y-3">
