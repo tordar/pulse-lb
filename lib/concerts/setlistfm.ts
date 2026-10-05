@@ -63,3 +63,28 @@ export function parseSetlistPage(html: string): SetlistInfo | null {
     eventName,
   };
 }
+
+export type SetlistResult = { ok: true; value: SetlistInfo & { setlistUrl: string } } | { ok: false; error: string };
+
+export async function fetchSetlistInfo(url: string): Promise<SetlistResult> {
+  const clean = url.trim();
+  if (!isSetlistUrl(clean)) return { ok: false, error: "Paste a setlist.fm setlist link." };
+  try {
+    const res = await fetch(clean, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; pulse-lb)" },
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+    const html = await res.text();
+    const info = res.ok ? parseSetlistPage(html) : null;
+    if (!info) {
+      console.warn("setlist.fm parse failed", { url: clean, status: res.status, bytes: html.length,
+        title: html.match(/<title>([^<]*)/)?.[1] });
+      return { ok: false, error: `Couldn't read that page (status ${res.status}). Add it by hand instead.` };
+    }
+    return { ok: true, value: { ...info, setlistUrl: clean } };
+  } catch (e) {
+    console.warn("setlist.fm fetch failed", { url: clean, error: String(e) });
+    return { ok: false, error: "Couldn't reach setlist.fm. Add it by hand instead." };
+  }
+}

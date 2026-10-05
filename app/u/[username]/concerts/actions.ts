@@ -8,7 +8,7 @@ import { isUuid, parseConcertForm, parseFestivalForm, dateInRange } from "@/lib/
 import { loadArtistIndex } from "@/lib/concerts/library";
 import { matchArtist } from "@/lib/concerts/match";
 import { searchAll } from "@/lib/db/queries/topItems";
-import { isSetlistUrl, parseSetlistPage, type SetlistInfo } from "@/lib/concerts/setlistfm";
+import { fetchSetlistInfo, type SetlistResult } from "@/lib/concerts/setlistfm";
 
 export type FormState = {
   error: string | null;
@@ -120,23 +120,7 @@ export async function searchLibraryArtists(username: string, q: string): Promise
   return (await searchAll(username, q)).artists.map((a) => a.artist_name);
 }
 
-export type SetlistResult = { ok: true; value: SetlistInfo & { setlistUrl: string } } | { ok: false; error: string };
-
 export async function fetchSetlist(username: string, url: string): Promise<SetlistResult> {
   await requireOwner(username);
-  const clean = url.trim();
-  if (!isSetlistUrl(clean)) return { ok: false, error: "Paste a setlist.fm setlist link." };
-  try {
-    const res = await fetch(clean, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; pulse-lb)" },
-      signal: AbortSignal.timeout(8000),
-      cache: "no-store",
-    });
-    if (!res.ok) return { ok: false, error: `setlist.fm answered ${res.status}. Add it by hand instead.` };
-    const info = parseSetlistPage(await res.text());
-    if (!info) return { ok: false, error: "Couldn't read that page. Add it by hand instead." };
-    return { ok: true, value: { ...info, setlistUrl: clean } };
-  } catch {
-    return { ok: false, error: "Couldn't reach setlist.fm. Add it by hand instead." };
-  }
+  return fetchSetlistInfo(url);
 }
