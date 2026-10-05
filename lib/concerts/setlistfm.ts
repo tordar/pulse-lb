@@ -66,22 +66,68 @@ export function parseSetlistPage(html: string): SetlistInfo | null {
 
 export type SetlistResult = { ok: true; value: SetlistInfo & { setlistUrl: string } } | { ok: false; error: string };
 
+export function setlistIdFromUrl(url: string): string | null {
+  return url.match(/-([0-9a-f]+)\.html$/)?.[1] ?? null;
+}
+
+type ApiSetlist = {
+  eventDate?: string;
+  artist?: { name?: string };
+  venue?: { name?: string; city?: { name?: string; country?: { name?: string } } };
+};
+
+export function parseSetlistApi(s: ApiSetlist): SetlistInfo | null {
+  const d = s.eventDate?.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!d || !s.artist?.name || !s.venue?.name) return null;
+  return {
+    artistName: s.artist.name,
+    eventDate: `${d[3]}-${d[2]}-${d[1]}`,
+    venue: s.venue.name,
+    city: s.venue.city?.name ?? null,
+    country: s.venue.city?.country?.name ?? null,
+    eventName: null,
+  };
+}
+
+// setlist.fm answers datacenter IPs (Vercel) with a 202 bot-check page, so the
+// page can't be scraped from prod. The official API isn't behind that check;
+// scraping stays as the fallback for deployments without a key.
+async function fromApi(id: string, key: string): Promise<SetlistInfo | null> {
+  const res = await fetch(`https://api.setlist.fm/rest/1.0/setlist/${id}`, {
+    headers: { "x-api-key": key, Accept: "application/json" },
+    signal: AbortSignal.timeout(8000),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    console.warn("setlist.fm API failed", { id, status: res.status });
+    return null;
+  }
+  return parseSetlistApi(await res.json());
+}
+
+async function fromPage(url: string): Promise<SetlistInfo | null> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; pulse-lb)" },
+    signal: AbortSignal.timeout(8000),
+    cache: "no-store",
+  });
+  const html = await res.text();
+  const info = res.ok ? parseSetlistPage(html) : null;
+  if (!info) {
+    console.warn("setlist.fm page parse failed", { url, status: res.status, bytes: html.length,
+      title: html.match(/<title>([^<]*)/)?.[1] });
+  }
+  return info;
+}
+
 export async function fetchSetlistInfo(url: string): Promise<SetlistResult> {
   const clean = url.trim();
-  if (!isSetlistUrl(clean)) return { ok: false, error: "Paste a setlist.fm setlist link." };
+  const id = setlistIdFromUrl(clean);
+  if (!isSetlistUrl(clean) || !id) return { ok: false, error: "Paste a setlist.fm setlist link." };
+  const key = process.env.SETLIST_FM_API_KEY;
   try {
-    const res = await fetch(clean, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; pulse-lb)" },
-      signal: AbortSignal.timeout(8000),
-      cache: "no-store",
-    });
-    const html = await res.text();
-    const info = res.ok ? parseSetlistPage(html) : null;
-    if (!info) {
-      console.warn("setlist.fm parse failed", { url: clean, status: res.status, bytes: html.length,
-        title: html.match(/<title>([^<]*)/)?.[1] });
-      return { ok: false, error: `Couldn't read that page (status ${res.status}). Add it by hand instead.` };
-    }
+    const info = key ? await fromApi(id, key) : await fromPage(clean);
+    if (!info) return { ok: false, error: "Couldn't read that setlist. Add it by hand instead." };
     return { ok: true, value: { ...info, setlistUrl: clean } };
   } catch (e) {
     console.warn("setlist.fm fetch failed", { url: clean, error: String(e) });

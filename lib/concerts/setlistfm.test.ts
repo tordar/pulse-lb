@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSetlistUrl, parseSetlistPage } from "./setlistfm";
+import { isSetlistUrl, parseSetlistApi, parseSetlistPage, setlistIdFromUrl } from "./setlistfm";
 
 const page = (desc: string, title: string) =>
   `<html><head><meta name="description" content="${desc}"/><meta property="og:title" content="${title}"/></head></html>`;
@@ -51,4 +51,21 @@ test("isSetlistUrl accepts only setlist.fm setlist pages", () => {
   assert.equal(isSetlistUrl("https://evil.example/setlist/a.html"), false);
   assert.equal(isSetlistUrl("https://www.setlist.fm.evil.example/setlist/a.html"), false);
   assert.equal(isSetlistUrl("not a url"), false);
+});
+
+test("setlistIdFromUrl takes the hex id before .html", () => {
+  assert.equal(setlistIdFromUrl("https://www.setlist.fm/setlist/raga-rockers/2015/arena-lillomarka-grorud-norway-7bf5823c.html"), "7bf5823c");
+  assert.equal(setlistIdFromUrl("https://www.setlist.fm/setlist/a/2015/b.html"), null);
+});
+
+test("parseSetlistApi maps the API response", () => {
+  assert.deepEqual(
+    parseSetlistApi({
+      eventDate: "12-09-2015",
+      artist: { name: "Raga Rockers" },
+      venue: { name: "Arena Lillomarka", city: { name: "Grorud", country: { name: "Norway" } } },
+    }),
+    { artistName: "Raga Rockers", eventDate: "2015-09-12", venue: "Arena Lillomarka", city: "Grorud", country: "Norway", eventName: null },
+  );
+  assert.equal(parseSetlistApi({ artist: { name: "X" } }), null);
 });
