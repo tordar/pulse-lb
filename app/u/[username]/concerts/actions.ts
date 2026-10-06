@@ -8,7 +8,7 @@ import { isUuid, parseConcertForm, parseFestivalForm, dateInRange } from "@/lib/
 import { loadArtistIndex } from "@/lib/concerts/library";
 import { matchArtist } from "@/lib/concerts/match";
 import { searchAll } from "@/lib/db/queries/topItems";
-import { fetchSetlistInfo, searchSetlists, type SearchResult, type SetlistResult } from "@/lib/concerts/setlistfm";
+import { fetchSetlistInfo, type SetlistResult } from "@/lib/concerts/setlistfm";
 
 export type FormState = {
   error: string | null;
@@ -123,10 +123,4 @@ export async function searchLibraryArtists(username: string, q: string): Promise
 export async function fetchSetlist(username: string, url: string): Promise<SetlistResult> {
   await requireOwner(username);
   return fetchSetlistInfo(url);
-}
-
-export async function searchSetlistFm(username: string, artist: string, year: string, page: number): Promise<SearchResult> {
-  await requireOwner(username);
-  if (artist.trim().length < 2) return { ok: false, error: "Type at least 2 letters of the artist." };
-  return searchSetlists(artist, year, Math.max(1, Math.floor(page)));
 }
