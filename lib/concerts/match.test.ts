@@ -29,3 +29,25 @@ test("buildArtistIndex keeps the most-played artist when names collide", () => {
   ]);
   assert.equal(matchArtist(idx, "Nirvana")?.mbid, "big");
 });
+
+test("matchArtist ignores curly apostrophes and Unicode hyphens", () => {
+  const idx = buildArtistIndex([
+    { artistName: "Noel Gallagher's High Flying Birds", mbid: "ng", plays: 5 },
+    { artistName: "Anti-Flag", mbid: "af", plays: 5 },
+  ]);
+  assert.equal(matchArtist(idx, "Noel Gallagher’s High Flying Birds")?.mbid, "ng");
+  assert.equal(matchArtist(idx, "Anti‐Flag")?.mbid, "af");
+});
+
+test("matchArtist falls back to the lead artist of a billing", () => {
+  const idx = buildArtistIndex([
+    { artistName: "Neil Young", mbid: "ny", plays: 426 },
+    { artistName: "Sex Pistols", mbid: "sp", plays: 20 },
+    { artistName: "Nick Cave & the Bad Seeds", mbid: "nc", plays: 99 },
+  ]);
+  assert.equal(matchArtist(idx, "Neil Young + Promise of the Real")?.mbid, "ny");
+  assert.equal(matchArtist(idx, "Sex Pistols feat. Frank Carter")?.mbid, "sp");
+  // A full name that is itself an artist wins over splitting it.
+  assert.equal(matchArtist(idx, "Nick Cave & the Bad Seeds")?.mbid, "nc");
+  assert.equal(matchArtist(idx, "Timbuktu & Damn!"), null);
+});
