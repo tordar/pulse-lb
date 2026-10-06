@@ -28,13 +28,14 @@ export default async function ConcertsPage({ params }: { params: Promise<{ usern
           <Ticket size={18} className="text-primary" /> Concerts
         </h2>
         {concerts.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
+          <div className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
             <Stat label="Shows" value={stats.shows.toLocaleString()} />
             <Stat label="Artists" value={stats.artists.toLocaleString()} />
             <Stat label="Festivals" value={stats.festivals.toLocaleString()} />
             {top500 && <Stat label="Of top 500" value={top500.seen.toLocaleString()} />}
             {stats.mostSeen && (
               <Stat
+                className="col-span-2"
                 label={`Seen most · ${stats.mostSeen.count}×`}
                 value={stats.mostSeen.name}
                 href={stats.mostSeen.mbid ? `/u/${encodeURIComponent(username)}/artists/${stats.mostSeen.mbid}` : null}
@@ -55,9 +56,11 @@ export default async function ConcertsPage({ params }: { params: Promise<{ usern
   );
 }
 
-function Stat({ label, value, href }: { label: string; value: string; href?: string | null }) {
+function Stat({ label, value, href, className = "" }: {
+  label: string; value: string; href?: string | null; className?: string;
+}) {
   return (
-    <div className="min-w-0">
+    <div className={`min-w-0 ${className}`}>
       {href ? (
         <Link href={href} className="block truncate text-base font-semibold text-foreground hover:underline">{value}</Link>
       ) : (
