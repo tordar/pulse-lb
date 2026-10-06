@@ -18,18 +18,18 @@ export default async function ConcertsPage({ params }: { params: Promise<{ usern
 
   return (
     <div className="space-y-6">
-      <header className="space-y-3">
+      <header className="space-y-4">
         <h2 className="text-xl font-semibold inline-flex items-center gap-2">
           <Ticket size={18} className="text-primary" /> Concerts
         </h2>
         {concerts.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
             <Stat label="Shows" value={stats.shows.toLocaleString()} />
             <Stat label="Artists" value={stats.artists.toLocaleString()} />
             <Stat label="Festivals" value={stats.festivals.toLocaleString()} />
             {stats.mostSeen && (
               <Stat
-                label={`Most seen · ${stats.mostSeen.count}×`}
+                label={`Seen most · ${stats.mostSeen.count}×`}
                 value={stats.mostSeen.name}
                 href={stats.mostSeen.mbid ? `/u/${encodeURIComponent(username)}/artists/${stats.mostSeen.mbid}` : null}
               />
@@ -53,9 +53,9 @@ function Stat({ label, value, href }: { label: string; value: string; href?: str
   return (
     <div className="min-w-0">
       {href ? (
-        <Link href={href} className="block truncate text-base font-semibold hover:underline">{value}</Link>
+        <Link href={href} className="block truncate text-base font-semibold text-foreground hover:underline">{value}</Link>
       ) : (
-        <div className="truncate text-base font-semibold tabular-nums">{value}</div>
+        <div className="truncate text-base font-semibold text-foreground tabular-nums">{value}</div>
       )}
       <div className="text-xs text-muted-foreground uppercase tracking-wide mt-0.5">{label}</div>
     </div>
