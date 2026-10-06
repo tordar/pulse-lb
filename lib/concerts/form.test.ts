@@ -45,3 +45,13 @@ test("non-UUID ids are rejected", () => {
   assert.equal(parseConcertForm(fd({ festivalId: "nope", eventDate: "2019-08-08", artistName: "X" })).ok, false);
   assert.equal(parseFestivalForm(fd({ id: "nope", name: "Øya", startDate: "2019-08-07", endDate: "2019-08-07" })).ok, false);
 });
+
+test("festival poster link must be https", () => {
+  const base = { name: "Øya", startDate: "2019-08-07", endDate: "2019-08-10" };
+  const ok = parseFestivalForm(fd({ ...base, posterUrl: "https://example.com/oya.jpg" }));
+  assert.equal(ok.ok && ok.value.posterUrl, "https://example.com/oya.jpg");
+  assert.equal(parseFestivalForm(fd({ ...base, posterUrl: "http://example.com/oya.jpg" })).ok, false);
+  assert.equal(parseFestivalForm(fd({ ...base, posterUrl: "javascript:alert(1)" })).ok, false);
+  const none = parseFestivalForm(fd(base));
+  assert.equal(none.ok && none.value.posterUrl, null);
+});

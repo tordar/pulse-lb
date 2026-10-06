@@ -9,6 +9,7 @@ export type ConcertInput = {
 export type FestivalInput = {
   id: string | null; name: string; startDate: string; endDate: string;
   venue: string | null; city: string | null; country: string | null; notes: string | null;
+  posterUrl: string | null;
 };
 
 const str = (fd: FormData, k: string) => {
@@ -55,11 +56,14 @@ export function parseFestivalForm(fd: FormData): Parsed<FestivalInput> {
   if (!name) return { ok: false, error: "Name is required." };
   if (!isIsoDate(startDate) || !isIsoDate(endDate)) return { ok: false, error: "Enter valid dates." };
   if (endDate < startDate) return { ok: false, error: "End date is before start date." };
+  const posterUrl = str(fd, "posterUrl");
+  if (posterUrl && !/^https:\/\//i.test(posterUrl))
+    return { ok: false, error: "Poster link must start with https://." };
   return {
     ok: true,
     value: {
       id, name, startDate, endDate, venue: str(fd, "venue"), city: str(fd, "city"),
-      country: str(fd, "country"), notes: str(fd, "notes"),
+      country: str(fd, "country"), notes: str(fd, "notes"), posterUrl,
     },
   };
 }

@@ -259,6 +259,8 @@ export const festivals = pgTable(
     lat: doublePrecision("lat"),
     lng: doublePrecision("lng"),
     notes: text("notes"),
+    // A link to the poster image hosted elsewhere; nothing is stored here.
+    posterUrl: text("poster_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

@@ -38,6 +38,10 @@ export function FestivalForm({
       <label className="text-xs space-y-1">Country
         <input name="country" defaultValue={state.values?.country ?? initial?.country ?? ""} className={input} />
       </label>
+      <label className="text-xs space-y-1 sm:col-span-2">Poster image link
+        <input name="posterUrl" type="url" placeholder="https://…/poster.jpg"
+          defaultValue={state.values?.posterUrl ?? initial?.posterUrl ?? ""} className={input} />
+      </label>
       <label className="text-xs space-y-1 sm:col-span-2">Notes
         <textarea name="notes" rows={2} defaultValue={state.values?.notes ?? initial?.notes ?? ""} className={input} />
       </label>

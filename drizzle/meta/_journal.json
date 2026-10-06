@@ -99,6 +99,13 @@
       "when": 1791204969900,
       "tag": "0013_huge_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791291658251,
+      "tag": "0014_clean_pride",
+      "breakpoints": true
     }
   ]
 }

@@ -203,7 +203,8 @@ function FestivalTicket({
 
   return (
     <Stub start={festival.startDate} end={festival.endDate}>
-      <div className="space-y-2.5">
+      <div className="flex gap-4">
+      <div className="min-w-0 flex-1 space-y-2.5">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-semibold tracking-widest text-primary">FESTIVAL</div>
@@ -275,6 +276,8 @@ function FestivalTicket({
           </div>
         )}
       </div>
+      {festival.posterUrl && <Poster url={festival.posterUrl} name={festival.name} />}
+      </div>
     </Stub>
   );
 }
@@ -300,5 +303,25 @@ function SetRow({ ctx, c }: { ctx: EditCtx; c: Concert }) {
         />
       )}
     </li>
+  );
+}
+
+// Posters are links to images hosted elsewhere, so a dead link just hides the
+// poster instead of showing a broken image.
+function Poster({ url, name }: { url: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0 self-start" title={`${name} poster`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary external host; next/image would need it allow-listed */}
+      <img
+        src={url}
+        alt={`${name} poster`}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="w-20 sm:w-28 aspect-[2/3] rounded-md object-cover border border-card-border bg-muted transition hover:opacity-90"
+      />
+    </a>
   );
 }
