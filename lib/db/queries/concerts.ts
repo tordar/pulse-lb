@@ -1,14 +1,21 @@
-import { and, asc, desc, eq, getTableColumns } from "drizzle-orm";
-import { db, schema } from "@/lib/db/client";
+import { and, asc, desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { db, schema, execute } from "@/lib/db/client";
+import type { CoverArtRef } from "@/lib/listenbrainz/coverArt";
 import type { Concert, Festival } from "@/lib/db/schema";
 import { userCached } from "./cache";
 import { withRetry } from "@/lib/db/retry";
 
 export type ArtistConcert = Concert & { festivalName: string | null };
 
-export function concertsTimeline(
-  username: string,
-): Promise<{ concerts: Concert[]; festivals: Festival[] }> {
+export type ConcertsTimeline = {
+  concerts: Concert[];
+  festivals: Festival[];
+  // Artist image per linked artist, keyed by MBID — the same cover art the
+  // Artists page shows (the artist's most-played release).
+  art: Record<string, CoverArtRef>;
+};
+
+export function concertsTimeline(username: string): Promise<ConcertsTimeline> {
   return userCached(username, ["concertsTimeline", username], async () => {
     const [concerts, festivals] = await Promise.all([
       withRetry(() =>
@@ -20,7 +27,18 @@ export function concertsTimeline(
           .orderBy(desc(schema.festivals.startDate)),
       ),
     ]);
-    return { concerts, festivals };
+    const { rows } = await withRetry(() =>
+      execute<{ artist_mbid: string; caa_id: number | null; caa_release_mbid: string | null }>(sql`
+        SELECT DISTINCT ON (a.artist_mbid) a.artist_mbid, a.caa_id, a.caa_release_mbid
+        FROM ${schema.aggArtist} a
+        JOIN ${schema.concerts} c ON c.artist_mbid = a.artist_mbid AND c.user_name = a.user_name
+        WHERE a.user_name = ${username} AND a.scope = 0 AND a.caa_id IS NOT NULL
+        ORDER BY a.artist_mbid, a.plays DESC
+      `),
+    );
+    const art: Record<string, CoverArtRef> = {};
+    for (const r of rows) art[r.artist_mbid] = { caaId: Number(r.caa_id), caaReleaseMbid: r.caa_release_mbid };
+    return { concerts, festivals, art };
   });
 }
 
