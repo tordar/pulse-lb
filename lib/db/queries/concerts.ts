@@ -57,9 +57,9 @@ export function concertsForArtist(username: string, artistMbid: string): Promise
 
 export type TopSeen = { top: number; seen: number }[];
 
-const TOP_TIERS = [10, 50, 100, 500];
+const TOP_TIERS = [500];
 
-// How many of the user's top-N artists (as ranked on Top Artists) they've seen
+// How many of the user's top 500 artists (as ranked on Top Artists) they've seen
 // live at least once.
 export function topArtistsSeen(username: string): Promise<TopSeen> {
   return userCached(username, ["topArtistsSeen", username], async () => {

@@ -19,6 +19,7 @@ export default async function ConcertsPage({ params }: { params: Promise<{ usern
   const isOwner = session?.lbUsername === username;
   const years = buildTimeline(concerts, festivals);
   const stats = concertStats(concerts, festivals.length);
+  const top500 = topSeen.find((t) => t.top === 500);
 
   return (
     <div className="space-y-6">
@@ -27,10 +28,11 @@ export default async function ConcertsPage({ params }: { params: Promise<{ usern
           <Ticket size={18} className="text-primary" /> Concerts
         </h2>
         {concerts.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
             <Stat label="Shows" value={stats.shows.toLocaleString()} />
             <Stat label="Artists" value={stats.artists.toLocaleString()} />
             <Stat label="Festivals" value={stats.festivals.toLocaleString()} />
+            {top500 && <Stat label="Of top 500" value={top500.seen.toLocaleString()} />}
             {stats.mostSeen && (
               <Stat
                 label={`Seen most · ${stats.mostSeen.count}×`}
@@ -39,17 +41,6 @@ export default async function ConcertsPage({ params }: { params: Promise<{ usern
               />
             )}
           </div>
-        )}
-        {concerts.length > 0 && topSeen.length > 0 && (
-          <p className="text-sm text-muted-foreground">
-            Seen live from your top artists:{" "}
-            {topSeen.map((t, i) => (
-              <span key={t.top}>
-                {i > 0 && " · "}
-                <span className="text-foreground tabular-nums">{t.seen}</span> of top {t.top}
-              </span>
-            ))}
-          </p>
         )}
       </header>
       {years.length === 0 && !isOwner ? (
