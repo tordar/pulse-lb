@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Ticket } from "lucide-react";
-import { concertsTimeline } from "@/lib/db/queries/concerts";
+import { concertsTimeline, topArtistsSeen } from "@/lib/db/queries/concerts";
 import { buildTimeline } from "@/lib/concerts/timeline";
 import { concertStats } from "@/lib/concerts/stats";
 import { getSession } from "@/lib/auth/session";
@@ -11,7 +11,11 @@ export const revalidate = 0;
 
 export default async function ConcertsPage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
-  const [{ concerts, festivals, art }, session] = await Promise.all([concertsTimeline(username), getSession()]);
+  const [{ concerts, festivals, art }, topSeen, session] = await Promise.all([
+    concertsTimeline(username),
+    topArtistsSeen(username).catch(() => []),
+    getSession(),
+  ]);
   const isOwner = session?.lbUsername === username;
   const years = buildTimeline(concerts, festivals);
   const stats = concertStats(concerts, festivals.length);
@@ -35,6 +39,17 @@ export default async function ConcertsPage({ params }: { params: Promise<{ usern
               />
             )}
           </div>
+        )}
+        {concerts.length > 0 && topSeen.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            Seen live from your top artists:{" "}
+            {topSeen.map((t, i) => (
+              <span key={t.top}>
+                {i > 0 && " · "}
+                <span className="text-foreground tabular-nums">{t.seen}</span> of top {t.top}
+              </span>
+            ))}
+          </p>
         )}
       </header>
       {years.length === 0 && !isOwner ? (

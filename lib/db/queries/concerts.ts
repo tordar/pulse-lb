@@ -54,3 +54,32 @@ export function concertsForArtist(username: string, artistMbid: string): Promise
     ),
   );
 }
+
+export type TopSeen = { top: number; seen: number }[];
+
+const TOP_TIERS = [10, 50, 100, 500];
+
+// How many of the user's top-N artists (as ranked on Top Artists) they've seen
+// live at least once.
+export function topArtistsSeen(username: string): Promise<TopSeen> {
+  return userCached(username, ["topArtistsSeen", username], async () => {
+    const { rows } = await withRetry(() =>
+      execute<{ rank: number; seen: boolean }>(sql`
+        SELECT ranked.rank, EXISTS (
+          SELECT 1 FROM ${schema.concerts} c
+          WHERE c.user_name = ${username} AND c.artist_mbid = ranked.artist_mbid
+        ) AS seen
+        FROM (
+          SELECT artist_mbid, ROW_NUMBER() OVER (ORDER BY plays DESC, artist_name)::int AS rank
+          FROM ${schema.aggArtist}
+          WHERE user_name = ${username} AND scope = 0
+        ) ranked
+        WHERE ranked.rank <= ${Math.max(...TOP_TIERS)}
+      `),
+    );
+    return TOP_TIERS.filter((n) => rows.length >= n).map((top) => ({
+      top,
+      seen: rows.filter((r) => Number(r.rank) <= top && r.seen).length,
+    }));
+  });
+}
