@@ -12,6 +12,7 @@ import { countListens } from "@/lib/db/queries/listenCount";
 import { getSession } from "@/lib/auth/session";
 import { getUserByMbId, isAllowedToSync } from "@/lib/auth/users";
 import { signChain, verifyChain } from "@/lib/sync/chainToken";
+import { healStaleAggregates } from "@/lib/sync/healAggregates";
 
 export const maxDuration = 300;
 
@@ -254,6 +255,11 @@ export async function GET(
   const aggStale =
     state?.lastListenedAt != null &&
     (state.lastAggregatedAt == null || state.lastAggregatedAt < state.lastListenedAt);
+  // The stats page used to self-heal on render; it is served from cache now,
+  // so the owner's page-load probe does it instead.
+  if (probe && aggStale) {
+    after(() => healStaleAggregates(username, state?.lastAggregatedAt ?? null));
+  }
 
   // Only stream rows inserted DURING THE CURRENT JOB — otherwise re-clicking
   // Sync after a backfill replays the tail of historical 2009 inserts. When

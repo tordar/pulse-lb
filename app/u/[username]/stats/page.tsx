@@ -1,13 +1,11 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { BarChart3, Calendar, Clock, Disc3, Music2, Play, TrendingUp, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { after } from "next/server";
-import { revalidateTag } from "next/cache";
 import { eq, sql } from "drizzle-orm";
 import { db, schema, execute } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { fmtHours } from "@/lib/format";
-import { rebuildAll } from "@/lib/db/aggregates/rebuild";
 import {
   allTimeStats,
   yearlyListening,
@@ -33,101 +31,119 @@ import { YearActivity } from "@/components/YearActivity";
 import { YearTabs } from "@/components/YearTabs";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { TopList, type TopListItem } from "@/components/TopList";
+import { ListSkeleton, PageSkeleton, Sk } from "@/components/Skeletons";
 import { songKey, artistKey, albumKey } from "@/lib/sync/keys";
 
+type Params = Promise<{ username: string }>;
+type SP = Promise<{ year?: string; day?: string }>;
 
-// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
-// Remove this opt-out after verifying the segment passes validation without it.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
-export const instant = false;
+export default function StatsPage({ params, searchParams }: { params: Params; searchParams: SP }) {
+  return (
+    <div className="space-y-8">
+      <Suspense fallback={<Sk className="h-5 w-40" />}>
+        <StatsHeader params={params} />
+      </Suspense>
+      <Suspense fallback={<PageSkeleton />}>
+        <StatsBody params={params} searchParams={searchParams} />
+      </Suspense>
+    </div>
+  );
+}
 
-
-export default async function StatsPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ username: string }>;
-  searchParams: Promise<{ year?: string; day?: string }>;
-}) {
+// Live, per request: sync state, and who is looking (owner gets SyncButton).
+async function StatsHeader({ params }: { params: Params }) {
   const { username } = await params;
-  const sp = await searchParams;
-
-  const session = await getSession();
+  const [session, state, allTime] = await Promise.all([
+    getSession(),
+    withRetry(() => db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) })),
+    allTimeStats(username),
+  ]);
   const isOwner = session?.lbUsername === username;
+  const empty = allTime.total_plays === 0;
+  return (
+    <header className="space-y-3">
+      {/* Sync info and search share one row on large screens; flex-wrap
+          drops the full-width search onto its own line below lg. For owners
+          SyncButton owns the whole block so its progress bar and insert
+          stream span the full width. */}
+      {isOwner ? (
+        <SyncButton
+          username={username}
+          lastSynced={
+            <p className="text-sm text-muted-foreground shrink-0">
+              {state?.lastSyncedAt
+                ? <>Last synced {relTime(state.lastSyncedAt)}</>
+                : <>Not synced yet</>}
+            </p>
+          }
+          search={!empty ? <GlobalSearch username={username} /> : null}
+        />
+      ) : (
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <p className="text-sm text-muted-foreground flex-1 shrink-0">
+            {state?.lastSyncedAt
+              ? <>Last synced {relTime(state.lastSyncedAt)}</>
+              : <>Not synced yet</>}
+          </p>
+          {!empty && <GlobalSearch username={username} />}
+        </div>
+      )}
+      {isOwner ? null : session ? (
+        <p className="text-sm text-muted-foreground">
+          Viewing @{username}&apos;s profile. <Link href={`/u/${session.lbUsername}/stats`} className="underline">Your dashboard</Link>.
+        </p>
+      ) : (
+        <SignInButton returnTo={`/u/${username}/stats`} label="Sign in to sync your own listens" />
+      )}
+    </header>
+  );
+}
 
-  // Year-independent queries run in parallel. Cached ones (allTime, yearly,
-  // hourly, availableYears) hit the per-user tag cache; uncached ones (state,
-  // recent listens) hit the DB but in parallel rather than serial.
-  const [state, allTime, yearly, hourly, recent, years, showSource] = await Promise.all([
-    withRetry(() =>
-      db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
-    ),
+async function StatsBody({ params, searchParams }: { params: Params; searchParams: SP }) {
+  const [{ username }, sp] = await Promise.all([params, searchParams]);
+  // Profile owner's display preference (not the viewer's) — defaults off.
+  const showSource = await getShowListenSource(username).catch(() => false);
+  const yearParam = parseInt(sp.year ?? "", 10) || null;
+  return (
+    <StatsPanels
+      username={username}
+      yearParam={yearParam}
+      day={sp.day ?? null}
+      dayDetail={
+        sp.day ? (
+          <Suspense fallback={null}>
+            <DayDetailLoader username={username} day={sp.day} yearParam={yearParam} showSource={showSource} />
+          </Suspense>
+        ) : null
+      }
+      recent={
+        <Suspense fallback={<ListSkeleton rows={10} />}>
+          <RecentListens username={username} showSource={showSource} />
+        </Suspense>
+      }
+    />
+  );
+}
+
+// The aggregate panels. Every query here goes through the per-user tag cache.
+async function StatsPanels({
+  username, yearParam, day, dayDetail, recent,
+}: {
+  username: string;
+  yearParam: number | null;
+  day: string | null;
+  dayDetail: React.ReactNode;
+  recent: React.ReactNode;
+}) {
+  const [allTime, yearly, hourly, years] = await Promise.all([
     allTimeStats(username),
     yearlyListening(username),
     hourlyDistribution(username),
-    withRetry(() =>
-      execute<{
-        listened_at: string;
-        track_name: string;
-        artist_name: string;
-        release_name: string | null;
-        source: string | null;
-      }>(sql`
-        SELECT listened_at, track_name, artist_name, release_name, source
-        FROM ${schema.listens}
-        WHERE user_name = ${username}
-        ORDER BY listened_at DESC LIMIT 10
-      `),
-    ),
     availableYears(username),
-    // Profile owner's display preference (not the viewer's) — defaults off.
-    getShowListenSource(username).catch(() => false),
   ]);
-  const recentRows = (recent as unknown as { rows: { listened_at: string; track_name: string; artist_name: string; release_name: string | null; source: string | null }[] }).rows;
-
-  // Self-heal stale aggregates: when listens are newer than the last rebuild
-  // (e.g. a sync chain died before its terminal rebuild), rebuild after the
-  // response so the next render serves fresh tiles. Claim-first stamp: the
-  // UPDATE only returns a row for whoever moves the stamp forward, so
-  // concurrent page loads don't all kick off their own rebuild.
-  const aggStale =
-    state?.lastListenedAt != null &&
-    (state.lastAggregatedAt == null || state.lastAggregatedAt < state.lastListenedAt);
-  if (aggStale) {
-    after(async () => {
-      const claimed = await withRetry(() =>
-        execute<{ user_name: string }>(sql`
-          UPDATE ${schema.syncState}
-          SET last_aggregated_at = NOW()
-          WHERE user_name = ${username}
-            AND last_listened_at IS NOT NULL
-            AND (last_aggregated_at IS NULL OR last_aggregated_at < last_listened_at)
-          RETURNING user_name
-        `),
-      );
-      if ((claimed as unknown as { rows: unknown[] }).rows.length === 0) return;
-      try {
-        await rebuildAll(username);
-        revalidateTag(`user:${username}`, "default");
-      } catch (e) {
-        // Put the old stamp back — otherwise a failed rebuild leaves the
-        // claim committed and staleness permanently undetectable (the sync
-        // route's terminal rebuild checks the same condition).
-        await withRetry(() =>
-          execute(sql`
-            UPDATE ${schema.syncState}
-            SET last_aggregated_at = ${state!.lastAggregatedAt}
-            WHERE user_name = ${username}
-          `),
-        );
-        throw e;
-      }
-    });
-  }
-
   const empty = allTime.total_plays === 0;
   const selectedYear = years.length
-    ? Math.max(years[years.length - 1], Math.min(years[0], parseInt(sp.year ?? "", 10) || years[0]))
+    ? Math.max(years[years.length - 1], Math.min(years[0], yearParam ?? years[0]))
     : null;
 
   // Prev/next neighbours for the year nav (years[] is descending).
@@ -135,15 +151,14 @@ export default async function StatsPage({
   const nextYear = yearIdx > 0 ? years[yearIdx - 1] : null;
   const prevYear = yearIdx >= 0 && yearIdx < years.length - 1 ? years[yearIdx + 1] : null;
 
-  const [daily, yearSongs, yearAlbums, yearArtists, daySummary] = selectedYear
+  const [daily, yearSongs, yearAlbums, yearArtists] = selectedYear
     ? await Promise.all([
         dailyListeningByYear(username, selectedYear),
         topSongsByYear(username, selectedYear),
         topAlbumsByYear(username, selectedYear),
         topArtistsByYear(username, selectedYear),
-        sp.day ? dayDetail(username, sp.day) : Promise.resolve(null),
       ])
-    : [[], [], [], [], null];
+    : [[], [], [], []];
 
   const qs = (name: string, artist: string) =>
     new URLSearchParams({ name, artist }).toString();
@@ -194,43 +209,7 @@ export default async function StatsPage({
   }));
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-3">
-        {/* Sync info and search share one row on large screens; flex-wrap
-            drops the full-width search onto its own line below lg. For owners
-            SyncButton owns the whole block so its progress bar and insert
-            stream span the full width. */}
-        {isOwner ? (
-          <SyncButton
-            username={username}
-            lastSynced={
-              <p className="text-sm text-muted-foreground shrink-0">
-                {state?.lastSyncedAt
-                  ? <>Last synced {relTime(state.lastSyncedAt)}</>
-                  : <>Not synced yet</>}
-              </p>
-            }
-            search={!empty ? <GlobalSearch username={username} /> : null}
-          />
-        ) : (
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <p className="text-sm text-muted-foreground flex-1 shrink-0">
-              {state?.lastSyncedAt
-                ? <>Last synced {relTime(state.lastSyncedAt)}</>
-                : <>Not synced yet</>}
-            </p>
-            {!empty && <GlobalSearch username={username} />}
-          </div>
-        )}
-        {isOwner ? null : session ? (
-          <p className="text-sm text-muted-foreground">
-            Viewing @{username}&apos;s profile. <Link href={`/u/${session.lbUsername}/stats`} className="underline">Your dashboard</Link>.
-          </p>
-        ) : (
-          <SignInButton returnTo={`/u/${username}/stats`} label="Sign in to sync your own listens" />
-        )}
-      </header>
-
+    <>
       {empty ? (
         <div className="py-24 flex flex-col items-center gap-3 text-sm text-muted-foreground">
           <Play size={36} className="text-subtle-foreground" />
@@ -308,41 +287,65 @@ export default async function StatsPage({
               <YearActivity
                 days={daily}
                 year={selectedYear}
-                activeDate={sp.day ?? null}
+                activeDate={day}
                 heading={<SectionHeading icon={Calendar}>{selectedYear}</SectionHeading>}
                 nav={<YearNav year={selectedYear} prevYear={prevYear} nextYear={nextYear} />}
               />
-              {daySummary && <DayDetailBlock username={username} day={daySummary} year={selectedYear} showSource={showSource} />}
+              {dayDetail}
             </section>
           )}
 
-          <section className="space-y-3">
-            <SectionHeading icon={Clock}>Recent listens</SectionHeading>
-            <ul className="divide-y divide-border text-sm">
-              {recentRows.map((r, i) => {
-                const { date, time } = splitDateTime(r.listened_at);
-                return (
-                  <li key={i} className="flex gap-3 py-2 items-baseline">
-                    <span className="text-subtle-foreground tabular-nums shrink-0 text-xs leading-tight whitespace-nowrap">
-                      <span className="block">{date}</span>
-                      <span className="block">{time}</span>
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">
-                      <span className="text-foreground">{r.track_name}</span>
-                      <span className="text-subtle-foreground"> · {r.artist_name}</span>
-                      {r.release_name && <span className="text-subtle-foreground"> · {r.release_name}</span>}
-                    </span>
-                    {showSource && <SourceDot source={r.source} />}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
+          {recent}
         </>
       )}
-    </div>
+    </>
   );
 }
+
+async function DayDetailLoader({
+  username, day, yearParam, showSource,
+}: { username: string; day: string; yearParam: number | null; showSource: boolean }) {
+  const summary = await dayDetail(username, day);
+  if (!summary) return null;
+  return <DayDetailBlock username={username} day={summary} year={yearParam ?? Number(day.slice(0, 4))} showSource={showSource} />;
+}
+
+async function RecentListens({ username, showSource }: { username: string; showSource: boolean }) {
+  const recent = await withRetry(() =>
+    execute<{ listened_at: string; track_name: string; artist_name: string; release_name: string | null; source: string | null }>(sql`
+      SELECT listened_at, track_name, artist_name, release_name, source
+      FROM ${schema.listens}
+      WHERE user_name = ${username}
+      ORDER BY listened_at DESC LIMIT 10
+    `),
+  );
+  const rows = (recent as unknown as { rows: { listened_at: string; track_name: string; artist_name: string; release_name: string | null; source: string | null }[] }).rows;
+  return (
+    <section className="space-y-3">
+      <SectionHeading icon={Clock}>Recent listens</SectionHeading>
+      <ul className="divide-y divide-border text-sm">
+        {rows.map((r, i) => {
+          const { date, time } = splitDateTime(r.listened_at);
+          return (
+            <li key={i} className="flex gap-3 py-2 items-baseline">
+              <span className="text-subtle-foreground tabular-nums shrink-0 text-xs leading-tight whitespace-nowrap">
+                <span className="block">{date}</span>
+                <span className="block">{time}</span>
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                <span className="text-foreground">{r.track_name}</span>
+                <span className="text-subtle-foreground"> · {r.artist_name}</span>
+                {r.release_name && <span className="text-subtle-foreground"> · {r.release_name}</span>}
+              </span>
+              {showSource && <SourceDot source={r.source} />}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 
 function DayDetailBlock({
   username,

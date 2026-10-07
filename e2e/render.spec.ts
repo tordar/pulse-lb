@@ -53,6 +53,15 @@ test.describe("owner", () => {
   }
 });
 
+test("stats (visitor) renders and deep-links to a year and day", async ({ page }) => {
+  await check(page, "/u/tordar/stats");
+  await expect(page.getByText("listening time")).toBeVisible();
+  await expect(page.getByText("Recent listens")).toBeVisible();
+  await page.goto("/u/tordar/stats?year=2019&day=2019-06-01", { waitUntil: "load" });
+  await expect(page.getByText("Saturday, June 1, 2019")).toBeVisible();
+  await expect(page.getByRole("button", { name: /sync/i })).toHaveCount(0);
+});
+
 test("artists ?q= filters and ?view=list switches layout", async ({ page }) => {
   await page.goto("/u/tordar/artists?q=radiohead&view=list", { waitUntil: "load" });
   const rows = page.locator('ol a[href^="/u/tordar/artists/"]');
