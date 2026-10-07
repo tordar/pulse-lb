@@ -10,6 +10,7 @@ import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
 import { SeenLive } from "@/components/SeenLive";
 import { concertsForArtist } from "@/lib/db/queries/concerts";
+import { artistRank } from "@/lib/db/queries/rank";
 
 
 type Params = Promise<{ username: string; artistMbid: string }>;
@@ -28,10 +29,11 @@ async function Unwrap({ params }: { params: Params }) {
 }
 
 async function ArtistDetail({ username, artistMbid }: { username: string; artistMbid: string }) {
-  const [detail, showSource, seenLive] = await Promise.all([
+  const [detail, showSource, seenLive, rank] = await Promise.all([
     artistDetail(username, artistMbid),
     getShowListenSource(username).catch(() => false),
     concertsForArtist(username, artistMbid).catch(() => []),
+    artistRank(username, artistMbid).catch(() => null),
   ]);
   if (!detail) notFound();
 
@@ -55,6 +57,7 @@ async function ArtistDetail({ username, artistMbid }: { username: string; artist
         </p>
         <h1 className="text-4xl font-bold leading-tight">{header.artist_name}</h1>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
+          {rank != null && <Stat label="Rank" value={`#${rank.toLocaleString()}`} />}
           <Stat label="Plays" value={header.total_plays.toLocaleString()} />
           <Stat label="Listening time" value={fmtHours(totalHours)} />
           <Stat label="Songs" value={header.distinct_tracks.toLocaleString()} />

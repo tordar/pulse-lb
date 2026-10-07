@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ChevronLeft, Disc3, Music2, Play, TrendingUp } from "lucide-react";
 import { albumDetail } from "@/lib/db/queries/albumDetail";
 import { getReleaseMeta } from "@/lib/musicbrainz/client";
+import { albumRank } from "@/lib/db/queries/rank";
 import { DetailSkeleton } from "@/components/Skeletons";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
@@ -37,7 +38,10 @@ async function AlbumDetail({ username, releaseMbid, name, artist }: { username: 
   // whatever happened to be in the URL — the URL might point to a box set
   // edition while most plays were under the standalone album.
   const lookupMbid = detail.header.canonical_release_mbid ?? releaseMbid;
-  const meta = await getReleaseMeta(lookupMbid).catch(() => null);
+  const [meta, rank] = await Promise.all([
+    getReleaseMeta(lookupMbid).catch(() => null),
+    albumRank(username, lookupMbid).catch(() => null),
+  ]);
   const totalTracks = meta?.trackCount ?? null;
 
   const { header, years, tracks } = detail;
@@ -80,6 +84,7 @@ async function AlbumDetail({ username, releaseMbid, name, artist }: { username: 
             )}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2 pt-3">
+            {rank != null && <Stat label="Rank" value={`#${rank.toLocaleString()}`} />}
             {header.first_release_date && (
               <Stat label="Released" value={header.first_release_date} />
             )}

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Clock, Disc3, Music2, TrendingUp } from "lucide-react";
 import { songDetail } from "@/lib/db/queries/songDetail";
+import { songRank } from "@/lib/db/queries/rank";
 import { getShowListenSource } from "@/lib/auth/users";
 import { SourceDot } from "@/components/SourceDot";
 import { DetailSkeleton } from "@/components/Skeletons";
@@ -27,12 +28,13 @@ async function Unwrap({ params, searchParams }: { params: Params; searchParams: 
 }
 
 async function SongDetail({ username, recordingMbid, name, artist }: { username: string; recordingMbid: string; name?: string; artist?: string }) {
-  const [detail, showSource] = await Promise.all([
+  const [detail, showSource, rank] = await Promise.all([
     songDetail(username, recordingMbid, {
       trackName: name,
       artistName: artist,
     }),
     getShowListenSource(username).catch(() => false),
+    songRank(username, recordingMbid).catch(() => null),
   ]);
   if (!detail) notFound();
 
@@ -67,6 +69,7 @@ async function SongDetail({ username, recordingMbid, name, artist }: { username:
           <h1 className="text-3xl font-bold leading-tight">{header.track_name}</h1>
           <p className="text-lg text-foreground/80">{header.artist_name}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2 pt-3">
+            {rank != null && <Stat label="Rank" value={`#${rank.toLocaleString()}`} />}
             <Stat label="Plays" value={header.total_plays.toLocaleString()} />
             <Stat label="Listening time" value={fmtHours(totalHours)} />
             <Stat label="First played" value={fmtDate(header.first_played)} />
