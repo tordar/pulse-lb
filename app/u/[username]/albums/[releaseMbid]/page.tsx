@@ -1,30 +1,34 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Disc3, Music2, Play, TrendingUp } from "lucide-react";
 import { albumDetail } from "@/lib/db/queries/albumDetail";
 import { getReleaseMeta } from "@/lib/musicbrainz/client";
+import { DetailSkeleton } from "@/components/Skeletons";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
 
 
-// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
-// Remove this opt-out after verifying the segment passes validation without it.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
-export const instant = false;
+type Params = Promise<{ username: string; releaseMbid: string }>;
+type SP = Promise<{ name?: string; artist?: string }>;
 
+export default function AlbumDetailPage({ params, searchParams }: { params: Params; searchParams: SP }) {
+  return (
+    <Suspense fallback={<DetailSkeleton />}>
+      <Unwrap params={params} searchParams={searchParams} />
+    </Suspense>
+  );
+}
 
-export default async function AlbumDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ username: string; releaseMbid: string }>;
-  searchParams: Promise<{ name?: string; artist?: string }>;
-}) {
-  const { username, releaseMbid } = await params;
-  const sp = await searchParams;
+async function Unwrap({ params, searchParams }: { params: Params; searchParams: SP }) {
+  const [{ username, releaseMbid }, sp] = await Promise.all([params, searchParams]);
+  return <AlbumDetail username={username} releaseMbid={releaseMbid} name={sp.name} artist={sp.artist} />;
+}
+
+async function AlbumDetail({ username, releaseMbid, name, artist }: { username: string; releaseMbid: string; name?: string; artist?: string }) {
   const detail = await albumDetail(username, releaseMbid, {
-    releaseName: sp.name,
-    artistName: sp.artist,
+    releaseName: name,
+    artistName: artist,
   });
   if (!detail) notFound();
 

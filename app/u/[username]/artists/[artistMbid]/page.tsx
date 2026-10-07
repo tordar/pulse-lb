@@ -1,27 +1,33 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Clock, Disc3, Music2, TrendingUp, Users } from "lucide-react";
 import { artistDetail } from "@/lib/db/queries/artistDetail";
 import { getShowListenSource } from "@/lib/auth/users";
 import { SourceDot } from "@/components/SourceDot";
+import { DetailSkeleton } from "@/components/Skeletons";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
 import { SeenLive } from "@/components/SeenLive";
 import { concertsForArtist } from "@/lib/db/queries/concerts";
 
 
-// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
-// Remove this opt-out after verifying the segment passes validation without it.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
-export const instant = false;
+type Params = Promise<{ username: string; artistMbid: string }>;
 
+export default function ArtistDetailPage({ params }: { params: Params }) {
+  return (
+    <Suspense fallback={<DetailSkeleton artwork={false} />}>
+      <Unwrap params={params} />
+    </Suspense>
+  );
+}
 
-export default async function ArtistDetailPage({
-  params,
-}: {
-  params: Promise<{ username: string; artistMbid: string }>;
-}) {
+async function Unwrap({ params }: { params: Params }) {
   const { username, artistMbid } = await params;
+  return <ArtistDetail username={username} artistMbid={artistMbid} />;
+}
+
+async function ArtistDetail({ username, artistMbid }: { username: string; artistMbid: string }) {
   const [detail, showSource, seenLive] = await Promise.all([
     artistDetail(username, artistMbid),
     getShowListenSource(username).catch(() => false),

@@ -69,3 +69,11 @@ test("unknown username renders empty list states", async ({ page }) => {
     await expect(page.getByText(new RegExp(`No ${kind} yet`))).toBeVisible();
   }
 });
+
+test("unknown detail ids show the not-found UI", async ({ page }) => {
+  const zero = "00000000-0000-0000-0000-000000000000";
+  for (const kind of ["artists", "albums", "songs"]) {
+    await page.goto(`/u/tordar/${kind}/${zero}`, { waitUntil: "load" });
+    await expect(page.locator("body")).toContainText(/could not be found|not found/i, { timeout: 15_000 });
+  }
+});

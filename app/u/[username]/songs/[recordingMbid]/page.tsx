@@ -1,32 +1,36 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Clock, Disc3, Music2, TrendingUp } from "lucide-react";
 import { songDetail } from "@/lib/db/queries/songDetail";
 import { getShowListenSource } from "@/lib/auth/users";
 import { SourceDot } from "@/components/SourceDot";
+import { DetailSkeleton } from "@/components/Skeletons";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
 
 
-// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
-// Remove this opt-out after verifying the segment passes validation without it.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
-export const instant = false;
+type Params = Promise<{ username: string; recordingMbid: string }>;
+type SP = Promise<{ name?: string; artist?: string }>;
 
+export default function SongDetailPage({ params, searchParams }: { params: Params; searchParams: SP }) {
+  return (
+    <Suspense fallback={<DetailSkeleton />}>
+      <Unwrap params={params} searchParams={searchParams} />
+    </Suspense>
+  );
+}
 
-export default async function SongDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ username: string; recordingMbid: string }>;
-  searchParams: Promise<{ name?: string; artist?: string }>;
-}) {
-  const { username, recordingMbid } = await params;
-  const sp = await searchParams;
+async function Unwrap({ params, searchParams }: { params: Params; searchParams: SP }) {
+  const [{ username, recordingMbid }, sp] = await Promise.all([params, searchParams]);
+  return <SongDetail username={username} recordingMbid={recordingMbid} name={sp.name} artist={sp.artist} />;
+}
+
+async function SongDetail({ username, recordingMbid, name, artist }: { username: string; recordingMbid: string; name?: string; artist?: string }) {
   const [detail, showSource] = await Promise.all([
     songDetail(username, recordingMbid, {
-      trackName: sp.name,
-      artistName: sp.artist,
+      trackName: name,
+      artistName: artist,
     }),
     getShowListenSource(username).catch(() => false),
   ]);
