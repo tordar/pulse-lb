@@ -52,3 +52,20 @@ test.describe("owner", () => {
     });
   }
 });
+
+test("artists ?q= filters and ?view=list switches layout", async ({ page }) => {
+  await page.goto("/u/tordar/artists?q=radiohead&view=list", { waitUntil: "load" });
+  const rows = page.locator('ol a[href^="/u/tordar/artists/"]');
+  await expect(rows.first()).toBeVisible();
+  await expect(rows.first()).toContainText(/radiohead/i);
+  await page.goto("/u/tordar/artists?q=zzzz-no-match", { waitUntil: "load" });
+  await expect(page.getByText('No artists match "zzzz-no-match".')).toBeVisible();
+});
+
+test("unknown username renders empty list states", async ({ page }) => {
+  for (const kind of ["songs", "albums", "artists"]) {
+    const res = await page.goto(`/u/nobody-xyz-404/${kind}`, { waitUntil: "load" });
+    expect(res?.status()).toBeLessThan(500);
+    await expect(page.getByText(new RegExp(`No ${kind} yet`))).toBeVisible();
+  }
+});
