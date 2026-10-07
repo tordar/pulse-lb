@@ -15,7 +15,8 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "test": "tsx --test \"lib/**/*.test.ts\""
+    "test": "tsx --test \"lib/**/*.test.ts\"",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
@@ -30,6 +31,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@next/playwright": "^16.4.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
