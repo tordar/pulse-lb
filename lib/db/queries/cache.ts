@@ -26,3 +26,23 @@ export function userCached<T>(
     revalidate: false,
   })();
 }
+
+/**
+ * Like userCached, but also expires after `seconds`.
+ *
+ * For reads that change outside the tag's invalidation points — e.g. a no-op
+ * sync bumps `lastSyncedAt` without revalidating `user:<name>` — so a pure tag
+ * cache would go stale indefinitely. Results are JSON-serialized: Dates come
+ * back as strings.
+ */
+export function userCachedFor<T>(
+  username: string,
+  keys: (string | number | undefined | null)[],
+  seconds: number,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return unstable_cache(fn, keys.map((k) => String(k ?? "")), {
+    tags: [`user:${username}`],
+    revalidate: seconds,
+  })();
+}

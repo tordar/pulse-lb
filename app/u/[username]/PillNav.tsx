@@ -27,13 +27,21 @@ export function PillNav({ username, children }: { username: string; children?: R
 
 export function AccountPill() {
   const pathname = usePathname();
-  return <PillLink tab={ACCOUNT_TAB} active={isTabActive(ACCOUNT_TAB.href, pathname)} />;
+  return <PillLink tab={ACCOUNT_TAB} active={isTabActive(ACCOUNT_TAB.href, pathname)} fullPrefetch={false} />;
 }
 
-function PillLink({ tab: { href, label, Icon }, active }: { tab: NavTab; active: boolean }) {
+function PillLink({
+  tab: { href, label, Icon },
+  active,
+  fullPrefetch = true,
+}: {
+  tab: NavTab;
+  active: boolean;
+  fullPrefetch?: boolean;
+}) {
   return (
     <Link
-      prefetch
+      prefetch={fullPrefetch ? true : undefined}
       href={href}
       aria-label={label}
       aria-current={active ? "page" : undefined}

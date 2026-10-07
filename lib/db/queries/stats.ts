@@ -1,6 +1,6 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, schema, execute } from "@/lib/db/client";
-import { userCached } from "./cache";
+import { userCached, userCachedFor } from "./cache";
 import { withRetry } from "@/lib/db/retry";
 
 type Row<T> = { rows: T[] };
@@ -301,4 +301,37 @@ export async function dayDetail(
     ...summary,
     listens: (listensRes as unknown as Row<DayListen>).rows,
   };
+}
+
+// Read on every stats view (tab prefetches included), so time-cached to keep
+// them from waking the database. lastSyncedAt comes back as a string.
+export function syncStateFor(username: string) {
+  return userCachedFor(username, ["syncState", username], 300, () =>
+    withRetry(() => db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) })),
+  );
+}
+
+export type RecentListen = {
+  listened_at: string;
+  track_name: string;
+  artist_name: string;
+  release_name: string | null;
+  source: string | null;
+};
+
+export function recentListens(username: string, limit = 10): Promise<RecentListen[]> {
+  return userCachedFor(username, ["recentListens", username, limit], 300, async () => {
+    const res = await withRetry(() =>
+      execute<RecentListen>(sql`
+        SELECT listened_at, track_name, artist_name, release_name, source
+        FROM ${schema.listens}
+        WHERE user_name = ${username}
+        ORDER BY listened_at DESC LIMIT ${limit}
+      `),
+    );
+    return (res as unknown as Row<RecentListen>).rows.map((r) => ({
+      ...r,
+      listened_at: new Date(r.listened_at).toISOString(),
+    }));
+  });
 }

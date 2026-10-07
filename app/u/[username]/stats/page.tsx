@@ -2,9 +2,6 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { BarChart3, Calendar, Clock, Disc3, Music2, Play, TrendingUp, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { eq, sql } from "drizzle-orm";
-import { db, schema, execute } from "@/lib/db/client";
-import { withRetry } from "@/lib/db/retry";
 import { fmtHours } from "@/lib/format";
 import {
   allTimeStats,
@@ -16,6 +13,8 @@ import {
   topSongsByYear,
   topAlbumsByYear,
   topArtistsByYear,
+  syncStateFor,
+  recentListens,
 } from "@/lib/db/queries/stats";
 import { SyncButton } from "./SyncButton";
 import { YearNav } from "./YearNav";
@@ -55,7 +54,7 @@ async function StatsHeader({ params }: { params: Params }) {
   const { username } = await params;
   const [session, state, allTime] = await Promise.all([
     getSession(),
-    withRetry(() => db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) })),
+    syncStateFor(username),
     allTimeStats(username),
   ]);
   const isOwner = session?.lbUsername === username;
@@ -311,15 +310,7 @@ async function DayDetailLoader({
 }
 
 async function RecentListens({ username, showSource }: { username: string; showSource: boolean }) {
-  const recent = await withRetry(() =>
-    execute<{ listened_at: string; track_name: string; artist_name: string; release_name: string | null; source: string | null }>(sql`
-      SELECT listened_at, track_name, artist_name, release_name, source
-      FROM ${schema.listens}
-      WHERE user_name = ${username}
-      ORDER BY listened_at DESC LIMIT 10
-    `),
-  );
-  const rows = (recent as unknown as { rows: { listened_at: string; track_name: string; artist_name: string; release_name: string | null; source: string | null }[] }).rows;
+  const rows = await recentListens(username);
   return (
     <section className="space-y-3">
       <SectionHeading icon={Clock}>Recent listens</SectionHeading>

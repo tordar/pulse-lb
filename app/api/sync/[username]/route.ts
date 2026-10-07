@@ -257,7 +257,9 @@ export async function GET(
     (state.lastAggregatedAt == null || state.lastAggregatedAt < state.lastListenedAt);
   // The stats page used to self-heal on render; it is served from cache now,
   // so the owner's page-load probe does it instead.
-  if (probe && aggStale) {
+  // Skip mid-sync: the running chain does its own terminal rebuild.
+  const syncActive = latest != null && (latest.status === "queued" || latest.status === "running");
+  if (probe && aggStale && !syncActive) {
     after(() => healStaleAggregates(username, state?.lastAggregatedAt ?? null));
   }
 
