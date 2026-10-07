@@ -171,16 +171,18 @@ function FestivalRow({
       </div>
 
       <div className="pl-[52px] pb-2">
-        {days.map((d) => (
-          <div key={d.date}>
-            {days.length > 1 && (
-              <div className="pt-2 text-xs text-subtle-foreground uppercase tracking-wide">{fmtDay(d.date)}</div>
-            )}
-            <ul className="divide-y divide-border">
-              {d.concerts.map((c) => <FestivalSet key={c.id} ctx={ctx} c={c} />)}
-            </ul>
-          </div>
-        ))}
+        <div className="md:grid md:grid-flow-col md:auto-cols-fr md:gap-6">
+          {days.map((d) => (
+            <div key={d.date} className="min-w-0">
+              {days.length > 1 && (
+                <div className="pt-2 text-xs text-subtle-foreground uppercase tracking-wide">{fmtDay(d.date)}</div>
+              )}
+              <ul className="divide-y divide-border">
+                {d.concerts.map((c) => <FestivalSet key={c.id} ctx={ctx} c={c} />)}
+              </ul>
+            </div>
+          ))}
+        </div>
         {editMode && (
           <div className="pt-2 space-y-2">
             <button type="button" onClick={() => setEditing({ kind: "add-to-festival", festivalId: festival.id })} className={quietBtn}>
