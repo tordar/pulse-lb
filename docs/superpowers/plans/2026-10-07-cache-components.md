@@ -91,14 +91,14 @@ Throwaway code on a throwaway branch. The output is a **ruling** written to the 
 
 **Files:**
 - Create (spike branch only): `app/spike/[username]/page.tsx`, `app/spike/[username]/{a,b,c}/page.tsx`, `app/spike/data.ts`, `e2e/spike.spec.ts`
-- Create (kept, on the main work branch): `e2e/playwright.config.ts`, `e2e/mint-token.ts`, `e2e/measure.spec.ts`
+- Create (kept, on the main work branch): `e2e/playwright.config.ts`, `e2e/mint-token.mts`, `e2e/measure.spec.ts`
 
 **Interfaces:**
 - Produces: `RULING` ∈ {`A`, `B`, `C`, `STOP`} recorded in the ledger as `Ruling: cache variant <X> — <evidence>`. Tasks 3–7 read it.
   - **A** = no directive. Content components call `userCached` (`unstable_cache`) directly.
   - **C** = the content component has `"use cache"` + `cacheTag("user:"+username)` + `cacheLife("max")`, and calls `userCached` inside.
   - **B** = like C, but with `"use cache: remote"`.
-- Produces: `e2e/playwright.config.ts` and `e2e/mint-token.ts` (used by every later task) and `e2e/measure.spec.ts` (used in Task 9).
+- Produces: `e2e/playwright.config.ts` and `e2e/mint-token.mts` (used by every later task) and `e2e/measure.spec.ts` (used in Task 9).
 
 - [ ] **Step 1: Install test tooling on the work branch**
 
@@ -134,7 +134,7 @@ export default defineConfig({
 
 Add to `package.json` scripts: `"e2e": "playwright test -c e2e/playwright.config.ts"`.
 
-- [ ] **Step 3: Create `e2e/mint-token.ts`**
+- [ ] **Step 3: Create `e2e/mint-token.mts`**
 
 ```ts
 // Prints a 1-hour owner session token for `tordar`, plus one real mbid per
@@ -163,7 +163,7 @@ Every later run uses it like this:
 ```bash
 SP=<scratchpad>
 cp ~/Documents/code/pulse-lb/.env .env
-npx tsx e2e/mint-token.ts > $SP/e2e.json
+npx tsx e2e/mint-token.mts > $SP/e2e.json
 export E2E_FIXTURES=$SP/e2e.json
 ```
 
@@ -809,7 +809,7 @@ cp ~/Documents/code/pulse-lb/.env .env && npm run build 2>&1 | tail -40
 ```bash
 PORT=3457 npx next start -p 3457 > $SP/server.log 2>&1 &
 sleep 4
-npx tsx e2e/mint-token.ts > $SP/e2e.json
+npx tsx e2e/mint-token.mts > $SP/e2e.json
 E2E_FIXTURES=$SP/e2e.json npm run e2e -- render.spec.ts --reporter=line
 pkill -f "next start -p 3457"; rm -f .env $SP/e2e.json
 ```
