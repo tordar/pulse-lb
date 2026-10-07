@@ -77,3 +77,25 @@ test("unknown detail ids show the not-found UI", async ({ page }) => {
     await expect(page.locator("body")).toContainText(/could not be found|not found/i, { timeout: 15_000 });
   }
 });
+
+test("concerts: visitor sees the list but no owner controls", async ({ page }) => {
+  await page.goto("/u/tordar/concerts", { waitUntil: "load" });
+  await expect(page.getByText("Shows", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add concert" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+});
+
+test("concerts: owner gets the bar and edit mode", async ({ page, context, baseURL }) => {
+  await context.addCookies([{ name: "pulse_session", value: fx.tok, url: baseURL! }]);
+  await page.goto("/u/tordar/concerts", { waitUntil: "load" });
+  await expect(page.getByRole("button", { name: "Add concert" })).toBeVisible();
+  await page.getByRole("button", { name: "Edit", exact: true }).first().click();
+  await expect(page.getByRole("button", { name: "Done" })).toBeVisible();
+  expect(await page.getByRole("button", { name: "Edit", exact: true }).count()).toBeGreaterThan(10);
+});
+
+test("concerts: unknown user renders the empty state", async ({ page }) => {
+  const res = await page.goto("/u/nobody-xyz-404/concerts", { waitUntil: "load" });
+  expect(res?.status()).toBeLessThan(500);
+  await expect(page.getByText("No concerts yet.")).toBeVisible();
+});

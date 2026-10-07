@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { CalendarDays, ChevronDown } from "lucide-react";
 import type { Concert, Festival } from "@/lib/db/schema";
 import type { TimelineYear } from "@/lib/concerts/timeline";
@@ -12,7 +11,7 @@ import { CoverArt } from "@/components/CoverArt";
 import { ConcertForm } from "./ConcertForm";
 import { FestivalForm } from "./FestivalForm";
 import { DeleteButton } from "./DeleteButton";
-import { SetlistImport } from "./SetlistImport";
+import { useEditMode, type Editing } from "./EditMode";
 import { deleteConcert, deleteFestival } from "./actions";
 
 export type TimelineProps = {
@@ -20,14 +19,7 @@ export type TimelineProps = {
   years: TimelineYear[];
   festivals: Festival[];
   art: Record<string, CoverArtRef>;
-  isOwner: boolean;
 };
-
-type Editing =
-  | { kind: "new-concert" } | { kind: "new-festival" }
-  | { kind: "concert"; id: string } | { kind: "festival"; id: string }
-  | { kind: "add-to-festival"; festivalId: string }
-  | { kind: "from-setlist"; initial: Partial<Concert> };
 
 type Ctx = {
   username: string;
@@ -42,37 +34,12 @@ type Ctx = {
 const quietBtn = "text-xs text-muted-foreground hover:text-foreground";
 const NO_ART: CoverArtRef = { caaId: null, caaReleaseMbid: null };
 
-export function Timeline({ username, years, festivals, art, isOwner }: TimelineProps) {
-  const [editing, setEditing] = useState<Editing | null>(null);
-  const [editMode, setEditMode] = useState(false);
-  const router = useRouter();
-  const close = useCallback(() => { setEditing(null); router.refresh(); }, [router]);
-  const ctx: Ctx = { username, festivals, art, editMode: isOwner && editMode, editing, setEditing, close };
+export function Timeline({ username, years, festivals, art }: TimelineProps) {
+  const { editMode, editing, setEditing, close } = useEditMode();
+  const ctx: Ctx = { username, festivals, art, editMode, editing, setEditing, close };
 
   return (
     <div className="space-y-8">
-      {isOwner && (
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setEditing({ kind: "new-concert" })}
-              className="text-sm rounded-md bg-primary text-primary-foreground px-3 py-1.5">Add concert</button>
-            <button type="button" onClick={() => setEditing({ kind: "new-festival" })}
-              className="text-sm rounded-md border border-card-border px-3 py-1.5">Add festival</button>
-            <button type="button" onClick={() => setEditMode(!editMode)} aria-pressed={editMode}
-              className={`text-sm rounded-md border border-card-border px-3 py-1.5 ml-auto ${editMode ? "bg-muted" : ""}`}>
-              {editMode ? "Done" : "Edit"}
-            </button>
-          </div>
-          <SetlistImport username={username} festivals={festivals}
-            onLoaded={(initial) => setEditing({ kind: "from-setlist", initial })} />
-          {editing?.kind === "new-concert" && <ConcertForm username={username} festivals={festivals} onDone={close} />}
-          {editing?.kind === "from-setlist" && (
-            <ConcertForm key={`${editing.initial.setlistUrl}`} username={username} festivals={festivals}
-              initial={editing.initial} onDone={close} />
-          )}
-          {editing?.kind === "new-festival" && <FestivalForm username={username} onDone={close} />}
-        </div>
-      )}
       {years.length === 0 && <p className="text-sm text-muted-foreground">No concerts yet.</p>}
       {years.map((y) => {
         const shows = y.entries.reduce(
