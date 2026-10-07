@@ -27,6 +27,7 @@ export function YearNav({
     <div className="inline-flex items-center gap-1 bg-card border border-card-border rounded-full p-1">
       {prevYear !== null ? (
         <Link
+          prefetch
           href={mkHref(prevYear)}
           scroll={false}
           aria-label={`View ${prevYear}`}
@@ -42,6 +43,7 @@ export function YearNav({
       <span className="px-3 text-sm font-medium tabular-nums">{year}</span>
       {nextYear !== null ? (
         <Link
+          prefetch
           href={mkHref(nextYear)}
           scroll={false}
           aria-label={`View ${nextYear}`}

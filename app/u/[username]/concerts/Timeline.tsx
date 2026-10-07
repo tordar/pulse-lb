@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentLink } from "@/components/IntentLink";
 import { useState } from "react";
 import { CalendarDays, ChevronDown } from "lucide-react";
 import type { Concert, Festival } from "@/lib/db/schema";
@@ -99,9 +99,9 @@ function Row({ image, title, subtitle, right, href, controls }: {
   return (
     <div className="flex items-center gap-3">
       {href ? (
-        <Link href={href} className="flex-1 min-w-0 flex items-center gap-3 py-2.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
+        <IntentLink href={href} className="flex-1 min-w-0 flex items-center gap-3 py-2.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
           {body}
-        </Link>
+        </IntentLink>
       ) : (
         <div className="flex-1 min-w-0 flex items-center gap-3 py-2.5">{body}</div>
       )}

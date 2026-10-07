@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/IntentLink";
 import { Play, Clock } from "lucide-react";
 import { CoverArt } from "@/components/CoverArt";
 import { FlipList } from "@/components/FlipList";
@@ -167,12 +167,12 @@ function Row({
   return (
     <li data-flip-key={item.key}>
       {item.href ? (
-        <Link
+        <IntentLink
           href={item.href}
           className="block p-2 rounded-md hover:bg-muted/50 active:bg-muted transition-colors"
         >
           {inner}
-        </Link>
+        </IntentLink>
       ) : (
         <div className="p-2 rounded-md">{inner}</div>
       )}

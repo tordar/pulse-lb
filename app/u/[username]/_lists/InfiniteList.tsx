@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/IntentLink";
 import { TopItemCard } from "@/components/TopItemCard";
 import { CoverArt } from "@/components/CoverArt";
 import type { View } from "@/components/ViewToggle";
@@ -200,12 +200,12 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
     return (
       <li key={`s-${s.rank}-${s.track_name}-${s.artist_name}`}>
         {href ? (
-          <Link
+          <IntentLink
             href={href}
             className="flex items-center gap-3 py-2.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded"
           >
             {row}
-          </Link>
+          </IntentLink>
         ) : (
           <div className="flex items-center gap-3 py-2.5">{row}</div>
         )}
@@ -238,9 +238,9 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
     return (
       <li key={`a-${a.rank}-${a.release_name}-${a.artist_name}`}>
         {href ? (
-          <Link href={href} className="flex items-center gap-3 py-2.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
+          <IntentLink href={href} className="flex items-center gap-3 py-2.5 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
             {row}
-          </Link>
+          </IntentLink>
         ) : (
           <div className="flex items-center gap-3 py-2.5">{row}</div>
         )}
@@ -269,9 +269,9 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
   return (
     <li key={`ar-${ar.rank}-${ar.artist_name}`}>
       {href ? (
-        <Link href={href} className="flex items-center gap-3 py-3 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
+        <IntentLink href={href} className="flex items-center gap-3 py-3 hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
           {row}
-        </Link>
+        </IntentLink>
       ) : (
         <div className="flex items-center gap-3 py-3">{row}</div>
       )}

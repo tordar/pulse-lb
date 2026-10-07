@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentLink } from "@/components/IntentLink";
 import { CoverArt } from "@/components/CoverArt";
 import type { SearchResults } from "@/lib/db/queries/topItems";
 
@@ -73,9 +73,9 @@ export function SearchHits({
               return (
                 <li key={hit.key} onMouseEnter={() => onHover?.(idx)}>
                   {hit.href ? (
-                    <Link href={hit.href} className={rowClass} onClick={onPick}>
+                    <IntentLink href={hit.href} className={rowClass} onClick={onPick}>
                       {row}
-                    </Link>
+                    </IntentLink>
                   ) : (
                     <div className={rowClass}>{row}</div>
                   )}

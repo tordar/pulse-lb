@@ -33,6 +33,7 @@ export function AccountPill() {
 function PillLink({ tab: { href, label, Icon }, active }: { tab: NavTab; active: boolean }) {
   return (
     <Link
+      prefetch
       href={href}
       aria-label={label}
       aria-current={active ? "page" : undefined}

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { IntentLink } from "@/components/IntentLink";
 import { Play, Clock } from "lucide-react";
 import { CoverArt } from "@/components/CoverArt";
 import type { CoverArtRef } from "@/lib/listenbrainz/coverArt";
@@ -73,9 +73,9 @@ export function TopItemCard({
   );
 
   return href ? (
-    <Link href={href} className="block h-full">
+    <IntentLink href={href} className="block h-full">
       {inner}
-    </Link>
+    </IntentLink>
   ) : (
     inner
   );

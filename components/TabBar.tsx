@@ -57,6 +57,7 @@ export function TabBar({ username }: { username: string }) {
             return (
               <li key={href}>
                 <Link
+                  prefetch
                   href={href}
                   aria-current={active ? "page" : undefined}
                   className="flex min-h-[49px] flex-col items-center justify-center gap-0.5 py-1.5 transition active:scale-95"
