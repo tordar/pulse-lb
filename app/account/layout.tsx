@@ -7,9 +7,7 @@ import { AccountLink } from "@/components/AccountLink";
 import { NowPlaying } from "../u/[username]/NowPlaying";
 import { getSession } from "@/lib/auth/session";
 
-// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
-// Remove this opt-out after verifying the segment passes validation without it.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+// Owner-only, outside the tab flow, redirects without a session: stays a blocking render.
 export const instant = false;
 
 export default async function AccountLayout({

@@ -7,9 +7,7 @@ import { AccountActions } from "./AccountActions";
 import { SourceToggle } from "./SourceToggle";
 
 
-// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
-// Remove this opt-out after verifying the segment passes validation without it.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+// Owner-only, outside the tab flow, redirects without a session: stays a blocking render.
 export const instant = false;
 
 

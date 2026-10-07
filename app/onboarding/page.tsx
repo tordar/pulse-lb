@@ -1,10 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ChevronLeft, ExternalLink } from "lucide-react";
-
-// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
-// Remove this opt-out after verifying the segment passes validation without it.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
-export const instant = false;
 
 type Step = {
   title: string;
@@ -71,27 +67,9 @@ const STEPS: Step[] = [
   },
 ];
 
-export default async function OnboardingPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string; username?: string }>;
-}) {
-  const { error, username } = await searchParams;
+type SP = Promise<{ error?: string; username?: string }>;
 
-  const errorBanner =
-    error === "notfound" ? (
-      <div className="mb-8 p-4 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-100 text-sm">
-        We couldn&apos;t find{" "}
-        <strong className="font-mono">{username}</strong> on ListenBrainz. If you haven&apos;t created an
-        account yet, the steps below will get you set up.
-      </div>
-    ) : error === "invalid" ? (
-      <div className="mb-8 p-4 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-100 text-sm">
-        <strong className="font-mono">{username}</strong> doesn&apos;t look like a valid ListenBrainz
-        username. Usernames are letters, numbers, dots, dashes, and underscores.
-      </div>
-    ) : null;
-
+export default function OnboardingPage({ searchParams }: { searchParams: SP }) {
   return (
     <main className="min-h-screen p-6 md:p-10 max-w-3xl mx-auto">
       <div className="mb-10 space-y-3">
@@ -108,7 +86,9 @@ export default async function OnboardingPage({
         </p>
       </div>
 
-      {errorBanner}
+      <Suspense fallback={null}>
+        <ErrorBanner searchParams={searchParams} />
+      </Suspense>
 
       <ol className="space-y-8">
         {STEPS.map((s, i) => (
@@ -152,5 +132,23 @@ export default async function OnboardingPage({
         </p>
       </div>
     </main>
+  );
+}
+
+async function ErrorBanner({ searchParams }: { searchParams: SP }) {
+  const { error, username } = await searchParams;
+  return (
+    error === "notfound" ? (
+      <div className="mb-8 p-4 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-100 text-sm">
+        We couldn&apos;t find{" "}
+        <strong className="font-mono">{username}</strong> on ListenBrainz. If you haven&apos;t created an
+        account yet, the steps below will get you set up.
+      </div>
+    ) : error === "invalid" ? (
+      <div className="mb-8 p-4 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-100 text-sm">
+        <strong className="font-mono">{username}</strong> doesn&apos;t look like a valid ListenBrainz
+        username. Usernames are letters, numbers, dots, dashes, and underscores.
+      </div>
+    ) : null
   );
 }

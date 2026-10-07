@@ -108,3 +108,20 @@ test("concerts: unknown user renders the empty state", async ({ page }) => {
   expect(res?.status()).toBeLessThan(500);
   await expect(page.getByText("No concerts yet.")).toBeVisible();
 });
+
+test("home: visitor sees Sign in, owner sees Signed in as", async ({ page, context, baseURL }) => {
+  await page.goto("/", { waitUntil: "load" });
+  await expect(page.getByText("Sign in with ListenBrainz")).toBeVisible();
+  await expect(page.getByText(/Signed in as/)).toHaveCount(0);
+  await context.addCookies([{ name: "pulse_session", value: fx.tok, url: baseURL! }]);
+  await page.goto("/", { waitUntil: "load" });
+  await expect(page.getByText(/Signed in as/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+});
+
+test("home ?error=upstream shows the banner; onboarding ?error=notfound too", async ({ page }) => {
+  await page.goto("/?error=upstream", { waitUntil: "load" });
+  await expect(page.getByText("ListenBrainz looks unreachable right now.")).toBeVisible();
+  await page.goto("/onboarding?error=notfound&username=zz", { waitUntil: "load" });
+  await expect(page.getByText(/couldn.t find/)).toBeVisible();
+});

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { cacheLife, cacheTag } from "next/cache";
 import {
   AlertTriangle,
   ArrowRight,
@@ -23,70 +25,75 @@ import { getSession } from "@/lib/auth/session";
 import { allTimeStats } from "@/lib/db/queries/stats";
 import { paymentsConfigured } from "@/lib/stripe";
 
-// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
-// Remove this opt-out after verifying the segment passes validation without it.
-// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
-export const instant = false;
-
 const DEMO_USERNAME = "tordar";
 
 
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string; reason?: string; username?: string }>;
-}) {
-  const sp = await searchParams;
-  const session = await getSession();
-  const upstreamErr = sp.error === "upstream";
-  const authErr = sp.error === "auth";
+type SP = Promise<{ error?: string; reason?: string; username?: string }>;
 
+export default function Home({ searchParams }: { searchParams: SP }) {
   const live = paymentsConfigured();
-  const demo = await safeAllTime(DEMO_USERNAME);
-
   return (
     <main className="min-h-screen flex flex-col">
-      {(upstreamErr || authErr) && (
-        <div className="max-w-3xl mx-auto px-6 w-full pt-6">
-          {upstreamErr && (
-            <div className="flex gap-3 items-start p-4 rounded-md border border-amber-900/60 bg-amber-950/30 text-amber-100 text-sm">
-              <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-400" />
-              <div className="space-y-1">
-                <p className="font-medium">ListenBrainz looks unreachable right now.</p>
-                <p className="text-amber-100/80">
-                  Try again in a minute. Live status at{" "}
-                  <a href="https://status.metabrainz.org/" target="_blank" rel="noreferrer" className="underline">
-                    status.metabrainz.org
-                  </a>
-                  .
-                </p>
-              </div>
-            </div>
-          )}
-          {authErr && (
-            <div className="p-4 rounded-md border border-amber-900/60 bg-amber-950/30 text-amber-100 text-sm">
-              Sign-in failed{sp.reason ? ` (${sp.reason})` : ""}. Please try again.
-            </div>
-          )}
-        </div>
-      )}
-
-      <Hero session={session} />
-      <DemoSection demo={demo} />
+      <Suspense fallback={null}>
+        <ErrorBanners searchParams={searchParams} />
+      </Suspense>
+      <Hero />
+      <DemoSection />
       <FeatureGrid />
       <HowItWorks />
-      <PricingCards live={live} signedIn={!!session} />
-      <BrowseForm defaultValue={sp.username ?? ""} />
+      <Suspense fallback={<PricingCards live={live} signedIn={false} />}>
+        <SessionPricing live={live} />
+      </Suspense>
+      <Suspense fallback={<BrowseForm defaultValue="" />}>
+        <BrowseFormFromUrl searchParams={searchParams} />
+      </Suspense>
       <SiteFooter />
     </main>
   );
 }
 
+async function ErrorBanners({ searchParams }: { searchParams: SP }) {
+  const sp = await searchParams;
+  const upstreamErr = sp.error === "upstream";
+  const authErr = sp.error === "auth";
+  if (!upstreamErr && !authErr) return null;
+  return (
+  <div className="max-w-3xl mx-auto px-6 w-full pt-6">
+    {upstreamErr && (
+      <div className="flex gap-3 items-start p-4 rounded-md border border-amber-900/60 bg-amber-950/30 text-amber-100 text-sm">
+        <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-400" />
+        <div className="space-y-1">
+          <p className="font-medium">ListenBrainz looks unreachable right now.</p>
+          <p className="text-amber-100/80">
+            Try again in a minute. Live status at{" "}
+            <a href="https://status.metabrainz.org/" target="_blank" rel="noreferrer" className="underline">
+              status.metabrainz.org
+            </a>
+            .
+          </p>
+        </div>
+      </div>
+    )}
+    {authErr && (
+      <div className="p-4 rounded-md border border-amber-900/60 bg-amber-950/30 text-amber-100 text-sm">
+        Sign-in failed{sp.reason ? ` (${sp.reason})` : ""}. Please try again.
+      </div>
+    )}
+  </div>
+  );
+}
+
+async function SessionPricing({ live }: { live: boolean }) {
+  return <PricingCards live={live} signedIn={!!(await getSession())} />;
+}
+
+async function BrowseFormFromUrl({ searchParams }: { searchParams: SP }) {
+  return <BrowseForm defaultValue={(await searchParams).username ?? ""} />;
+}
+
 /* ---------------- hero ---------------- */
 
-type DemoStats = Awaited<ReturnType<typeof safeAllTime>>;
-
-function Hero({ session }: { session: Awaited<ReturnType<typeof getSession>> }) {
+function Hero() {
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
@@ -111,41 +118,62 @@ function Hero({ session }: { session: Awaited<ReturnType<typeof getSession>> }) 
                 See the live demo <ArrowRight size={16} />
               </Button>
             </Link>
-            {session ? (
-              <form action="/auth/logout" method="post">
-                <Button size="lg" variant="outline" type="submit">
-                  Sign out
-                </Button>
-              </form>
-            ) : (
-              <SignInButton label="Sign in with ListenBrainz" />
-            )}
+            <Suspense fallback={<span className="inline-block h-11 w-56" aria-hidden />}>
+              <HeroAuthButton />
+            </Suspense>
           </div>
-          {session ? (
-            <p className="text-xs text-muted-foreground">
-              Signed in as <strong className="text-foreground">@{session.lbUsername}</strong> ·{" "}
-              <Link href={`/u/${encodeURIComponent(session.lbUsername)}/stats`} className="text-primary hover:underline">
-                your dashboard
-              </Link>{" "}
-              ·{" "}
-              <Link href="/account" className="text-primary hover:underline">
-                account settings
-              </Link>
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Browsing any public profile is free, forever. Subscribe to add your own listens.
-            </p>
-          )}
+          <Suspense fallback={null}>
+            <HeroSignedInAs />
+          </Suspense>
         </div>
       </div>
     </section>
   );
 }
 
+async function HeroAuthButton() {
+  const session = await getSession();
+  return session ? (
+      <form action="/auth/logout" method="post">
+        <Button size="lg" variant="outline" type="submit">
+          Sign out
+        </Button>
+      </form>
+  ) : (
+      <SignInButton label="Sign in with ListenBrainz" />
+  );
+}
+
+async function HeroSignedInAs() {
+  const session = await getSession();
+  if (!session) {
+    return (
+    <p className="text-xs text-muted-foreground">
+      Browsing any public profile is free, forever. Subscribe to add your own listens.
+    </p>
+    );
+  }
+  return (
+    <p className="text-xs text-muted-foreground">
+      Signed in as <strong className="text-foreground">@{session.lbUsername}</strong> ·{" "}
+      <Link href={`/u/${encodeURIComponent(session.lbUsername)}/stats`} className="text-primary hover:underline">
+        your dashboard
+      </Link>{" "}
+      ·{" "}
+      <Link href="/account" className="text-primary hover:underline">
+        account settings
+      </Link>
+    </p>
+  );
+}
+
 /* ---------------- demo section ---------------- */
 
-function DemoSection({ demo }: { demo: DemoStats }) {
+async function DemoSection() {
+  "use cache";
+  cacheTag(`user:${DEMO_USERNAME}`);
+  cacheLife("minutes");
+  const demo = await safeAllTime(DEMO_USERNAME);
   const links: { label: string; href: string; desc: string; icon: LucideIcon }[] = [
     {
       label: "All-time dashboard",
