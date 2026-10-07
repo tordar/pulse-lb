@@ -56,7 +56,22 @@ async function resolveArtistName(
   username: string,
   artistMbid: string,
 ): Promise<string | null> {
-  // Containment rather than "= ANY(...)": only @> can use the GIN index on
+  // The aggregate holds the name this mbid is credited under most. Any one
+  // listen won't do: a collaboration credited "Haruomi Hosono" also carries
+  // Mac DeMarco's mbid, and an unordered LIMIT 1 picked that row.
+  const agg = await withRetry(() =>
+    execute<{ artist_name: string }>(sql`
+      SELECT artist_name
+      FROM ${schema.aggArtist}
+      WHERE user_name = ${username} AND scope = 0 AND artist_mbid = ${artistMbid}::uuid
+      ORDER BY plays DESC
+      LIMIT 1
+    `),
+  );
+  const aggName = (agg as unknown as Row<{ artist_name: string }>).rows[0]?.artist_name;
+  if (aggName) return aggName;
+
+  // Not aggregated yet (fresh sync): fall back to the listens. Containment rather than "= ANY(...)": only @> can use the GIN index on
   // artist_mbids. Same result, but a miss costs one index probe instead of a
   // full scan of the table (see the index in lib/db/schema.ts).
   const res = await withRetry(() =>
@@ -177,7 +192,7 @@ export function artistDetail(
   username: string,
   artistMbid: string,
 ): Promise<ArtistDetail | null> {
-  return userCached(username, ["artistDetail", username, artistMbid], () =>
+  return userCached(username, ["artistDetail:v2", username, artistMbid], () =>
     artistDetailUncached(username, artistMbid),
   );
 }
