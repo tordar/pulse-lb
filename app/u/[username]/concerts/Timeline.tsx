@@ -2,7 +2,7 @@
 
 import { IntentLink } from "@/components/IntentLink";
 import { useState } from "react";
-import { CalendarDays, ChevronDown } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import type { Concert, Festival } from "@/lib/db/schema";
 import type { TimelineYear } from "@/lib/concerts/timeline";
 import type { CoverArtRef } from "@/lib/listenbrainz/coverArt";
@@ -138,7 +138,6 @@ function FestivalRow({
   ctx, festival, days,
 }: { ctx: Ctx; festival: Festival; days: { date: string; concerts: Concert[] }[] }) {
   const { username, festivals, editMode, editing, setEditing, close } = ctx;
-  const [open, setOpen] = useState(false);
   const sets = days.flatMap((d) => d.concerts);
 
   if (editMode && editing?.kind === "festival" && editing.id === festival.id) {
@@ -146,13 +145,11 @@ function FestivalRow({
   }
   const adding = editMode && editing?.kind === "add-to-festival" && editing.festivalId === festival.id;
   const place = [festival.venue, festival.city].filter(Boolean).join(", ");
-  const expanded = open || editMode;
 
   return (
     <li>
       <div className="flex items-center gap-3">
-        <button type="button" onClick={() => setOpen(!open)} aria-expanded={expanded}
-          className="flex-1 min-w-0 flex items-center gap-3 py-2.5 text-left hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
+        <div className="flex-1 min-w-0 flex items-center gap-3 py-2.5">
           <FestivalImage festival={festival} />
           <div className="flex-1 min-w-0">
             <div className="truncate text-sm font-medium">{festival.name}</div>
@@ -163,8 +160,7 @@ function FestivalRow({
           <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
             {fmtRange(festival.startDate, festival.endDate)}
           </span>
-          <ChevronDown size={14} className={`shrink-0 text-muted-foreground transition ${expanded ? "rotate-180" : ""}`} />
-        </button>
+        </div>
         {editMode && (
           <EditControls
             onEdit={() => setEditing({ kind: "festival", id: festival.id })}
@@ -174,35 +170,33 @@ function FestivalRow({
         )}
       </div>
 
-      {expanded && (
-        <div className="pl-[52px] pb-2">
-          {days.map((d) => (
-            <div key={d.date}>
-              {days.length > 1 && (
-                <div className="pt-2 text-xs text-subtle-foreground uppercase tracking-wide">{fmtDay(d.date)}</div>
-              )}
-              <ul className="divide-y divide-border">
-                {d.concerts.map((c) => <FestivalSet key={c.id} ctx={ctx} c={c} />)}
-              </ul>
-            </div>
-          ))}
-          {editMode && (
-            <div className="pt-2 space-y-2">
-              <button type="button" onClick={() => setEditing({ kind: "add-to-festival", festivalId: festival.id })} className={quietBtn}>
-                + Add artist
-              </button>
-              {adding && (
-                <ConcertForm
-                  username={username}
-                  festivals={festivals}
-                  initial={{ festivalId: festival.id, eventDate: festival.startDate, venue: festival.venue, city: festival.city, country: festival.country }}
-                  onDone={close}
-                />
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      <div className="pl-[52px] pb-2">
+        {days.map((d) => (
+          <div key={d.date}>
+            {days.length > 1 && (
+              <div className="pt-2 text-xs text-subtle-foreground uppercase tracking-wide">{fmtDay(d.date)}</div>
+            )}
+            <ul className="divide-y divide-border">
+              {d.concerts.map((c) => <FestivalSet key={c.id} ctx={ctx} c={c} />)}
+            </ul>
+          </div>
+        ))}
+        {editMode && (
+          <div className="pt-2 space-y-2">
+            <button type="button" onClick={() => setEditing({ kind: "add-to-festival", festivalId: festival.id })} className={quietBtn}>
+              + Add artist
+            </button>
+            {adding && (
+              <ConcertForm
+                username={username}
+                festivals={festivals}
+                initial={{ festivalId: festival.id, eventDate: festival.startDate, venue: festival.venue, city: festival.city, country: festival.country }}
+                onDone={close}
+              />
+            )}
+          </div>
+        )}
+      </div>
     </li>
   );
 }
