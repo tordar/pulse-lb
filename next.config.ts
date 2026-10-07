@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
   // while links still work. Private ranges only, and dev-only: production is
   // same-origin and ignores this.
   allowedDevOrigins: ["10.*.*.*", "192.168.*.*", "172.16.*.*"],
+  cacheComponents: true,
+  partialPrefetching: true,
+  // /u/<name> has no page of its own; Stats is the profile's front door.
+  async redirects() {
+    return [{ source: "/u/:username", destination: "/u/:username/stats", permanent: false }];
+  },
 };
 
 export default nextConfig;

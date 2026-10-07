@@ -6,8 +6,12 @@ import { getReleaseMeta } from "@/lib/musicbrainz/client";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+
+// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
+// Remove this opt-out after verifying the segment passes validation without it.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+export const instant = false;
+
 
 export default async function AlbumDetailPage({
   params,

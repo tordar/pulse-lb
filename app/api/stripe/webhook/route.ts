@@ -5,7 +5,6 @@ import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { stripe } from "@/lib/stripe";
 
-export const runtime = "nodejs";
 
 // Stripe sends events as raw POST bodies; signature verification requires the
 // exact bytes, so we read the request body as text (not JSON-parsed) and pass

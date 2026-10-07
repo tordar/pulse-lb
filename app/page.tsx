@@ -23,9 +23,13 @@ import { getSession } from "@/lib/auth/session";
 import { allTimeStats } from "@/lib/db/queries/stats";
 import { paymentsConfigured } from "@/lib/stripe";
 
+// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
+// Remove this opt-out after verifying the segment passes validation without it.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+export const instant = false;
+
 const DEMO_USERNAME = "tordar";
 
-export const revalidate = 300;
 
 export default async function Home({
   searchParams,

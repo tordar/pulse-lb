@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { PillNav } from "../u/[username]/PillNav";
+import { AccountPill, PillNav } from "../u/[username]/PillNav";
 import { TabBar } from "@/components/TabBar";
 import { AccountLink } from "@/components/AccountLink";
 import { NowPlaying } from "../u/[username]/NowPlaying";
 import { getSession } from "@/lib/auth/session";
+
+// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
+// Remove this opt-out after verifying the segment passes validation without it.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+export const instant = false;
 
 export default async function AccountLayout({
   children,
@@ -31,7 +36,7 @@ export default async function AccountLayout({
             <span className="text-subtle-foreground mx-0.5">/</span>
             <span>{username}</span>
           </Link>
-          <PillNav username={username} showAccount />
+          <PillNav username={username}><AccountPill /></PillNav>
           <div className="min-w-0 flex items-center gap-2">
             <NowPlaying username={username} />
             <AccountLink active />
