@@ -4,17 +4,15 @@ import { useState, useSyncExternalStore } from "react";
 import { albumKey, artistKey, songKey } from "@/lib/sync/keys";
 
 /**
- * A client-side projection of a sync that is still running.
+ * A client-side projection of listens the server has not aggregated yet.
  *
  * Every figure on the stats page is read from the `agg_*` tables, and those are
- * only written by `rebuildAll()` at the very end of a sync chain. So between
- * clicking Sync and the chain terminating, the server has nothing new to tell
- * us however often we ask — the rows are in `listens`, but no aggregate reflects
- * them yet.
+ * written after listens land. So between a listen happening and the server
+ * folding it in, the server has nothing new to tell us however often we ask.
  *
- * Rather than rebuild aggregates on a timer (a full DELETE + re-INSERT of the
- * user's whole history, the most expensive thing in the app), the sync poller
- * reports the rows it just saw land and we add them up here. Tiles and top lists
+ * Rather than refresh aggregates on a timer, the live poller in
+ * `NowPlaying.tsx` reports the listens it just fetched from ListenBrainz and
+ * we add them up here. Tiles and top lists
  * read the running total and show it on top of their server value, so the page
  * moves as the listens arrive. The authoritative refresh then overwrites it.
  *
@@ -37,6 +35,7 @@ export type Counters = {
 };
 
 export type LiveListen = {
+  listened_at: string;
   track_name: string;
   artist_name: string;
   release_name: string | null;
@@ -54,6 +53,10 @@ function empty(): Counters {
 }
 
 let counters: Counters = empty();
+// The rows themselves, newest first, for the "Recent listens" list. Capped:
+// only the top few are ever shown, and a tab can stay open for days.
+let recent: LiveListen[] = [];
+const RECENT_MAX = 50;
 // Bumped on every change: the counters object is mutated in place, so identity
 // alone can't tell subscribers anything.
 let version = 0;
@@ -89,15 +92,22 @@ export function recordListens(rows: LiveListen[]) {
     bump(counters.artist, artistKey(r.artist_name), ms);
     if (r.release_name) bump(counters.album, albumKey(r.release_name, r.artist_name), ms);
   }
+  recent = [...rows].sort((a, b) => b.listened_at.localeCompare(a.listened_at)).concat(recent).slice(0, RECENT_MAX);
   emit();
 }
 
 /** Drop the projection — called when a sync starts and once it has settled. */
 export function resetLive() {
   counters = empty();
+  recent = [];
   generation++;
   emit();
 }
+
+export function useLiveRecent(): LiveListen[] {
+  return useSyncExternalStore(subscribe, () => recent, () => EMPTY);
+}
+const EMPTY: LiveListen[] = [];
 
 export function getGeneration(): number {
   return generation;
