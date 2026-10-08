@@ -1,10 +1,7 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { eq } from "drizzle-orm";
-import { db, schema } from "@/lib/db/client";
 import { getUserByLbUsername, isAllowedToSync } from "@/lib/auth/users";
 import { ingestUser } from "@/lib/sync/ingest";
-import { healStaleAggregates } from "@/lib/sync/healAggregates";
 
 export const maxDuration = 60;
 
@@ -14,21 +11,15 @@ export const maxDuration = 60;
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
   const owner = await getUserByLbUsername(username);
+  // Only pages that exist get ingested. Without this, self-host (where
+  // isAllowedToSync(null) is true) would import any LB username a visitor names.
+  if (!owner) return NextResponse.json({ error: "unknown_user" }, { status: 404 });
   if (!isAllowedToSync(owner)) {
     return NextResponse.json({ error: "subscription_required" }, { status: 402 });
   }
   const result = await ingestUser(username);
   if ((result.mode === "live" && result.added > 0) || result.mode === "import") {
     revalidateTag(`user:${username}`, "default");
-  }
-  if (result.mode === "live") {
-    // Stale from a crash before this design (or a failed import rebuild).
-    after(async () => {
-      const s = await db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) });
-      const stale = s?.lastListenedAt != null &&
-        (s.lastAggregatedAt == null || s.lastAggregatedAt < s.lastListenedAt);
-      if (stale) await healStaleAggregates(username, s.lastAggregatedAt ?? null);
-    });
   }
   return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
 }

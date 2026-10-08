@@ -97,24 +97,36 @@ export async function ingestUser(
   return { mode: "live", added: outcome.added, more };
 }
 
+// Import slices get their own lock, keyed apart from the aggregate lock:
+// rebuildAll takes lockUser on another connection, so holding that one here
+// would deadlock. This transaction only holds the lock; the slice's own
+// writes go through their usual connections.
 async function importSlice(username: string): Promise<IngestResult> {
-  const result = await syncUser(username, { maxDurationMs: 40_000 });
-  if (result.completed) {
-    await rebuildAll(username);
-    await withRetry(() =>
-      db.update(schema.syncState)
-        .set({ backfillCompletedAt: new Date(), lastAggregatedAt: new Date() })
-        .where(eq(schema.syncState.userName, username)),
+  return sqlClient.begin(async (tx): Promise<IngestResult> => {
+    const [lock] = await tx`SELECT pg_try_advisory_xact_lock(hashtext(${"import:" + username})) AS ok`;
+    if (lock.ok !== true) return { mode: "busy" };
+    // A slice that held the lock before us may have just finished the import.
+    const [s] = await tx`SELECT backfill_completed_at FROM sync_state WHERE user_name = ${username}`;
+    if (s?.backfill_completed_at) return { mode: "skipped" };
+
+    const result = await syncUser(username, { maxDurationMs: 40_000 });
+    if (result.completed) {
+      await rebuildAll(username);
+      await withRetry(() =>
+        db.update(schema.syncState)
+          .set({ backfillCompletedAt: new Date(), lastAggregatedAt: new Date() })
+          .where(eq(schema.syncState.userName, username)),
+      );
+    }
+    const state = await withRetry(() =>
+      db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
     );
-  }
-  const state = await withRetry(() =>
-    db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) }),
-  );
-  return {
-    mode: "import",
-    added: result.added,
-    more: !result.completed,
-    imported: await countListens(username),
-    target: state?.targetListens ?? null,
-  };
+    return {
+      mode: "import",
+      added: result.added,
+      more: !result.completed,
+      imported: await countListens(username),
+      target: state?.targetListens ?? null,
+    };
+  });
 }

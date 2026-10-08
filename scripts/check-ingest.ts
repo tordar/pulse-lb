@@ -38,6 +38,17 @@ async function main() {
 
   assert.equal((await ingestUser(USER, { fetchNewer })).mode, "skipped", "throttled within 10s");
 
+  // Import mode: a slice already holding the import lock turns others away.
+  await sql`UPDATE sync_state SET backfill_completed_at = NULL WHERE user_name = ${USER}`;
+  try {
+    await sql.begin(async (tx) => {
+      await tx`SELECT pg_advisory_xact_lock(hashtext(${"import:" + USER}))`;
+      assert.equal((await ingestUser(USER, { fetchNewer })).mode, "busy", "import lock held");
+    });
+  } finally {
+    await sql`UPDATE sync_state SET backfill_completed_at = now() WHERE user_name = ${USER}`;
+  }
+
   const inc = await snapshot(sql, USER);
   await rebuildAll(USER);
   assert.deepEqual(diff(inc, await snapshot(sql, USER)), []);
