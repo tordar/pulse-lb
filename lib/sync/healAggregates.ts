@@ -10,8 +10,8 @@ import { rebuildAll } from "@/lib/db/aggregates/rebuild";
  * Claim-first stamp: the UPDATE only returns a row for whoever moves the stamp
  * forward, so concurrent callers don't all kick off their own rebuild.
  *
- * This used to run from the stats page render; it now runs from the owner's
- * sync-status probe so pages can be served from cache.
+ * This used to run from the stats page render; it now runs from the ingest
+ * route so pages can be served from cache.
  */
 export async function healStaleAggregates(username: string, previous: Date | null): Promise<void> {
   const claimed = await withRetry(() =>

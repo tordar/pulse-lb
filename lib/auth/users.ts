@@ -14,6 +14,13 @@ export async function getUserByMbId(mbAccountId: number): Promise<DbUser | null>
   return row ?? null;
 }
 
+export async function getUserByLbUsername(lbUsername: string): Promise<DbUser | null> {
+  const row = await withRetry(() =>
+    db.query.users.findFirst({ where: eq(schema.users.listenbrainzUsername, lbUsername) }),
+  );
+  return row ?? null;
+}
+
 /**
  * Display-only read for the "listen source" dots, called on every detail and
  * stats render — i.e. on every page a crawler can reach. Cached under the

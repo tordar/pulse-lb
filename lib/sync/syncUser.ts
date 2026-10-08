@@ -266,7 +266,32 @@ async function fetchPageWithFallback(opts: {
   throw lastErr;
 }
 
-function listenToRow(username: string, l: Listen) {
+export type ListenRow = ReturnType<typeof listenToRow>;
+
+/**
+ * Live ingest's fetch: every listen strictly newer than `sinceTs`, oldest page
+ * last, without touching the database — the caller inserts and updates
+ * aggregates in one transaction. `more` means the deadline or row cap cut it
+ * short and the caller should come back.
+ */
+export async function fetchNewerListens(
+  username: string,
+  sinceTs: number,
+  opts: { deadline: number; maxRows: number },
+): Promise<{ rows: ListenRow[]; more: boolean }> {
+  const rows: ListenRow[] = [];
+  let cursor = sinceTs;
+  while (true) {
+    if (Date.now() >= opts.deadline || rows.length >= opts.maxRows) return { rows, more: true };
+    const page = await fetchPageWithFallback({ username, mode: "incremental", cursor });
+    if (page.length === 0) return { rows, more: false };
+    rows.push(...page.map((l) => listenToRow(username, l)));
+    cursor = page[0].listened_at;
+    if (page.length < 1000) return { rows, more: false };
+  }
+}
+
+export function listenToRow(username: string, l: Listen) {
   const a = l.track_metadata.additional_info ?? {};
   const m = l.track_metadata.mbid_mapping ?? {};
   return {
