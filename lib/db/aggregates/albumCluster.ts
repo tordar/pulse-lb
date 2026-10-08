@@ -221,7 +221,7 @@ export async function artistClusteredAlbums(
 export const ALBUM_AGG_INSERT = withAlbumClusters(`
   INSERT INTO agg_album (
     user_name, scope, group_key, release_name, artist_name,
-    plays, effective_ms, caa_id, caa_release_mbid, release_mbid
+    plays, effective_ms, caa_id, caa_release_mbid, release_mbid, member_artists
   )
   SELECT
     $1::text,
@@ -236,7 +236,8 @@ export const ALBUM_AGG_INSERT = withAlbumClusters(`
     (array_agg(cl.caa_release_mbid ORDER BY cl.listened_at DESC)
       FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1],
     mode() WITHIN GROUP (ORDER BY cl.release_mbid)
-      FILTER (WHERE cl.release_mbid IS NOT NULL)
+      FILTER (WHERE cl.release_mbid IS NOT NULL),
+    array_agg(DISTINCT lower(cl.artist_name)) FILTER (WHERE cl.artist_name IS NOT NULL)
   FROM clustered cl
   LEFT JOIN recordings rec ON rec.mbid = cl.recording_mbid
   LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
@@ -257,7 +258,8 @@ export const ALBUM_AGG_INSERT = withAlbumClusters(`
     (array_agg(cl.caa_release_mbid ORDER BY cl.listened_at DESC)
       FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1],
     mode() WITHIN GROUP (ORDER BY cl.release_mbid)
-      FILTER (WHERE cl.release_mbid IS NOT NULL)
+      FILTER (WHERE cl.release_mbid IS NOT NULL),
+    array_agg(DISTINCT lower(cl.artist_name)) FILTER (WHERE cl.artist_name IS NOT NULL)
   FROM clustered cl
   LEFT JOIN recordings rec ON rec.mbid = cl.recording_mbid
   LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg

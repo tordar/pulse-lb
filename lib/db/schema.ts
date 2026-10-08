@@ -96,6 +96,9 @@ export const aggAlltime = pgTable("agg_alltime", {
   firstPlayed: timestamp("first_played", { withTimezone: true }),
   lastPlayed: timestamp("last_played", { withTimezone: true }),
   durationCoveragePct: doublePrecision("duration_coverage_pct"),
+  // Plays with a known duration. Stored so live ingest can keep
+  // duration_coverage_pct exact without rescanning every listen.
+  coveredPlays: integer("covered_plays").default(0).notNull(),
   computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -186,6 +189,10 @@ export const aggAlbum = pgTable(
     caaId: bigint("caa_id", { mode: "number" }),
     caaReleaseMbid: uuid("caa_release_mbid"),
     releaseMbid: uuid("release_mbid"),
+    // Lower-cased artist names whose listens fall in this cluster. Clusters
+    // can span artists via a shared release group; live ingest uses this to
+    // find every artist it must re-read when one of them gets a new listen.
+    memberArtists: text("member_artists").array(),
   },
   // No primary key — see agg_song. Reads use agg_album_top; reclaims ~40 MB.
   (t) => [index("agg_album_top").on(t.userName, t.scope, t.plays)],
@@ -202,6 +209,9 @@ export const syncState = pgTable("sync_state", {
   // sync invocation. Null until the first sync runs.
   targetListens: integer("target_listens"),
   lastAggregatedAt: timestamp("last_aggregated_at", { withTimezone: true }),
+  // Set once the first history import reaches LB's oldest listen. Null means
+  // ingest runs in import mode (syncUser + rebuildAll) instead of live mode.
+  backfillCompletedAt: timestamp("backfill_completed_at", { withTimezone: true }),
 });
 
 export const syncJobs = pgTable(

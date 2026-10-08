@@ -43,7 +43,7 @@ async function buildAlltime(tx: TransactionSql, username: string) {
     INSERT INTO agg_alltime (
       user_name, total_plays, effective_ms,
       distinct_artists, distinct_albums, distinct_songs,
-      first_played, last_played, duration_coverage_pct
+      first_played, last_played, duration_coverage_pct, covered_plays
     )
     SELECT
       $1::text,
@@ -59,7 +59,8 @@ async function buildAlltime(tx: TransactionSql, username: string) {
           WHERE l.duration_ms IS NOT NULL OR r.length_ms IS NOT NULL
         ) / NULLIF(COUNT(*), 0),
         1
-      )::float8
+      )::float8,
+      COUNT(*) FILTER (WHERE l.duration_ms IS NOT NULL OR r.length_ms IS NOT NULL)::int
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
     WHERE l.user_name = $1
