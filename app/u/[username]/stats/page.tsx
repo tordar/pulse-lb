@@ -188,7 +188,7 @@ async function StatsPanels({
         </div>
       ) : (
         <>
-          <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <section className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             <StatTile icon={Play} big value={<AnimatedNumber value={allTime.total_plays} live="plays" />} label="plays" />
             <StatTile
               icon={Clock}
@@ -201,6 +201,7 @@ async function StatsPanels({
                 />
               }
               label="listening time"
+              shortLabel="listened"
             />
             <StatTile icon={Users} value={<AnimatedNumber value={allTime.distinct_artists} />} label="artists" />
             <StatTile icon={Disc3} value={<AnimatedNumber value={allTime.distinct_albums} />} label="albums" />
@@ -217,6 +218,7 @@ async function StatsPanels({
                   ? `since ${fmtDate(allTime.first_played)}`
                   : "span"
               }
+              shortLabel={allTime.first_played ? `since ${fmtDate(allTime.first_played).slice(0, 4)}` : undefined}
             />
           </section>
 
@@ -432,6 +434,7 @@ function StatTile({
   icon: Icon,
   value,
   label,
+  shortLabel,
   big = false,
 }: {
   icon?: LucideIcon;
@@ -439,13 +442,24 @@ function StatTile({
   // from the old figure to the new one when a sync lands fresh aggregates.
   value: React.ReactNode;
   label: string;
+  // Narrower label for the 3-column phone grid, where the full one wraps.
+  shortLabel?: string;
   big?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-card-border bg-card p-4 space-y-2">
-      {Icon && <Icon size={16} className="text-primary" />}
-      <div className={`tabular-nums font-semibold ${big ? "text-2xl" : "text-xl"}`}>{value}</div>
-      <div className="text-xs text-muted-foreground uppercase tracking-wide">{label}</div>
+    <div className="rounded-lg border border-card-border bg-card p-3 sm:p-4 space-y-1 sm:space-y-2 min-w-0">
+      {Icon && <Icon size={16} className="text-primary hidden sm:block" />}
+      <div className={`tabular-nums font-semibold text-base truncate ${big ? "sm:text-2xl" : "sm:text-xl"}`}>{value}</div>
+      <div className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wide truncate">
+        {shortLabel ? (
+          <>
+            <span className="sm:hidden">{shortLabel}</span>
+            <span className="hidden sm:inline">{label}</span>
+          </>
+        ) : (
+          label
+        )}
+      </div>
     </div>
   );
 }
