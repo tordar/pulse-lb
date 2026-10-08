@@ -1,5 +1,5 @@
 // Bucket keys shared by the server-rendered top lists and the client-side
-// projection of an in-flight sync. Deliberately NOT in liveDelta.ts: that module
+// projection of listens the live poller has seen. Deliberately NOT in liveDelta.ts: that module
 // is "use client", so anything exported from it becomes a client reference and
 // throws if a server component calls it.
 

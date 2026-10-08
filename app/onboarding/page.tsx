@@ -58,9 +58,9 @@ const STEPS: Step[] = [
     title: "Sign in with ListenBrainz",
     body: (
       <>
-        Sign in to pulse using your ListenBrainz account. We&apos;ll mirror your listens
-        from LB into our database and show you the dashboard. First sync takes a few
-        minutes for a large library; subsequent visits are instant.
+        Sign in to pulse using your ListenBrainz account. We&apos;ll import your listens
+        from LB and show you the dashboard. The first import takes a few minutes for a
+        large library; after that your stats update live.
       </>
     ),
     link: { href: "/auth/login", label: "Sign in with ListenBrainz" },

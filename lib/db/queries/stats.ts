@@ -1,5 +1,5 @@
-import { eq, sql } from "drizzle-orm";
-import { db, schema, execute } from "@/lib/db/client";
+import { sql } from "drizzle-orm";
+import { schema, execute } from "@/lib/db/client";
 import { userCached, userCachedFor } from "./cache";
 import { withRetry } from "@/lib/db/retry";
 
@@ -301,14 +301,6 @@ export async function dayDetail(
     ...summary,
     listens: (listensRes as unknown as Row<DayListen>).rows,
   };
-}
-
-// Read on every stats view (tab prefetches included), so time-cached to keep
-// them from waking the database. lastSyncedAt comes back as a string.
-export function syncStateFor(username: string) {
-  return userCachedFor(username, ["syncState", username], 300, () =>
-    withRetry(() => db.query.syncState.findFirst({ where: eq(schema.syncState.userName, username) })),
-  );
 }
 
 export type RecentListen = {

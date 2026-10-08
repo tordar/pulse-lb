@@ -13,7 +13,7 @@ import { unstable_cache } from "next/cache";
  * request never opens a connection, and the endpoint is free to suspend.
  *
  * `revalidate: false` — entries live until something calls revalidateTag for
- * this user. Aggregates only move when a sync lands (app/api/sync) or the user
+ * this user. Aggregates only move when an ingest lands (app/api/listens/ingest) or the user
  * changes a display setting (app/account/actions.ts), and both do.
  */
 export function userCached<T>(

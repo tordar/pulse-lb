@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { BarChart3, Calendar, Clock, Disc3, Music2, Play, TrendingUp, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { fmtHours } from "@/lib/format";
+import { fmtHours, splitDateTime } from "@/lib/format";
 import {
   allTimeStats,
   yearlyListening,
@@ -13,10 +13,10 @@ import {
   topSongsByYear,
   topAlbumsByYear,
   topArtistsByYear,
-  syncStateFor,
   recentListens,
 } from "@/lib/db/queries/stats";
-import { SyncButton } from "./SyncButton";
+import { LiveRecent } from "./LiveRecent";
+import { ImportStatus } from "./ImportStatus";
 import { YearNav } from "./YearNav";
 import { GlobalSearch } from "./GlobalSearch";
 import { DayTimeline } from "./DayTimeline";
@@ -49,50 +49,22 @@ export default function StatsPage({ params, searchParams }: { params: Params; se
   );
 }
 
-// Live, per request: sync state, and who is looking (owner gets SyncButton).
+// Live, per request: who is looking, and the import progress line.
 async function StatsHeader({ params }: { params: Params }) {
   const { username } = await params;
-  const [session, state, allTime] = await Promise.all([
-    getSession(),
-    syncStateFor(username),
-    allTimeStats(username),
-  ]);
+  const [session, allTime] = await Promise.all([getSession(), allTimeStats(username)]);
   const isOwner = session?.lbUsername === username;
   const empty = allTime.total_plays === 0;
   return (
     <header className="space-y-3">
-      {/* Sync info and search share one row on large screens; flex-wrap
-          drops the full-width search onto its own line below lg. For owners
-          SyncButton owns the whole block so its progress bar and insert
-          stream span the full width. */}
-      {isOwner ? (
-        <SyncButton
-          username={username}
-          lastSynced={
-            <p className="text-sm text-muted-foreground shrink-0">
-              {state?.lastSyncedAt
-                ? <>Last synced {relTime(state.lastSyncedAt)}</>
-                : <>Not synced yet</>}
-            </p>
-          }
-          search={!empty ? <GlobalSearch username={username} /> : null}
-        />
-      ) : (
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <p className="text-sm text-muted-foreground flex-1 shrink-0">
-            {state?.lastSyncedAt
-              ? <>Last synced {relTime(state.lastSyncedAt)}</>
-              : <>Not synced yet</>}
-          </p>
-          {!empty && <GlobalSearch username={username} />}
-        </div>
-      )}
+      <ImportStatus />
+      {!empty && <GlobalSearch username={username} />}
       {isOwner ? null : session ? (
         <p className="text-sm text-muted-foreground">
           Viewing @{username}&apos;s profile. <Link href={`/u/${session.lbUsername}/stats`} className="underline">Your dashboard</Link>.
         </p>
       ) : (
-        <SignInButton returnTo={`/u/${username}/stats`} label="Sign in to sync your own listens" />
+        <SignInButton returnTo={`/u/${username}/stats`} label="Sign in to see your own listens" />
       )}
     </header>
   );
@@ -315,6 +287,7 @@ async function RecentListens({ username, showSource }: { username: string; showS
     <section className="space-y-3">
       <SectionHeading icon={Clock}>Recent listens</SectionHeading>
       <ul className="divide-y divide-border text-sm">
+        <LiveRecent newestServer={rows[0]?.listened_at ?? null} />
         {rows.map((r, i) => {
           const { date, time } = splitDateTime(r.listened_at);
           return (
@@ -489,20 +462,6 @@ function SectionHeading({ icon: Icon, children, extra }: { icon: LucideIcon; chi
 
 function fmtDate(s: string): string {
   return new Date(s).toISOString().slice(0, 10);
-}
-
-function splitDateTime(s: string): { date: string; time: string } {
-  const iso = new Date(s).toISOString();
-  return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
-}
-
-function relTime(d: Date | string): string {
-  const date = typeof d === "string" ? new Date(d) : d;
-  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (secs < 60) return `${secs}s ago`;
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
-  return `${Math.floor(secs / 86400)}d ago`;
 }
 
 function spanLabel(first: string, last: string): string {

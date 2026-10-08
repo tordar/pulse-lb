@@ -92,20 +92,6 @@ const ListenCountResponse = z.object({
   payload: z.object({ count: z.number() }),
 });
 
-// playing-now records have no listened_at (the play hasn't ended) so we
-// validate them with a relaxed shape.
-const PlayingNowListen = z.object({
-  playing_now: z.boolean().optional(),
-  track_metadata: ListenSchema.shape.track_metadata,
-});
-
-const PlayingNowResponse = z.object({
-  payload: z.object({
-    listens: z.array(PlayingNowListen),
-    playing_now: z.boolean(),
-  }),
-});
-
 const ValidateTokenResponse = z.object({
   code: z.number(),
   message: z.string(),
@@ -191,14 +177,6 @@ export async function getListenCount(username: string): Promise<number | null> {
     if (e instanceof LBError && e.status === 404) return null;
     throw e;
   }
-}
-
-export type PlayingNowListenT = z.infer<typeof PlayingNowListen>;
-
-export async function getPlayingNow(username: string): Promise<PlayingNowListenT | null> {
-  const r = await lbFetch(`/1/user/${username}/playing-now`);
-  const j = PlayingNowResponse.parse(await r.json());
-  return j.payload.listens[0] ?? null;
 }
 
 export async function validateToken(token: string): Promise<{ valid: boolean; userName?: string }> {

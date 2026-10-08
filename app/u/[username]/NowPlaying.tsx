@@ -1,69 +1,93 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Music2 } from "lucide-react";
+import { fetchListensSince, fetchPlayingNow, mergeNew, nextDelay, toLiveListen, type PlayingNow } from "@/lib/live/lbBrowser";
+import { recordListens } from "@/lib/sync/liveDelta";
+import { setImportStatus } from "@/lib/live/importStatus";
+import type { IngestResult } from "@/lib/sync/ingest";
 
-type PlayingNow = {
-  track_name: string;
-  artist_name: string;
-  release_name?: string | null;
-  caa_id?: number | null;
-  caa_release_mbid?: string | null;
-} | null;
-
-// A background tab used to poll this forever at 30s: 2,880 hits a day per
-// forgotten tab, each one a function invocation. Doubled, and gated on tab
-// visibility below — nobody is reading a now-playing pill they can't see.
-const POLL_MS = 60_000;
-
-export function NowPlaying({ username }: { username: string }) {
+// The one live loop on every profile page. Every 15s while the tab is visible
+// it asks ListenBrainz (directly, from the browser) for what's playing and for
+// listens newer than the newest one this page has seen. New listens go on
+// screen immediately via liveDelta; then the server is nudged to store them.
+// A hidden tab stops entirely.
+export function NowPlaying({ username, cursor }: { username: string; cursor: number | null }) {
   const [np, setNp] = useState<PlayingNow>(null);
+  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
-    let id: ReturnType<typeof setInterval> | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let failures = 0;
+    let since = cursor;
+    let ingesting = false;
+    let ingestAllowed = true;
+    const seen = new Set<string>();
+
+    async function ingest() {
+      if (ingesting || !ingestAllowed) return;
+      ingesting = true;
+      try {
+        while (!cancelled) {
+          const r = await fetch(`/api/listens/ingest/${encodeURIComponent(username)}`, { method: "POST" });
+          if (r.status === 402 || r.status === 404) { ingestAllowed = false; return; }
+          if (!r.ok) return;
+          const res = (await r.json()) as IngestResult;
+          if (res.mode === "import") setImportStatus(res.more ? { imported: res.imported, target: res.target } : null);
+          // "skipped" means another tab or viewer just stored them: refresh too.
+          if (res.mode !== "busy") router.refresh();
+          if (!("more" in res) || !res.more) return;
+        }
+      } catch {
+        /* next new listen retries */
+      } finally {
+        ingesting = false;
+      }
+    }
 
     async function tick() {
       if (document.visibilityState !== "visible") return;
       try {
-        const r = await fetch(`/api/lb/playing-now/${encodeURIComponent(username)}`, {
-          cache: "no-store",
-        });
-        if (!r.ok) return;
-        const data = (await r.json()) as { listen: PlayingNow };
-        if (!cancelled) setNp(data.listen);
+        const [playing, listens] = await Promise.all([
+          fetchPlayingNow(username),
+          since == null ? Promise.resolve([]) : fetchListensSince(username, since),
+        ]);
+        if (cancelled) return;
+        setNp(playing);
+        failures = 0;
+        if (since == null) {
+          void ingest(); // no aggregates yet: first import
+        } else if (listens.length > 0) {
+          since = listens[0].listened_at;
+          const fresh = mergeNew(seen, listens.map(toLiveListen));
+          if (fresh.length > 0) recordListens(fresh);
+          void ingest();
+        }
       } catch {
-        /* swallow — keep polling */
+        failures++;
       }
+      schedule();
     }
 
-    // Stop the timer outright when the tab is hidden rather than letting tick()
-    // no-op: browsers throttle background intervals unevenly, and a stopped
-    // timer costs nothing at all. Coming back refetches immediately so the pill
-    // is never showing a stale track on the frame the user returns to.
-    function start() {
-      if (id !== null) return;
-      void tick();
-      id = setInterval(tick, POLL_MS);
-    }
-    function stop() {
-      if (id === null) return;
-      clearInterval(id);
-      id = null;
+    function schedule() {
+      if (cancelled || document.visibilityState !== "visible") return;
+      timer = setTimeout(tick, nextDelay(failures));
     }
     function onVisibility() {
-      if (document.visibilityState === "visible") start();
-      else stop();
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (document.visibilityState === "visible") void tick();
     }
 
     onVisibility();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
-      stop();
+      if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [username]);
+  }, [username, cursor, router]);
 
   const coverUrl =
     np?.caa_id && np.caa_release_mbid

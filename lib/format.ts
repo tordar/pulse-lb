@@ -16,3 +16,8 @@ export function fmtHours(h: number): string {
 export function fmtListeningTime(ms: number): string {
   return fmtHours(ms / 1000 / 3600);
 }
+
+export function splitDateTime(s: string): { date: string; time: string } {
+  const iso = new Date(s).toISOString();
+  return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
+}

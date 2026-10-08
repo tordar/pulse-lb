@@ -6,6 +6,7 @@ import { TabBar } from "@/components/TabBar";
 import { AccountLink } from "@/components/AccountLink";
 import { NowPlaying } from "../u/[username]/NowPlaying";
 import { getSession } from "@/lib/auth/session";
+import { allTimeStats } from "@/lib/db/queries/stats";
 
 // Owner-only, outside the tab flow, redirects without a session: stays a blocking render.
 export const instant = false;
@@ -20,6 +21,8 @@ export default async function AccountLayout({
     redirect(`/auth/login?return=${encodeURIComponent("/account")}`);
   }
   const username = session.lbUsername;
+  const { last_played } = await allTimeStats(username);
+  const cursor = last_played ? Math.floor(new Date(last_played).getTime() / 1000) : null;
 
   return (
     <div className="min-h-screen">
@@ -36,7 +39,7 @@ export default async function AccountLayout({
           </Link>
           <PillNav username={username}><AccountPill /></PillNav>
           <div className="min-w-0 flex items-center gap-2">
-            <NowPlaying username={username} />
+            <NowPlaying username={username} cursor={cursor} />
             <AccountLink active />
           </div>
         </div>

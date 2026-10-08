@@ -7,6 +7,7 @@ import { AccountLink } from "@/components/AccountLink";
 import { NowPlaying } from "./NowPlaying";
 import { OwnerOnly } from "@/components/OwnerOnly";
 import { Sk } from "@/components/Skeletons";
+import { allTimeStats } from "@/lib/db/queries/stats";
 
 type Params = Promise<{ username: string }>;
 
@@ -76,9 +77,13 @@ async function HeaderNav({ params }: { params: Params }) {
 
 async function HeaderRight({ params }: { params: Params }) {
   const { username } = await params;
+  // Same cached row the stats tiles render from, so the poller starts exactly
+  // where the numbers on screen stop.
+  const { last_played } = await allTimeStats(username);
+  const cursor = last_played ? Math.floor(new Date(last_played).getTime() / 1000) : null;
   return (
     <>
-      <NowPlaying username={username} />
+      <NowPlaying username={username} cursor={cursor} />
       <Suspense fallback={null}>
         <OwnerOnly username={username}>
           <AccountLink />
