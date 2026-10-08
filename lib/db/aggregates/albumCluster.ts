@@ -258,7 +258,7 @@ export function albumAggInsert(opts?: { clusterKeyParam: number }): string {
       FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1],
     mode() WITHIN GROUP (ORDER BY cl.release_mbid)
       FILTER (WHERE cl.release_mbid IS NOT NULL),
-    array_agg(DISTINCT lower(cl.artist_name)) FILTER (WHERE cl.artist_name IS NOT NULL)
+    NULL::text[]  -- member_artists: only read on scope 0 rows
   FROM clustered cl
   LEFT JOIN recordings rec ON rec.mbid = cl.recording_mbid
   LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
