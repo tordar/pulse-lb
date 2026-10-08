@@ -1,5 +1,6 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
+import type { Row } from "postgres";
 import { sqlClient as sql } from "@/lib/db/client";
 import { rebuildAll } from "@/lib/db/aggregates/rebuild";
 import { ingestUser } from "@/lib/sync/ingest";
@@ -10,7 +11,7 @@ if (!/localhost/.test(process.env.DATABASE_URL ?? "")) throw new Error("local DB
 const USER = process.argv[2] ?? "tordar";
 
 // listened_at stays the string postgres-js hands back (microseconds intact).
-const toRow = (r: Record<string, any>): ListenRow => ({
+const toRow = (r: Row): ListenRow => ({
   userName: r.user_name, listenedAt: r.listened_at, trackName: r.track_name, artistName: r.artist_name,
   releaseName: r.release_name, recordingMbid: r.recording_mbid, releaseMbid: r.release_mbid,
   releaseGroupMbid: r.release_group_mbid, artistMbids: r.artist_mbids ?? [], caaId: r.caa_id,

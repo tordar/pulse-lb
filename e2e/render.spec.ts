@@ -5,14 +5,14 @@ const fx = JSON.parse(readFileSync(process.env.E2E_FIXTURES!, "utf8")) as {
   tok: string; artist: string; release: string; rec: string;
 };
 
-// Never /stats as owner locally: the owner's sync probe can rebuild prod
-// aggregates. Visitor /stats joins this list in Task 6.
+// Run against a local DB only: the owner's ingest probe can rebuild aggregates.
 export const PAGES = [
   "/",
   "/u/tordar/songs",
   "/u/tordar/albums",
   "/u/tordar/artists",
   "/u/tordar/concerts",
+  "/u/tordar/stats",
   `/u/tordar/artists/${fx.artist}`,
   `/u/tordar/albums/${fx.release}`,
   `/u/tordar/songs/${fx.rec}`,
