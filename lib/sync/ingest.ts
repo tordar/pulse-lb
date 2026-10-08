@@ -97,18 +97,26 @@ export async function ingestUser(
   return { mode: "live", added: outcome.added, more };
 }
 
-// Import slices get their own lock, keyed apart from the aggregate lock:
-// rebuildAll takes lockUser on another connection, so holding that one here
-// would deadlock. This transaction only holds the lock; the slice's own
-// writes go through their usual connections.
-async function importSlice(username: string): Promise<IngestResult> {
-  return sqlClient.begin(async (tx): Promise<IngestResult> => {
-    const [lock] = await tx`SELECT pg_try_advisory_xact_lock(hashtext(${"import:" + username})) AS ok`;
-    if (lock.ok !== true) return { mode: "busy" };
-    // A slice that held the lock before us may have just finished the import.
-    const [s] = await tx`SELECT backfill_completed_at FROM sync_state WHERE user_name = ${username}`;
-    if (s?.backfill_completed_at) return { mode: "skipped" };
+// One import slice at a time per user, claimed with a lease on sync_state
+// (see importLeaseUntil in the schema for why not a lock). Longer than a
+// slice can run, so a dead function's lease expires before anyone waits long.
+const IMPORT_LEASE = "90 seconds";
 
+async function importSlice(username: string): Promise<IngestResult> {
+  // A user's first ingest may come before syncUser has written their row.
+  await withRetry(() => sqlClient`INSERT INTO sync_state (user_name) VALUES (${username}) ON CONFLICT DO NOTHING`);
+  const claimed = await withRetry(() => sqlClient`
+    UPDATE sync_state SET import_lease_until = now() + ${IMPORT_LEASE}::interval
+    WHERE user_name = ${username} AND backfill_completed_at IS NULL
+      AND (import_lease_until IS NULL OR import_lease_until < now())
+    RETURNING 1`);
+  if (claimed.length === 0) {
+    // Either a slice holding the lease just finished the import, or one is running.
+    const [s] = await sqlClient`SELECT backfill_completed_at FROM sync_state WHERE user_name = ${username}`;
+    return { mode: s?.backfill_completed_at ? "skipped" : "busy" };
+  }
+
+  try {
     const result = await syncUser(username, { maxDurationMs: 40_000 });
     if (result.completed) {
       await rebuildAll(username);
@@ -128,5 +136,7 @@ async function importSlice(username: string): Promise<IngestResult> {
       imported: await countListens(username),
       target: state?.targetListens ?? null,
     };
-  });
+  } finally {
+    await withRetry(() => sqlClient`UPDATE sync_state SET import_lease_until = NULL WHERE user_name = ${username}`);
+  }
 }

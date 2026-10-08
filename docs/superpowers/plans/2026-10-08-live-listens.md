@@ -1616,7 +1616,7 @@ git commit -m "test: cover live listens showing before ingest and the unpaid-own
 **Files:**
 - Later, separately: `drizzle/0016_*.sql` dropping `sync_jobs`
 
-- [ ] **Step 1: Ask the user before migrating production.** The 0015 migration adds three nullable/defaulted columns and stamps `backfill_completed_at`. Nothing is dropped.
+- [ ] **Step 1: Ask the user before migrating production.** The migrations only add columns (0015: `covered_plays`, `member_artists`, `backfill_completed_at`; 0016: `import_lease_until`). Nothing is dropped and nothing is stamped: each user's first ingest runs one import slice plus `rebuildAll`, then stamps `backfill_completed_at`.
 
 - [ ] **Step 2: Run the production migration and refill aggregates**
 

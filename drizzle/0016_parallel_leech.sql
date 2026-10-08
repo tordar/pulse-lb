@@ -1,0 +1,1 @@
+ALTER TABLE "sync_state" ADD COLUMN "import_lease_until" timestamp with time zone;

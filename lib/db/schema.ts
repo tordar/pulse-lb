@@ -212,6 +212,11 @@ export const syncState = pgTable("sync_state", {
   // Set once the first history import reaches LB's oldest listen. Null means
   // ingest runs in import mode (syncUser + rebuildAll) instead of live mode.
   backfillCompletedAt: timestamp("backfill_completed_at", { withTimezone: true }),
+  // Set while an import slice runs, so concurrent ingests don't stack imports.
+  // A lease rather than an advisory lock: a lock would hold a pooled
+  // connection idle for the whole slice while syncUser and rebuildAll need
+  // others from the same small pool. Expires on its own if the function dies.
+  importLeaseUntil: timestamp("import_lease_until", { withTimezone: true }),
 });
 
 export const syncJobs = pgTable(

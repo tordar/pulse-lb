@@ -39,15 +39,13 @@ async function main() {
 
   assert.equal((await ingestUser(USER, { fetchNewer })).mode, "skipped", "throttled within 10s");
 
-  // Import mode: a slice already holding the import lock turns others away.
-  await sql`UPDATE sync_state SET backfill_completed_at = NULL WHERE user_name = ${USER}`;
+  // Import mode: a running slice's lease turns other ingests away.
+  await sql`UPDATE sync_state SET backfill_completed_at = NULL,
+    import_lease_until = now() + interval '90 seconds' WHERE user_name = ${USER}`;
   try {
-    await sql.begin(async (tx) => {
-      await tx`SELECT pg_advisory_xact_lock(hashtext(${"import:" + USER}))`;
-      assert.equal((await ingestUser(USER, { fetchNewer })).mode, "busy", "import lock held");
-    });
+    assert.equal((await ingestUser(USER, { fetchNewer })).mode, "busy", "import lease held");
   } finally {
-    await sql`UPDATE sync_state SET backfill_completed_at = now() WHERE user_name = ${USER}`;
+    await sql`UPDATE sync_state SET backfill_completed_at = now(), import_lease_until = NULL WHERE user_name = ${USER}`;
   }
 
   const inc = await snapshot(sql, USER);
