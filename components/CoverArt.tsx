@@ -49,7 +49,9 @@ export function CoverArt({
       // cache; running it through the optimizer on top only spends a billed
       // transformation to re-encode it.
       unoptimized
-      className={`shrink-0 bg-muted ${className}`}
+      // Covers are drawn as squares; a non-square source would otherwise keep
+      // its own ratio (preflight sets height:auto) and render squashed.
+      className={`shrink-0 bg-muted aspect-square object-cover ${className}`}
       onError={() => setFailedUrl(url)}
     />
   );

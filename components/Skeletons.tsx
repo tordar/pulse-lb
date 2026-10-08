@@ -10,11 +10,7 @@ export function PageSkeleton() {
         <Sk className="h-4 w-36" />
         <Sk className="h-8 w-24 rounded-md" />
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {Array.from({ length: 6 }, (_, i) => (
-          <Sk key={i} className="h-24 rounded-lg" />
-        ))}
-      </div>
+      <StatTilesSkeleton />
       <Sk className="h-72 rounded-lg" />
       <Sk className="h-44 rounded-lg" />
     </div>
@@ -92,7 +88,18 @@ export function ListSkeleton({
   );
 }
 
-/** The value-over-label stat row used on concerts and detail headers. */
+/** Placeholder for a row of <StatTile>s. */
+export function StatTilesSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3" aria-hidden>
+      {Array.from({ length: count }, (_, i) => (
+        <Sk key={i} className="h-16 sm:h-24 rounded-lg" />
+      ))}
+    </div>
+  );
+}
+
+/** The value-over-label stat row used on detail headers. */
 export function StatRowSkeleton({ count = 5 }: { count?: number }) {
   return (
     <div className="grid grid-cols-3 gap-x-4 gap-y-3 md:flex md:flex-wrap md:gap-x-8 md:gap-y-2" aria-hidden>

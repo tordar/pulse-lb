@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Ticket } from "lucide-react";
+import { Repeat, Tent, Ticket, Trophy, Users } from "lucide-react";
 import { concertsTimeline, topArtistsSeen } from "@/lib/db/queries/concerts";
 import { buildTimeline } from "@/lib/concerts/timeline";
 import { concertStats } from "@/lib/concerts/stats";
 import { OwnerOnly } from "@/components/OwnerOnly";
-import { ListSkeleton, StatRowSkeleton } from "@/components/Skeletons";
+import { ListSkeleton, StatTilesSkeleton } from "@/components/Skeletons";
+import { StatTile } from "@/components/StatTile";
 import { Timeline } from "./Timeline";
 import { OwnerBar } from "./OwnerBar";
 import { ConcertsEditProvider } from "./EditMode";
@@ -19,7 +20,7 @@ export default function ConcertsPage({ params }: { params: Params }) {
         <h2 className="text-xl font-semibold inline-flex items-center gap-2">
           <Ticket size={18} className="text-primary" /> Concerts
         </h2>
-        <Suspense fallback={<StatRowSkeleton count={5} />}>
+        <Suspense fallback={<StatTilesSkeleton />}>
           <Unwrap params={params} part="stats" />
         </Suspense>
       </header>
@@ -62,20 +63,28 @@ async function ConcertStatsRow({ username }: { username: string }) {
   const stats = concertStats(concerts, festivals.length);
   const top500 = topSeen.find((t) => t.top === 500);
   return (
-    <div className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
-      <Stat label="Shows" value={stats.shows.toLocaleString()} />
-      <Stat label="Artists" value={stats.artists.toLocaleString()} />
-      <Stat label="Festivals" value={stats.festivals.toLocaleString()} />
-      {top500 && <Stat label="Of top 500" value={top500.seen.toLocaleString()} />}
+    <section className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+      <StatTile icon={Ticket} value={stats.shows.toLocaleString()} label="shows" />
+      <StatTile icon={Users} value={stats.artists.toLocaleString()} label="artists" />
+      <StatTile icon={Tent} value={stats.festivals.toLocaleString()} label="festivals" />
+      {top500 && <StatTile icon={Trophy} value={top500.seen.toLocaleString()} label="of top 500" />}
       {stats.mostSeen && (
-        <Stat
+        <StatTile
           className="col-span-2"
-          label={`Seen most · ${stats.mostSeen.count}×`}
-          value={stats.mostSeen.name}
-          href={stats.mostSeen.mbid ? `/u/${encodeURIComponent(username)}/artists/${stats.mostSeen.mbid}` : null}
+          icon={Repeat}
+          value={
+            stats.mostSeen.mbid ? (
+              <Link href={`/u/${encodeURIComponent(username)}/artists/${stats.mostSeen.mbid}`} className="hover:underline">
+                {stats.mostSeen.name}
+              </Link>
+            ) : (
+              stats.mostSeen.name
+            )
+          }
+          label={`seen most · ${stats.mostSeen.count}×`}
         />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -91,19 +100,4 @@ async function ConcertList({ username }: { username: string }) {
     );
   }
   return <Timeline username={username} years={years} festivals={festivals} art={art} />;
-}
-
-function Stat({ label, value, href, className = "" }: {
-  label: string; value: string; href?: string | null; className?: string;
-}) {
-  return (
-    <div className={`min-w-0 ${className}`}>
-      {href ? (
-        <Link href={href} className="block truncate text-base font-semibold text-foreground hover:underline">{value}</Link>
-      ) : (
-        <div className="truncate text-base font-semibold text-foreground tabular-nums">{value}</div>
-      )}
-      <div className="text-xs text-muted-foreground uppercase tracking-wide mt-0.5">{label}</div>
-    </div>
-  );
 }
