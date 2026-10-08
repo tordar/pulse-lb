@@ -32,8 +32,9 @@ scrobbled, and the database follows without full aggregate rebuilds.
 
 ### Client: `useLiveListens` hook
 
-Mounted in `app/u/[username]/layout.tsx` for every viewer. Merged with the
-existing `NowPlaying` poll so there is one timer.
+Lives in `NowPlaying` (mounted in `app/u/[username]/layout.tsx` for every
+viewer), so there is one timer. Playing-now is also fetched directly from LB,
+which removes `/api/lb/playing-now`.
 
 1. On mount, and every 15s while the tab is visible, request
    `GET /1/user/{u}/listens?min_ts=<newest listened_at on screen>` from LB,
@@ -42,11 +43,12 @@ existing `NowPlaying` poll so there is one timer.
    lists update immediately.
 3. If anything was new, `POST /api/listens/ingest/{username}` (no body).
 4. If the response says `more: true`, call ingest again.
-5. On final success: `router.refresh()`, then `resetLive()` so authoritative
-   numbers replace the projection.
+5. On success: `router.refresh()`. The projection re-zeros against the new
+   server values, so nothing is counted twice.
 
-The "newest listened_at on screen" is passed from the server-rendered layout
-(from `sync_state.last_listened_at`).
+The starting cursor is `agg_alltime.last_played`, read from the same cached row
+the tiles render from, so polling starts exactly where the numbers on screen
+stop.
 
 ### Server: `POST /api/listens/ingest/[username]`
 
@@ -90,17 +92,22 @@ than duplicating SQL).
 | `agg_album` | all clusters of the artists played, via the artist-scoped CTE |
 | `agg_alltime` | single row, updated additively (below) |
 
-`agg_alltime`:
-- `total_plays += n`, `effective_ms += Σ duration` (same COALESCE with
-  `recordings.length_ms` as the rebuild), `last_played = max(...)`,
-  `first_played = min(...)`.
-- `distinct_artists` / `distinct_songs`: +1 per key with no prior listen
-  (checked before insert, using the same key expressions as the rebuild).
-- `distinct_albums`: += (clusters for affected artists after) − (clusters
-  before). Can decrease: a new play can tip a majority vote and merge two name
-  keys. "Before" is counted from the `agg_album` rows about to be deleted.
-- `duration_coverage_pct`: recomputed from the updated totals plus a
-  covered-plays delta.
+`agg_alltime` is derived after the other tables are updated: plays and
+listening time summed from `agg_day`, distinct artists/albums/songs counted
+from the scope-0 rows of `agg_artist`/`agg_album`/`agg_song`, first/last played
+from the `listens` PK index, and coverage from a new `covered_plays` column.
+This stays exact even when a new play merges two album name variants.
+
+**Clusters spanning artists.** 112 album clusters in production data contain
+more than one artist (via a shared release group). A new column
+`agg_album.member_artists` (lower-cased artist names per cluster) lets ingest
+find every artist sharing a cluster with the new listens, re-read their
+listens, and rebuild exactly the clusters the new listens were in before or
+are in after.
+
+New columns (one migration): `agg_alltime.covered_plays`,
+`agg_album.member_artists`, `sync_state.backfill_completed_at` (null means
+ingest runs the import path).
 
 `agg_song`/`agg_artist`/`agg_album` have no primary key, so slices are
 DELETE + INSERT; no upserts.
