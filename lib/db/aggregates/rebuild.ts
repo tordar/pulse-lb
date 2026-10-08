@@ -144,13 +144,13 @@ export async function buildSong(
       $1::text,
       EXTRACT(YEAR FROM l.listened_at)::int,
       COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
-      (array_agg(l.track_name ORDER BY l.listened_at DESC))[1],
+      (array_agg(l.track_name ORDER BY l.listened_at DESC, l.track_name DESC))[1],
       l.artist_name,
       COUNT(*)::int,
       COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
-      (array_agg(l.caa_id ORDER BY l.listened_at DESC)
+      (array_agg(l.caa_id ORDER BY l.listened_at DESC, l.track_name DESC)
         FILTER (WHERE l.caa_id IS NOT NULL))[1],
-      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC)
+      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC, l.track_name DESC)
         FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1],
       mode() WITHIN GROUP (ORDER BY l.recording_mbid)
         FILTER (WHERE l.recording_mbid IS NOT NULL)
@@ -169,13 +169,13 @@ export async function buildSong(
       $1::text,
       0::int,
       COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
-      (array_agg(l.track_name ORDER BY l.listened_at DESC))[1],
+      (array_agg(l.track_name ORDER BY l.listened_at DESC, l.track_name DESC))[1],
       l.artist_name,
       COUNT(*)::int,
       COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
-      (array_agg(l.caa_id ORDER BY l.listened_at DESC)
+      (array_agg(l.caa_id ORDER BY l.listened_at DESC, l.track_name DESC)
         FILTER (WHERE l.caa_id IS NOT NULL))[1],
-      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC)
+      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC, l.track_name DESC)
         FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1],
       mode() WITHIN GROUP (ORDER BY l.recording_mbid)
         FILTER (WHERE l.recording_mbid IS NOT NULL)
@@ -220,9 +220,9 @@ export async function buildArtist(
       COUNT(DISTINCT ${clusterKey})::int,
       mode() WITHIN GROUP (ORDER BY l.artist_mbids[1])
         FILTER (WHERE l.artist_mbids[1] IS NOT NULL),
-      (array_agg(l.caa_id ORDER BY l.listened_at DESC)
+      (array_agg(l.caa_id ORDER BY l.listened_at DESC, l.track_name DESC)
         FILTER (WHERE l.caa_id IS NOT NULL))[1],
-      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC)
+      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC, l.track_name DESC)
         FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1]
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
@@ -243,9 +243,9 @@ export async function buildArtist(
       COUNT(DISTINCT ${clusterKey})::int,
       mode() WITHIN GROUP (ORDER BY l.artist_mbids[1])
         FILTER (WHERE l.artist_mbids[1] IS NOT NULL),
-      (array_agg(l.caa_id ORDER BY l.listened_at DESC)
+      (array_agg(l.caa_id ORDER BY l.listened_at DESC, l.track_name DESC)
         FILTER (WHERE l.caa_id IS NOT NULL))[1],
-      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC)
+      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC, l.track_name DESC)
         FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1]
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid

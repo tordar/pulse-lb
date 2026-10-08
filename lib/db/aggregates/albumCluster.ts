@@ -208,9 +208,9 @@ export async function artistClusteredAlbums(
           mode() WITHIN GROUP (ORDER BY cl.release_mbid)
             FILTER (WHERE cl.release_mbid IS NOT NULL)::text AS release_mbid,
           COUNT(*)::int AS plays,
-          (array_agg(cl.caa_id ORDER BY cl.listened_at DESC)
+          (array_agg(cl.caa_id ORDER BY cl.listened_at DESC, cl.track_name DESC)
             FILTER (WHERE cl.caa_id IS NOT NULL))[1] AS caa_id,
-          (array_agg(cl.caa_release_mbid ORDER BY cl.listened_at DESC)
+          (array_agg(cl.caa_release_mbid ORDER BY cl.listened_at DESC, cl.track_name DESC)
             FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1]::text AS caa_release_mbid,
           COUNT(*) OVER ()::int AS cluster_count
         FROM clustered cl
@@ -252,9 +252,9 @@ export function albumAggInsert(opts?: { clusterKeyParam: number }): string {
     mode() WITHIN GROUP (ORDER BY cl.artist_name),
     COUNT(*)::int,
     COALESCE(SUM(COALESCE(cl.duration_ms, rec.length_ms)), 0)::bigint,
-    (array_agg(cl.caa_id ORDER BY cl.listened_at DESC)
+    (array_agg(cl.caa_id ORDER BY cl.listened_at DESC, cl.track_name DESC)
       FILTER (WHERE cl.caa_id IS NOT NULL))[1],
-    (array_agg(cl.caa_release_mbid ORDER BY cl.listened_at DESC)
+    (array_agg(cl.caa_release_mbid ORDER BY cl.listened_at DESC, cl.track_name DESC)
       FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1],
     mode() WITHIN GROUP (ORDER BY cl.release_mbid)
       FILTER (WHERE cl.release_mbid IS NOT NULL),
@@ -275,9 +275,9 @@ export function albumAggInsert(opts?: { clusterKeyParam: number }): string {
     mode() WITHIN GROUP (ORDER BY cl.artist_name),
     COUNT(*)::int,
     COALESCE(SUM(COALESCE(cl.duration_ms, rec.length_ms)), 0)::bigint,
-    (array_agg(cl.caa_id ORDER BY cl.listened_at DESC)
+    (array_agg(cl.caa_id ORDER BY cl.listened_at DESC, cl.track_name DESC)
       FILTER (WHERE cl.caa_id IS NOT NULL))[1],
-    (array_agg(cl.caa_release_mbid ORDER BY cl.listened_at DESC)
+    (array_agg(cl.caa_release_mbid ORDER BY cl.listened_at DESC, cl.track_name DESC)
       FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1],
     mode() WITHIN GROUP (ORDER BY cl.release_mbid)
       FILTER (WHERE cl.release_mbid IS NOT NULL),
