@@ -1,9 +1,12 @@
 import type { TransactionSql } from "postgres";
 import { sqlClient } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
+import { lockUser } from "./lock";
 import {
+  albumAggInsert,
   ALBUM_AGG_INSERT,
   ALBUM_CLUSTER_CTE,
+  ARTIST_SET_CLUSTER_CTE,
   nameKeyExpr,
   withAlbumClusters,
 } from "./albumCluster";
@@ -16,6 +19,7 @@ import {
 export async function rebuildAll(username: string): Promise<void> {
   await withRetry(() =>
     sqlClient.begin(async (tx) => {
+      await lockUser(tx, username);
       await tx`DELETE FROM agg_alltime WHERE user_name = ${username}`;
       await tx`DELETE FROM agg_year    WHERE user_name = ${username}`;
       await tx`DELETE FROM agg_hour    WHERE user_name = ${username}`;
@@ -120,18 +124,24 @@ async function buildDay(tx: TransactionSql, username: string) {
   `;
 }
 
-async function buildSong(tx: TransactionSql, username: string) {
+export async function buildSong(
+  tx: TransactionSql,
+  username: string,
+  artists?: string[],
+) {
+  const filter = artists ? "AND l.artist_name = ANY($2::text[])" : "";
   // UNION ALL of year-scoped rows (scope = year) and all-time rows (scope = 0).
   // Same SELECT shape; the only differences are the scope expression and the
   // GROUP BY columns.
-  await tx`
+  await tx.unsafe(
+    `
     INSERT INTO agg_song (
       user_name, scope, group_key, track_name, artist_name,
       plays, effective_ms, caa_id, caa_release_mbid, recording_mbid
     )
     -- Year-scoped
     SELECT
-      ${username}::text,
+      $1::text,
       EXTRACT(YEAR FROM l.listened_at)::int,
       COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
       (array_agg(l.track_name ORDER BY l.listened_at DESC))[1],
@@ -146,7 +156,7 @@ async function buildSong(tx: TransactionSql, username: string) {
         FILTER (WHERE l.recording_mbid IS NOT NULL)
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
-    WHERE l.user_name = ${username}
+    WHERE l.user_name = $1 ${filter}
     GROUP BY
       EXTRACT(YEAR FROM l.listened_at)::int,
       COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
@@ -156,7 +166,7 @@ async function buildSong(tx: TransactionSql, username: string) {
 
     -- All-time (scope = 0 (all-time sentinel))
     SELECT
-      ${username}::text,
+      $1::text,
       0::int,
       COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
       (array_agg(l.track_name ORDER BY l.listened_at DESC))[1],
@@ -171,14 +181,21 @@ async function buildSong(tx: TransactionSql, username: string) {
         FILTER (WHERE l.recording_mbid IS NOT NULL)
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
-    WHERE l.user_name = ${username}
+    WHERE l.user_name = $1 ${filter}
     GROUP BY
       COALESCE(l.recording_mbid::text, '~' || l.track_name) || '|' || COALESCE(l.artist_name, ''),
       l.artist_name
-  `;
+  `,
+    artists ? [username, artists] : [username],
+  );
 }
 
-async function buildArtist(tx: TransactionSql, username: string) {
+export async function buildArtist(
+  tx: TransactionSql,
+  username: string,
+  artists?: string[],
+) {
+  const filter = artists ? "AND l.artist_name = ANY($2::text[])" : "";
   // distinct_albums counts album clusters: each listen is mapped to its
   // cluster key via the shared canon CTE (listens without a release_name
   // contribute nothing, matching the old DISTINCT release_name semantics).
@@ -186,7 +203,7 @@ async function buildArtist(tx: TransactionSql, username: string) {
     ELSE COALESCE(c.canon_rg::text, ${nameKeyExpr("l")}) END`;
   await tx.unsafe(
     `
-    WITH ${ALBUM_CLUSTER_CTE}
+    WITH ${artists ? ARTIST_SET_CLUSTER_CTE : ALBUM_CLUSTER_CTE}
     INSERT INTO agg_artist (
       user_name, scope, artist_name, plays, effective_ms,
       distinct_songs, distinct_albums,
@@ -210,7 +227,7 @@ async function buildArtist(tx: TransactionSql, username: string) {
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
     LEFT JOIN canon c ON c.name_key = ${nameKeyExpr("l")}
-    WHERE l.user_name = $1 AND l.artist_name IS NOT NULL
+    WHERE l.user_name = $1 AND l.artist_name IS NOT NULL ${filter}
     GROUP BY EXTRACT(YEAR FROM l.listened_at)::int, l.artist_name
 
     UNION ALL
@@ -233,14 +250,24 @@ async function buildArtist(tx: TransactionSql, username: string) {
     FROM listens l
     LEFT JOIN recordings r ON r.mbid = l.recording_mbid
     LEFT JOIN canon c ON c.name_key = ${nameKeyExpr("l")}
-    WHERE l.user_name = $1 AND l.artist_name IS NOT NULL
+    WHERE l.user_name = $1 AND l.artist_name IS NOT NULL ${filter}
     GROUP BY l.artist_name
   `,
-    [username],
+    artists ? [username, artists] : [username],
   );
 }
 
-async function buildAlbum(tx: TransactionSql, username: string) {
+export async function buildAlbum(
+  tx: TransactionSql,
+  username: string,
+  scope?: { artists: string[]; clusterKeys: string[] },
+) {
   // Clustered album grouping — see albumCluster.ts for the full rule set.
-  await tx.unsafe(ALBUM_AGG_INSERT, [username]);
+  if (!scope) return void (await tx.unsafe(ALBUM_AGG_INSERT, [username]));
+  if (scope.clusterKeys.length === 0) return;
+  await tx.unsafe(albumAggInsert({ clusterKeyParam: 3 }), [
+    username,
+    scope.artists,
+    scope.clusterKeys,
+  ]);
 }

@@ -55,7 +55,8 @@ export function nameKey(releaseName: string, artistName: string): string {
 // detail/artist queries scope to a single artist ($2) — clusters never span
 // artists (the name key embeds the artist), so the result is identical for
 // that artist but ~15× cheaper than scanning every listen per page view.
-const clusterCTE = (artistScoped: boolean) => `
+type ClusterScope = "user" | "artist" | "artistSet";
+const clusterCTE = (scope: ClusterScope) => `
   base AS (
     SELECT l.listened_at, l.track_name, l.release_name, l.artist_name, l.caa_id, l.caa_release_mbid,
            l.release_mbid, l.recording_mbid, l.duration_ms,
@@ -65,7 +66,8 @@ const clusterCTE = (artistScoped: boolean) => `
     FROM listens l
     LEFT JOIN releases rel ON rel.mbid = l.release_mbid
     WHERE l.user_name = $1 AND l.release_name IS NOT NULL
-      ${artistScoped ? "AND lower(l.artist_name) = lower($2)" : ""}
+      ${scope === "artist" ? "AND lower(l.artist_name) = lower($2)" : ""}
+      ${scope === "artistSet" ? "AND l.artist_name = ANY($2::text[])" : ""}
   ),
   votes AS (
     SELECT name_key, MIN(name_norm) AS name_norm, rg, COUNT(*)::int AS c
@@ -98,7 +100,8 @@ const clusterCTE = (artistScoped: boolean) => `
   )
 `;
 
-export const ALBUM_CLUSTER_CTE = clusterCTE(false);
+export const ALBUM_CLUSTER_CTE = clusterCTE("user");
+export const ARTIST_SET_CLUSTER_CTE = clusterCTE("artistSet");
 
 /** Wrap a query tail in the full-user cluster CTE. Tail references `clustered`. */
 export function withAlbumClusters(tail: string): string {
@@ -107,7 +110,14 @@ export function withAlbumClusters(tail: string): string {
 
 /** Artist-scoped variant for runtime queries — $1 username, $2 artist name. */
 export function withArtistAlbumClusters(tail: string): string {
-  return `WITH ${clusterCTE(true)} ${tail}`;
+  return `WITH ${clusterCTE("artist")} ${tail}`;
+}
+
+/** $1 username, $2::text[] verbatim artist names. Callers MUST pass every
+ *  verbatim spelling of each lower-cased name: name keys are lower-cased, so a
+ *  missing spelling silently drops votes. */
+export function withArtistSetAlbumClusters(tail: string): string {
+  return `WITH ${ARTIST_SET_CLUSTER_CTE} ${tail}`;
 }
 
 import { sqlClient } from "@/lib/db/client";
@@ -163,7 +173,10 @@ export async function resolveAlbumCluster(
 
   return {
     cluster_key: rows[0].cluster_key,
-    members: rows.map((r) => ({ release_name: r.release_name, artist_name: r.artist_name })),
+    members: rows.map((r) => ({
+      release_name: r.release_name,
+      artist_name: r.artist_name,
+    })),
     rg_name: rows[0].rg_name,
     first_release_date: rows[0].first_release_date,
   };
@@ -218,7 +231,15 @@ export async function artistClusteredAlbums(
 // The agg_album INSERT used by the rebuild. Display name prefers the release
 // group's canonical MB title (constant within an adopted cluster), falling
 // back to the most-played scrobbled name.
-export const ALBUM_AGG_INSERT = withAlbumClusters(`
+//
+// Unscoped: $1 username (full rebuild). Scoped: $1 username, $2 artists,
+// $<clusterKeyParam> cluster keys — only those clusters are inserted.
+export function albumAggInsert(opts?: { clusterKeyParam: number }): string {
+  const wrap = opts ? withArtistSetAlbumClusters : withAlbumClusters;
+  const where = opts
+    ? `WHERE cl.cluster_key = ANY($${opts.clusterKeyParam}::text[])`
+    : "";
+  return wrap(`
   INSERT INTO agg_album (
     user_name, scope, group_key, release_name, artist_name,
     plays, effective_ms, caa_id, caa_release_mbid, release_mbid, member_artists
@@ -241,6 +262,7 @@ export const ALBUM_AGG_INSERT = withAlbumClusters(`
   FROM clustered cl
   LEFT JOIN recordings rec ON rec.mbid = cl.recording_mbid
   LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
+  ${where}
   GROUP BY EXTRACT(YEAR FROM cl.listened_at)::int, cl.cluster_key
 
   UNION ALL
@@ -263,5 +285,8 @@ export const ALBUM_AGG_INSERT = withAlbumClusters(`
   FROM clustered cl
   LEFT JOIN recordings rec ON rec.mbid = cl.recording_mbid
   LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
+  ${where}
   GROUP BY cl.cluster_key
 `);
+}
+export const ALBUM_AGG_INSERT = albumAggInsert();
