@@ -35,7 +35,14 @@ export function ListPage({ kind, params, searchParams }: { kind: Kind; params: P
           <Controls kind={kind} searchParams={searchParams} />
         </Suspense>
       </div>
-      <Suspense fallback={<ListSkeleton shape={shape} view="grid" />}>
+      <Suspense
+        fallback={
+          <>
+            <div className="md:hidden"><ListSkeleton shape={shape} view="list" /></div>
+            <div className="hidden md:block"><ListSkeleton shape={shape} view="grid" /></div>
+          </>
+        }
+      >
         <ListContent kind={kind} params={params} searchParams={searchParams} />
       </Suspense>
     </div>
@@ -47,18 +54,22 @@ async function Controls({ kind, searchParams }: { kind: Kind; searchParams: SP }
   return (
     <div className="flex items-center gap-3 flex-wrap">
       <SearchBox placeholder={KINDS[kind].placeholder} />
-      <ViewToggle current={sp.view === "list" ? "list" : "grid"} />
+      <ViewToggle current={parseView(sp.view)} />
     </div>
   );
 }
 
 async function ListContent({ kind, params, searchParams }: { kind: Kind; params: Params; searchParams: SP }) {
   const [{ username }, sp] = await Promise.all([params, searchParams]);
-  const view: View = sp.view === "list" ? "list" : "grid";
+  const view = parseView(sp.view);
   return <CachedList kind={kind} username={username} query={sp.q ?? ""} view={view} />;
 }
 
-async function CachedList({ kind, username, query, view }: { kind: Kind; username: string; query: string; view: View }) {
+function parseView(v: string | undefined): View | null {
+  return v === "list" || v === "grid" ? v : null;
+}
+
+async function CachedList({ kind, username, query, view }: { kind: Kind; username: string; query: string; view: View | null }) {
   const { Icon } = KINDS[kind];
   const { items, hasMore } = await LOAD[kind]({ username, query, page: 0 });
   if (items.length === 0) {

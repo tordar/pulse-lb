@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { IntentLink } from "@/components/IntentLink";
 import { TopItemCard } from "@/components/TopItemCard";
 import { CoverArt } from "@/components/CoverArt";
+import { fmtListeningTime } from "@/lib/format";
 import type { View } from "@/components/ViewToggle";
 import type {
   TopSong,
@@ -25,7 +26,8 @@ export function InfiniteList({
   initialHasMore,
 }: {
   kind: ListKind;
-  view: View;
+  // null: no choice in the URL, so CSS picks list on phones and grid from md up.
+  view: View | null;
   username: string;
   query: string;
   initialItems: ListItem[];
@@ -74,12 +76,13 @@ export function InfiniteList({
 
   return (
     <>
-      {view === "grid" ? (
-        <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      {view !== "list" && (
+        <ul className={`${view === null ? "hidden md:grid" : "grid"} grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4`}>
           {items.map((item) => renderCard(item, kind, username))}
         </ul>
-      ) : (
-        <ol className="divide-y divide-border">
+      )}
+      {view !== "grid" && (
+        <ol className={`divide-y divide-border ${view === null ? "md:hidden" : ""}`}>
           {items.map((item) => renderRow(item, kind, username))}
         </ol>
       )}
@@ -173,18 +176,32 @@ function renderCard(item: ListItem, kind: ListKind, username: string) {
   );
 }
 
+// Fixed width keeps covers lined up past rank 99.
+const RANK = "w-7 shrink-0 text-center text-xs text-subtle-foreground tabular-nums";
+
+function RowStats({ plays, effectiveMs }: { plays: number; effectiveMs: number }) {
+  return (
+    <span className="shrink-0 text-right tabular-nums leading-tight">
+      <span className="block text-sm text-muted-foreground">{plays.toLocaleString()} plays</span>
+      {effectiveMs > 0 && (
+        <span className="block text-xs text-subtle-foreground">{fmtListeningTime(effectiveMs)}</span>
+      )}
+    </span>
+  );
+}
+
 function renderRow(item: ListItem, kind: ListKind, username: string) {
   if (kind === "songs") {
     const s = item as TopSong;
     const href = songHref(username, s.recording_mbid, s.track_name, s.artist_name);
     const row = (
       <>
-        <span className="w-8 text-right text-sm text-subtle-foreground tabular-nums">
+        <span className={RANK}>
           {s.rank}
         </span>
         <CoverArt
           art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
-          size={40}
+          size={48}
           alt={s.track_name}
           className="rounded"
         />
@@ -192,9 +209,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
           <div className="truncate text-sm font-medium">{s.track_name}</div>
           <div className="truncate text-xs text-muted-foreground">{s.artist_name}</div>
         </div>
-        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-          {s.plays.toLocaleString()} plays
-        </span>
+        <RowStats plays={s.plays} effectiveMs={Number(s.effective_ms)} />
       </>
     );
     return (
@@ -217,7 +232,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
     const href = albumHref(username, a.release_mbid, a.release_name, a.artist_name);
     const row = (
       <>
-        <span className="w-8 text-right text-sm text-subtle-foreground tabular-nums">
+        <span className={RANK}>
           {a.rank}
         </span>
         <CoverArt
@@ -230,9 +245,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
           <div className="truncate text-sm font-medium">{a.release_name}</div>
           <div className="truncate text-xs text-muted-foreground">{a.artist_name}</div>
         </div>
-        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-          {a.plays.toLocaleString()} plays
-        </span>
+        <RowStats plays={a.plays} effectiveMs={Number(a.effective_ms)} />
       </>
     );
     return (
@@ -251,7 +264,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
   const href = artistHref(username, ar.artist_mbid);
   const row = (
     <>
-      <span className="w-8 text-right text-sm text-subtle-foreground tabular-nums">
+      <span className={RANK}>
         {ar.rank}
       </span>
       <div className="flex-1 min-w-0">
@@ -261,9 +274,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
           {ar.seen_count > 0 && <span className="text-primary"> · seen live {ar.seen_count}×</span>}
         </div>
       </div>
-      <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-        {ar.plays.toLocaleString()} plays
-      </span>
+      <RowStats plays={ar.plays} effectiveMs={Number(ar.effective_ms)} />
     </>
   );
   return (

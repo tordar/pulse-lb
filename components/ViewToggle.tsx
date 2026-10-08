@@ -4,15 +4,15 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 export type View = "grid" | "list";
 
-export function ViewToggle({ current }: { current: View }) {
+// `null` means no choice in the URL: list on phones, grid from md up.
+export function ViewToggle({ current }: { current: View | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
 
   function setView(v: View) {
     const next = new URLSearchParams(params);
-    if (v === "list") next.set("view", "list");
-    else next.delete("view");
+    next.set("view", v);
     const url = `${pathname}${next.toString() ? `?${next}` : ""}`;
     router.replace(url, { scroll: false });
   }
@@ -24,7 +24,9 @@ export function ViewToggle({ current }: { current: View }) {
         className={`px-3 py-1.5 text-sm font-medium transition-colors ${
           current === "grid"
             ? "bg-primary text-primary-foreground"
-            : "text-foreground/80 hover:bg-muted active:bg-muted"
+            : current === null
+              ? "text-foreground/80 hover:bg-muted active:bg-muted md:bg-primary md:text-primary-foreground"
+              : "text-foreground/80 hover:bg-muted active:bg-muted"
         }`}
       >
         Grid
@@ -34,7 +36,9 @@ export function ViewToggle({ current }: { current: View }) {
         className={`px-3 py-1.5 text-sm font-medium border-l border-border transition-colors ${
           current === "list"
             ? "bg-primary text-primary-foreground"
-            : "text-foreground/80 hover:bg-muted active:bg-muted"
+            : current === null
+              ? "bg-primary text-primary-foreground md:bg-transparent md:text-foreground/80 md:hover:bg-muted"
+              : "text-foreground/80 hover:bg-muted active:bg-muted"
         }`}
       >
         List
