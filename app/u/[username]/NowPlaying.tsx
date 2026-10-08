@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Music2 } from "lucide-react";
-import { fetchListensSince, fetchPlayingNow, mergeNew, nextDelay, toLiveListen, type PlayingNow } from "@/lib/live/lbBrowser";
+import { fetchListensSince, fetchPlayingNow, mergeNew, nextDelay, playingKey, toLiveListen, type PlayingNow } from "@/lib/live/lbBrowser";
 import { recordListens } from "@/lib/sync/liveDelta";
 import { setImportStatus } from "@/lib/live/importStatus";
 import type { IngestResult } from "@/lib/sync/ingest";
@@ -13,6 +13,8 @@ import type { IngestResult } from "@/lib/sync/ingest";
 // listens newer than the newest one this page has seen. New listens go on
 // screen immediately via liveDelta; then the server is nudged to store them.
 // A hidden tab stops entirely.
+const CONFIRM_MS = 2_000;
+
 export function NowPlaying({ username, cursor }: { username: string; cursor: number | null }) {
   const [np, setNp] = useState<PlayingNow>(null);
   const router = useRouter();
@@ -43,6 +45,17 @@ export function NowPlaying({ username, cursor }: { username: string; cursor: num
     let ingesting = false;
     let ingestAllowed = true;
     const seen = seenRef.current;
+    let shownKey = "";
+
+    // Navidrome briefly reports an album's first track when you jump to another
+    // track on it (seen as a ~1s blip on LB). A poll landing in that window used
+    // to pin the wrong song for a whole interval, so a change is only shown once
+    // a second read a moment later agrees.
+    async function confirmPlaying(playing: PlayingNow): Promise<PlayingNow> {
+      if (playingKey(playing) === shownKey) return playing;
+      await new Promise((r) => setTimeout(r, CONFIRM_MS));
+      return fetchPlayingNow(username);
+    }
 
     async function ingest() {
       if (ingesting || !ingestAllowed) return;
@@ -80,7 +93,10 @@ export function NowPlaying({ username, cursor }: { username: string; cursor: num
           since == null ? Promise.resolve([]) : fetchListensSince(username, since),
         ]);
         if (cancelled) return;
-        setNp(playing);
+        const confirmed = await confirmPlaying(playing);
+        if (cancelled) return;
+        shownKey = playingKey(confirmed);
+        setNp(confirmed);
         failures = 0;
         if (since == null) {
           void ingest(); // no aggregates yet: first import

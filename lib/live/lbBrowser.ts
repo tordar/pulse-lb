@@ -76,3 +76,8 @@ export async function fetchPlayingNow(username: string, fetchImpl: typeof fetch 
     caa_id: m.mbid_mapping?.caa_id ?? null, caa_release_mbid: m.mbid_mapping?.caa_release_mbid ?? null,
   };
 }
+
+/** Identity of a now-playing reading, for telling a real change from a repeat. */
+export function playingKey(p: PlayingNow): string {
+  return p ? `${p.track_name}|${p.artist_name}|${p.release_name ?? ""}` : "";
+}

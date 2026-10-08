@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fetchListensSince, mergeNew, nextDelay, toLiveListen, type LBListen } from "./lbBrowser";
+import { fetchListensSince, mergeNew, nextDelay, playingKey, toLiveListen, type LBListen } from "./lbBrowser";
 
 const L = (ts: number, track = "t"): LBListen => ({
   listened_at: ts, track_metadata: { track_name: track, artist_name: "a", release_name: "r",
@@ -37,4 +37,12 @@ test("fetchListensSince pages forward until a short page", async () => {
   assert.match(calls[0], /min_ts=1000/);
   assert.match(calls[1], /min_ts=2000/);
   assert.equal(got[0].listened_at, 2500, "newest first");
+});
+
+test("playingKey tells tracks apart and treats nothing-playing as empty", () => {
+  const a = { track_name: "White Child", artist_name: "x", release_name: "r" };
+  const b = { track_name: "Sixteen", artist_name: "x", release_name: "r" };
+  assert.notEqual(playingKey(a), playingKey(b));
+  assert.equal(playingKey({ ...a, caa_id: 1 }), playingKey(a));
+  assert.equal(playingKey(null), "");
 });
