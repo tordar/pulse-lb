@@ -56,7 +56,9 @@ async function StatsHeader({ params }: { params: Params }) {
   const isOwner = session?.lbUsername === username;
   const empty = allTime.total_plays === 0;
   return (
-    <header className="space-y-3">
+    // Search is desktop-only, so on phones an owner's header is often empty —
+    // drop it then, or its slot leaves a gap above the stat tiles.
+    <header className="space-y-3 max-md:[&:not(:has(p,a,button))]:hidden">
       <ImportStatus />
       {!empty && <GlobalSearch username={username} />}
       {isOwner ? null : session ? (
