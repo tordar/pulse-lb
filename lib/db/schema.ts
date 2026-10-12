@@ -193,6 +193,13 @@ export const aggAlbum = pgTable(
     // can span artists via a shared release group; live ingest uses this to
     // find every artist it must re-read when one of them gets a new listen.
     memberArtists: text("member_artists").array(),
+    // Display-name inputs, scope 0 rows only. release_name is the display
+    // name; it starts as base_name and ALBUM_DISPLAY_NAMES swaps in
+    // alt_name (+ rg_year) when two of an artist's release groups share a
+    // base name. alt_name is NULL for clusters without a release group.
+    baseName: text("base_name"),
+    altName: text("alt_name"),
+    rgYear: integer("rg_year"),
   },
   // No primary key — see agg_song. Reads use agg_album_top; reclaims ~40 MB.
   (t) => [index("agg_album_top").on(t.userName, t.scope, t.plays)],

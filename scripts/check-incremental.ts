@@ -50,6 +50,14 @@ async function scenario(name: string, pick: () => Promise<Row[]>, synthetic = fa
   return problems.length === 0;
 }
 
+const FAKE_RG = "00000000-0000-4000-8000-00000000c1a5";
+const synthetic = (ts: string, artist: string, release: string, rg: string | null) => ({
+  user_name: USER, listened_at: ts, track_name: "Zz Clash Track", artist_name: artist,
+  release_name: release, recording_mbid: null, release_mbid: null, release_group_mbid: rg,
+  artist_mbids: [], caa_id: null, caa_release_mbid: null, duration_ms: 123000, source: null,
+  inserted_at: new Date().toISOString(),
+} as Row);
+
 const newest = (n: number) => () => sql<Row[]>`
   SELECT * FROM listens WHERE user_name = ${USER} ORDER BY listened_at DESC LIMIT ${n}`;
 
@@ -72,6 +80,36 @@ async function main() {
       return [{ ...r, listened_at: new Date(new Date(r.listened_at).getTime() + 1000).toISOString(),
         artist_name: r.artist_name!.toUpperCase() === r.artist_name ? r.artist_name!.toLowerCase() : r.artist_name!.toUpperCase() }];
     }, true),
+    // Same-titled albums: a listen on one of a self-titled series, whose
+    // display name depends on its siblings.
+    await scenario("same-titled albums", () => sql<Row[]>`
+      SELECT l.* FROM listens l
+      WHERE l.user_name = ${USER} AND lower(l.artist_name) = (
+        SELECT lower(artist_name) FROM agg_album
+        WHERE user_name = ${USER} AND scope = 0 AND release_name IS DISTINCT FROM base_name
+        ORDER BY plays DESC LIMIT 1)
+      ORDER BY l.listened_at DESC LIMIT 5`),
+    // An unmatched curly-apostrophe spelling normalises to an album's base
+    // name but has no release group: it must not rename the real album.
+    await scenario("unmatched spelling variant", async () => {
+      const [a] = await sql<{ artist_name: string; base_name: string }[]>`
+        SELECT artist_name, base_name FROM agg_album
+        WHERE user_name = ${USER} AND scope = 0 AND base_name LIKE '%''%' AND alt_name IS NOT NULL
+        ORDER BY plays DESC LIMIT 1`;
+      return [synthetic("2031-01-02T00:30:00Z", a.artist_name, a.base_name.replaceAll("'", "’"), null)];
+    }, true),
+    // A new release group with the same title as an existing album: both
+    // become a same-titled group and switch to their scrobbled names.
+    await scenario("new same-titled release group", async () => {
+      const [a] = await sql<{ artist_name: string; base_name: string }[]>`
+        SELECT artist_name, base_name FROM agg_album
+        WHERE user_name = ${USER} AND scope = 0 AND alt_name IS NOT NULL AND alt_name <> base_name
+          AND release_name = base_name
+        ORDER BY plays DESC LIMIT 1`;
+      await sql`INSERT INTO release_groups (mbid, name, first_release_year)
+        VALUES (${FAKE_RG}, ${a.base_name}, 2031) ON CONFLICT (mbid) DO UPDATE SET name = EXCLUDED.name`;
+      return [synthetic("2031-01-03T00:30:00Z", a.artist_name, `${a.base_name} (Zz Edition)`, FAKE_RG)];
+    }, true),
     // Review Focus 5: brand-new artist, new day, new year.
     await scenario("new artist / new day / new year", async () => [{
       user_name: USER, listened_at: "2031-01-01T00:30:00Z", track_name: "Zz Test Track",
@@ -80,6 +118,7 @@ async function main() {
       caa_release_mbid: null, duration_ms: 123000, source: null, inserted_at: new Date().toISOString(),
     } as Row], true),
   ];
+  await sql`DELETE FROM release_groups WHERE mbid = ${FAKE_RG}`;
   await sql.end();
   if (results.includes(false)) process.exit(1);
 }

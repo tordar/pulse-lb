@@ -155,11 +155,11 @@ async function albumDetailUncached(
   const header = (headerRes as unknown as Row<AlbumHeader>).rows[0];
   if (!header || !header.total_plays) return null;
 
-  // Canonical display name + first release date come straight from the
-  // cluster's adopted release group when there is one.
-  if (cluster?.rg_name) {
-    header.release_name = cluster.rg_name;
-    release_name = cluster.rg_name;
+  // Display name matches the album lists (see ALBUM_DISPLAY_NAMES); first
+  // release date comes from the cluster's adopted release group.
+  if (cluster?.display_name) {
+    header.release_name = cluster.display_name;
+    release_name = cluster.display_name;
   }
   header.first_release_date = cluster?.first_release_date ?? null;
 

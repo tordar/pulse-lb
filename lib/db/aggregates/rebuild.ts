@@ -5,6 +5,7 @@ import { lockUser } from "./lock";
 import {
   albumAggInsert,
   ALBUM_AGG_INSERT,
+  ALBUM_DISPLAY_NAMES,
   ALBUM_CLUSTER_CTE,
   ARTIST_SET_CLUSTER_CTE,
   nameKeyExpr,
@@ -263,11 +264,15 @@ export async function buildAlbum(
   scope?: { artists: string[]; clusterKeys: string[] },
 ) {
   // Clustered album grouping — see albumCluster.ts for the full rule set.
-  if (!scope) return void (await tx.unsafe(ALBUM_AGG_INSERT, [username]));
-  if (scope.clusterKeys.length === 0) return;
-  await tx.unsafe(albumAggInsert({ clusterKeyParam: 3 }), [
-    username,
-    scope.artists,
-    scope.clusterKeys,
-  ]);
+  if (!scope) {
+    await tx.unsafe(ALBUM_AGG_INSERT, [username]);
+  } else {
+    if (scope.clusterKeys.length === 0) return;
+    await tx.unsafe(albumAggInsert({ clusterKeyParam: 3 }), [
+      username,
+      scope.artists,
+      scope.clusterKeys,
+    ]);
+  }
+  await tx.unsafe(ALBUM_DISPLAY_NAMES, [username]);
 }

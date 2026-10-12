@@ -126,14 +126,15 @@ import { withRetry } from "@/lib/db/retry";
 export type AlbumCluster = {
   cluster_key: string;
   members: { release_name: string; artist_name: string }[];
-  rg_name: string | null;
+  // The album's name as the lists show it (agg_album), else the RG title.
+  display_name: string | null;
   first_release_date: string | null;
 };
 
 /**
  * Resolve a clicked album (by release_mbid, with a name-key fallback) to its
  * full cluster: every (release_name, artist_name) variant that belongs to it,
- * plus the release group's canonical title and date when adopted. Scoped to
+ * plus its display name and the release group's date when adopted. Scoped to
  * the album's artist and done in a single round trip.
  */
 export async function resolveAlbumCluster(
@@ -155,10 +156,12 @@ export async function resolveAlbumCluster(
           LIMIT 1
         )
         SELECT DISTINCT cl.cluster_key, cl.release_name, cl.artist_name,
-               rgm.name AS rg_name, rgm.first_release_date
+               COALESCE(agg.release_name, rgm.name) AS display_name, rgm.first_release_date
         FROM clustered cl
         JOIN target t USING (cluster_key)
         LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
+        LEFT JOIN agg_album agg
+          ON agg.user_name = $1 AND agg.scope = 0 AND agg.group_key = cl.cluster_key
       `),
       [username, artistName, releaseMbid, fallbackNameKey],
     ),
@@ -166,7 +169,7 @@ export async function resolveAlbumCluster(
     cluster_key: string;
     release_name: string;
     artist_name: string;
-    rg_name: string | null;
+    display_name: string | null;
     first_release_date: string | null;
   }[];
   if (rows.length === 0) return null;
@@ -177,7 +180,7 @@ export async function resolveAlbumCluster(
       release_name: r.release_name,
       artist_name: r.artist_name,
     })),
-    rg_name: rows[0].rg_name,
+    display_name: rows[0].display_name,
     first_release_date: rows[0].first_release_date,
   };
 }
@@ -204,7 +207,8 @@ export async function artistClusteredAlbums(
     sqlClient.unsafe(
       withArtistAlbumClusters(`
         SELECT
-          COALESCE(MIN(rgm.name), mode() WITHIN GROUP (ORDER BY cl.release_name)) AS release_name,
+          COALESCE(MIN(agg.release_name), MIN(rgm.name),
+                   mode() WITHIN GROUP (ORDER BY cl.release_name)) AS release_name,
           mode() WITHIN GROUP (ORDER BY cl.release_mbid)
             FILTER (WHERE cl.release_mbid IS NOT NULL)::text AS release_mbid,
           COUNT(*)::int AS plays,
@@ -215,6 +219,8 @@ export async function artistClusteredAlbums(
           COUNT(*) OVER ()::int AS cluster_count
         FROM clustered cl
         LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
+        LEFT JOIN agg_album agg
+          ON agg.user_name = $1 AND agg.scope = 0 AND agg.group_key = cl.cluster_key
         GROUP BY cl.cluster_key, rgm.name
         ORDER BY plays DESC, release_name
         LIMIT $3
@@ -228,9 +234,11 @@ export async function artistClusteredAlbums(
   };
 }
 
-// The agg_album INSERT used by the rebuild. Display name prefers the release
-// group's canonical MB title (constant within an adopted cluster), falling
-// back to the most-played scrobbled name.
+// The agg_album INSERT used by the rebuild. The name it writes is the base
+// name: the release group's canonical MB title (constant within an adopted
+// cluster), falling back to the most-played scrobbled name. Scope 0 rows also
+// store the inputs ALBUM_DISPLAY_NAMES needs to tell same-titled albums
+// apart; it must run after every insert.
 //
 // Unscoped: $1 username (full rebuild). Scoped: $1 username, $2 artists,
 // $<clusterKeyParam> cluster keys — only those clusters are inserted.
@@ -242,7 +250,8 @@ export function albumAggInsert(opts?: { clusterKeyParam: number }): string {
   return wrap(`
   INSERT INTO agg_album (
     user_name, scope, group_key, release_name, artist_name,
-    plays, effective_ms, caa_id, caa_release_mbid, release_mbid, member_artists
+    plays, effective_ms, caa_id, caa_release_mbid, release_mbid, member_artists,
+    base_name, alt_name, rg_year
   )
   SELECT
     $1::text,
@@ -258,7 +267,8 @@ export function albumAggInsert(opts?: { clusterKeyParam: number }): string {
       FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1],
     mode() WITHIN GROUP (ORDER BY cl.release_mbid)
       FILTER (WHERE cl.release_mbid IS NOT NULL),
-    NULL::text[]  -- member_artists: only read on scope 0 rows
+    NULL::text[],  -- member_artists, base_name, alt_name, rg_year: only read on scope 0 rows
+    NULL::text, NULL::text, NULL::int
   FROM clustered cl
   LEFT JOIN recordings rec ON rec.mbid = cl.recording_mbid
   LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
@@ -281,7 +291,10 @@ export function albumAggInsert(opts?: { clusterKeyParam: number }): string {
       FILTER (WHERE cl.caa_release_mbid IS NOT NULL))[1],
     mode() WITHIN GROUP (ORDER BY cl.release_mbid)
       FILTER (WHERE cl.release_mbid IS NOT NULL),
-    array_agg(DISTINCT lower(cl.artist_name)) FILTER (WHERE cl.artist_name IS NOT NULL)
+    array_agg(DISTINCT lower(cl.artist_name)) FILTER (WHERE cl.artist_name IS NOT NULL),
+    COALESCE(MIN(rgm.name), mode() WITHIN GROUP (ORDER BY cl.release_name)),
+    CASE WHEN MIN(rgm.name) IS NOT NULL THEN mode() WITHIN GROUP (ORDER BY cl.release_name) END,
+    MIN(rgm.first_release_year)
   FROM clustered cl
   LEFT JOIN recordings rec ON rec.mbid = cl.recording_mbid
   LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
@@ -290,3 +303,55 @@ export function albumAggInsert(opts?: { clusterKeyParam: number }): string {
 `);
 }
 export const ALBUM_AGG_INSERT = albumAggInsert();
+
+// Self-titled series ("The Bronx" I–VI, Weezer's colour albums, American
+// Football LP1–3) share one MB release-group title, so the base names above
+// collide. Within each (artist, base name) group of two or more release
+// groups, show each album's most-played scrobbled name instead ("The Bronx
+// (III)", "Weezer (Blue Album)"); where those still collide, add the release
+// year. Albums whose base name is unique for their artist keep it.
+//
+// Only clusters that adopted a release group take part (alt_name is NULL
+// otherwise): an unmatched spelling variant ("It’s" vs "It's") is the same
+// album that clustering missed, not a sibling, and must not rename the real
+// one.
+//
+// Reads only stored scope 0 rows, so it is exact for any subset of rebuilt
+// clusters: the incremental path re-runs it over the whole user and gets the
+// same names as a full rebuild. Year rows take their cluster's all-time name.
+// $1 = username.
+export const ALBUM_DISPLAY_NAMES = `
+  WITH s0 AS (
+    SELECT group_key, base_name, alt_name, rg_year,
+           lower(COALESCE(artist_name, '')) AS artist_key,
+           ${NORM("base_name")} AS base_norm,
+           ${NORM("alt_name")} AS alt_norm
+    FROM agg_album
+    WHERE user_name = $1 AND scope = 0 AND alt_name IS NOT NULL
+  ),
+  picked AS (
+    -- A scrobbled name that only differs by case/apostrophes adds nothing:
+    -- keep MB's spelling.
+    SELECT *,
+           CASE
+             WHEN COUNT(*) OVER (PARTITION BY artist_key, base_norm) = 1 OR alt_norm = base_norm
+               THEN base_name
+             ELSE alt_name
+           END AS picked_name
+    FROM s0
+  ),
+  named AS (
+    SELECT group_key,
+           CASE
+             WHEN rg_year IS NOT NULL
+              AND COUNT(*) OVER (PARTITION BY artist_key, base_norm, ${NORM("picked_name")}) > 1
+               THEN picked_name || ' (' || rg_year || ')'
+             ELSE picked_name
+           END AS display_name
+    FROM picked
+  )
+  UPDATE agg_album a SET release_name = n.display_name
+  FROM named n
+  WHERE a.user_name = $1 AND a.group_key = n.group_key
+    AND a.release_name IS DISTINCT FROM n.display_name
+`;
