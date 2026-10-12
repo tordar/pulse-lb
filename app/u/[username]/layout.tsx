@@ -40,7 +40,7 @@ export default function UserLayout({ children, params }: { children: React.React
               <HeaderNav params={params} />
             </Suspense>
           </div>
-          <div className="min-w-0 md:justify-self-end flex items-center gap-2">
+          <div className="min-w-0 md:w-full flex items-center justify-end gap-2">
             <Suspense fallback={null}>
               <HeaderRight params={params} />
             </Suspense>
