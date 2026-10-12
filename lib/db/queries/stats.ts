@@ -308,6 +308,7 @@ export type RecentListen = {
   track_name: string;
   artist_name: string;
   release_name: string | null;
+  recording_mbid: string | null;
   source: string | null;
 };
 
@@ -315,7 +316,7 @@ export function recentListens(username: string, limit = 10): Promise<RecentListe
   return userCachedFor(username, ["recentListens", username, limit], 300, async () => {
     const res = await withRetry(() =>
       execute<RecentListen>(sql`
-        SELECT listened_at, track_name, artist_name, release_name, source
+        SELECT listened_at, track_name, artist_name, release_name, recording_mbid::text AS recording_mbid, source
         FROM ${schema.listens}
         WHERE user_name = ${username}
         ORDER BY listened_at DESC LIMIT ${limit}

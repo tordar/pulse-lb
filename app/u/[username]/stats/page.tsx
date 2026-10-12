@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { BarChart3, Calendar, Clock, Disc3, Music2, Play, TrendingUp, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { fmtHours, splitDateTime } from "@/lib/format";
+import { fmtHours, songHref, splitDateTime } from "@/lib/format";
 import {
   allTimeStats,
   yearlyListening,
@@ -292,11 +292,12 @@ async function RecentListens({ username, showSource }: { username: string; showS
     <section className="space-y-3">
       <SectionHeading icon={Clock}>Recent listens</SectionHeading>
       <ul className="divide-y divide-border text-sm">
-        <LiveRecent newestServer={rows[0]?.listened_at ?? null} />
+        <LiveRecent username={username} newestServer={rows[0]?.listened_at ?? null} />
         {rows.map((r, i) => {
           const { date, time } = splitDateTime(r.listened_at);
-          return (
-            <li key={i} className="flex gap-3 py-2 items-baseline">
+          const href = songHref(username, r);
+          const row = (
+            <>
               <span className="text-subtle-foreground tabular-nums shrink-0 text-xs leading-tight whitespace-nowrap">
                 <span className="block">{date}</span>
                 <span className="block">{time}</span>
@@ -307,6 +308,17 @@ async function RecentListens({ username, showSource }: { username: string; showS
                 {r.release_name && <span className="text-subtle-foreground"> · {r.release_name}</span>}
               </span>
               {showSource && <SourceDot source={r.source} />}
+            </>
+          );
+          return (
+            <li key={i}>
+              {href ? (
+                <Link href={href} className="flex gap-3 py-2 items-baseline hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
+                  {row}
+                </Link>
+              ) : (
+                <div className="flex gap-3 py-2 items-baseline">{row}</div>
+              )}
             </li>
           );
         })}

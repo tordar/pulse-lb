@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Music2 } from "lucide-react";
 import { fetchListensSince, fetchPlayingNow, mergeNew, nextDelay, playingKey, toLiveListen, type PlayingNow } from "@/lib/live/lbBrowser";
 import { recordListens } from "@/lib/sync/liveDelta";
+import { songHref } from "@/lib/format";
 import { setImportStatus } from "@/lib/live/importStatus";
 import type { IngestResult } from "@/lib/sync/ingest";
 
@@ -138,8 +140,10 @@ export function NowPlaying({ username, cursor }: { username: string; cursor: num
       ? `https://archive.org/download/mbid-${np.caa_release_mbid}/mbid-${np.caa_release_mbid}-${np.caa_id}_thumb250.jpg`
       : null;
 
-  return (
-    <div className="hidden md:inline-flex items-center gap-2 bg-card border border-card-border rounded-full pl-1 pr-3 py-1 max-w-xs">
+  const href = np ? songHref(username, np) : null;
+  const pillClass = "hidden md:inline-flex items-center gap-2 bg-card border border-card-border rounded-full pl-1 pr-3 py-1 max-w-xs";
+  const content = (
+    <>
       {coverUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={coverUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
@@ -166,6 +170,13 @@ export function NowPlaying({ username, cursor }: { username: string; cursor: num
           <span className="text-xs text-muted-foreground whitespace-nowrap">Nothing playing</span>
         )}
       </span>
-    </div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className={`${pillClass} hover:bg-muted transition-colors`}>
+      {content}
+    </Link>
+  ) : (
+    <div className={pillClass}>{content}</div>
   );
 }

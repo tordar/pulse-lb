@@ -21,3 +21,13 @@ export function splitDateTime(s: string): { date: string; time: string } {
   const iso = new Date(s).toISOString();
   return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
 }
+
+/** Song page link for a listen, or null when it has no MusicBrainz recording. */
+export function songHref(
+  username: string,
+  l: { recording_mbid?: string | null; track_name: string; artist_name: string },
+): string | null {
+  if (!l.recording_mbid) return null;
+  const qs = new URLSearchParams({ name: l.track_name, artist: l.artist_name });
+  return `/u/${encodeURIComponent(username)}/songs/${l.recording_mbid}?${qs}`;
+}

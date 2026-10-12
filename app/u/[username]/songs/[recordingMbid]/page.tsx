@@ -36,7 +36,12 @@ async function SongDetail({ username, recordingMbid, name, artist }: { username:
     getShowListenSource(username).catch(() => false),
     songRank(username, recordingMbid).catch(() => null),
   ]);
-  if (!detail) notFound();
+  if (!detail) {
+    // The now-playing pill links here before the first play of a song has been
+    // stored; show the song as unplayed rather than a 404.
+    if (name && artist) return <Unplayed username={username} name={name} artist={artist} />;
+    notFound();
+  }
 
   const { header, years, albums, recent } = detail;
   const totalHours = header.total_minutes / 60;
@@ -151,6 +156,29 @@ async function SongDetail({ username, recordingMbid, name, artist }: { username:
           </ul>
         </section>
       )}
+    </div>
+  );
+}
+
+function Unplayed({ username, name, artist }: { username: string; name: string; artist: string }) {
+  return (
+    <div className="space-y-8">
+      <div className="text-sm">
+        <Link
+          href={`/u/${encodeURIComponent(username)}/songs`}
+          className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft size={14} /> Songs
+        </Link>
+      </div>
+      <header className="space-y-2 text-center md:text-left">
+        <p className="text-xs text-primary uppercase tracking-wide inline-flex items-center gap-1.5">
+          <Music2 size={13} /> Song
+        </p>
+        <h1 className="text-3xl font-bold leading-tight">{name}</h1>
+        <p className="text-lg text-foreground/80">{artist}</p>
+        <p className="text-sm text-muted-foreground pt-3">No plays recorded yet.</p>
+      </header>
     </div>
   );
 }

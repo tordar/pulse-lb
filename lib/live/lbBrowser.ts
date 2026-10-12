@@ -19,6 +19,7 @@ export type LBListen = {
 export type PlayingNow = {
   track_name: string; artist_name: string; release_name?: string | null;
   caa_id?: number | null; caa_release_mbid?: string | null;
+  recording_mbid?: string | null;
 } | null;
 
 export function toLiveListen(l: LBListen): LiveListen {
@@ -74,6 +75,7 @@ export async function fetchPlayingNow(username: string, fetchImpl: typeof fetch 
   return {
     track_name: m.track_name, artist_name: m.artist_name, release_name: m.release_name ?? null,
     caa_id: m.mbid_mapping?.caa_id ?? null, caa_release_mbid: m.mbid_mapping?.caa_release_mbid ?? null,
+    recording_mbid: m.mbid_mapping?.recording_mbid ?? m.additional_info?.recording_mbid ?? null,
   };
 }
 
