@@ -20,8 +20,10 @@ export default function UserLayout({ children, params }: { children: React.React
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 backdrop-blur-md bg-background/70 border-b border-border/60">
         {/* 3-column grid on md+ (1fr auto 1fr) keeps the pills dead-centre
-            regardless of how wide the breadcrumb or now-playing pill is. */}
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap md:grid md:grid-cols-[1fr_auto_1fr]">
+            regardless of how wide the breadcrumb or now-playing pill is. The
+            side tracks are minmax(0,1fr) so a long track name truncates
+            inside its column instead of widening it over the pills. */}
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <Link
             href="/"
             className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 md:justify-self-start"

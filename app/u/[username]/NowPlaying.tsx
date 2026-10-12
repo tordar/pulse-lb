@@ -141,14 +141,14 @@ export function NowPlaying({ username, cursor }: { username: string; cursor: num
       : null;
 
   const href = np ? songHref(username, np) : null;
-  const pillClass = "hidden md:inline-flex items-center gap-2 bg-card border border-card-border rounded-full pl-1 pr-3 py-1 max-w-xs";
+  const pillClass = "hidden md:inline-flex items-center gap-2 bg-card border border-card-border rounded-full pl-1 pr-3 py-1 max-w-xs min-w-0";
   const content = (
     <>
       {coverUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={coverUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+        <img src={coverUrl} alt="" className="w-7 h-7 shrink-0 rounded-full object-cover" />
       ) : (
-        <span className="w-7 h-7 rounded-full bg-muted grid place-items-center">
+        <span className="w-7 h-7 shrink-0 rounded-full bg-muted grid place-items-center">
           <Music2 size={13} className={np ? "text-primary" : "text-subtle-foreground"} />
         </span>
       )}
