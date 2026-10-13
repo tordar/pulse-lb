@@ -11,6 +11,7 @@ import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
 import { SeenLive } from "@/components/SeenLive";
 import { concertsForArtist } from "@/lib/db/queries/concerts";
 import { artistRank } from "@/lib/db/queries/rank";
+import { songHref } from "@/lib/format";
 
 
 type Params = Promise<{ username: string; artistMbid: string }>;
@@ -167,18 +168,20 @@ async function ArtistDetail({ username, artistMbid }: { username: string; artist
             {recent.map((r, i) => {
               const [date, time] = fmtDateTime(r.listened_at).split(" ");
               return (
-                <li key={i} className="flex gap-3 py-1.5 items-baseline">
-                  <span className="text-subtle-foreground tabular-nums shrink-0 text-xs leading-tight whitespace-nowrap">
-                    <span className="block">{date}</span>
-                    <span className="block">{time}</span>
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">
-                    {r.track_name}
-                    {r.release_name && (
-                      <span className="text-subtle-foreground"> · {r.release_name}</span>
-                    )}
-                  </span>
-                  {showSource && <SourceDot source={r.source} />}
+                <li key={i}>
+                  <RecentRow href={songHref(username, { ...r, artist_name: header.artist_name })}>
+                    <span className="text-subtle-foreground tabular-nums shrink-0 text-xs leading-tight whitespace-nowrap">
+                      <span className="block">{date}</span>
+                      <span className="block">{time}</span>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {r.track_name}
+                      {r.release_name && (
+                        <span className="text-subtle-foreground"> · {r.release_name}</span>
+                      )}
+                    </span>
+                    {showSource && <SourceDot source={r.source} />}
+                  </RecentRow>
                 </li>
               );
             })}
@@ -186,6 +189,16 @@ async function ArtistDetail({ username, artistMbid }: { username: string; artist
         </section>
       )}
     </div>
+  );
+}
+
+function RecentRow({ href, children }: { href: string | null; children: React.ReactNode }) {
+  return href ? (
+    <Link href={href} className="flex gap-3 py-1.5 items-baseline hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
+      {children}
+    </Link>
+  ) : (
+    <div className="flex gap-3 py-1.5 items-baseline">{children}</div>
   );
 }
 

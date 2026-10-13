@@ -35,6 +35,7 @@ export type ArtistAlbum = {
 
 export type ArtistListen = {
   listened_at: string;
+  recording_mbid: string | null;
   track_name: string;
   release_name: string | null;
   source: string | null;
@@ -144,7 +145,7 @@ async function artistDetailUncached(
   artistClusteredAlbums(username, artist_name, 12),
   withRetry(() =>
     execute<ArtistListen>(sql`
-      SELECT listened_at, track_name, release_name, source
+      SELECT listened_at, recording_mbid::text AS recording_mbid, track_name, release_name, source
       FROM ${schema.listens}
       WHERE user_name = ${username} AND artist_name = ${artist_name}
       ORDER BY listened_at DESC

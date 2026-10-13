@@ -7,6 +7,7 @@ import { ensureRecordingLengths } from "@/lib/listenbrainz/metadata";
 export type SongHeader = {
   track_name: string;
   artist_name: string;
+  artist_mbid: string | null;
   caa_id: number | null;
   caa_release_mbid: string | null;
   total_plays: number;
@@ -26,6 +27,7 @@ export type SongAlbum = {
 export type SongListen = {
   listened_at: string;
   release_name: string | null;
+  release_mbid: string | null;
   source: string | null;
 };
 
@@ -91,6 +93,7 @@ async function songDetailUncached(
       SELECT
         ${track_name}::text AS track_name,
         ${artist_name}::text AS artist_name,
+        mode() WITHIN GROUP (ORDER BY artist_mbids[1]) FILTER (WHERE artist_mbids[1] IS NOT NULL)::text AS artist_mbid,
         (array_agg(caa_id ORDER BY listened_at DESC) FILTER (WHERE caa_id IS NOT NULL))[1] AS caa_id,
         (array_agg(caa_release_mbid ORDER BY listened_at DESC) FILTER (WHERE caa_release_mbid IS NOT NULL))[1] AS caa_release_mbid,
         COUNT(*)::int AS total_plays,
@@ -142,7 +145,7 @@ async function songDetailUncached(
 
   const recentRes = await withRetry(() =>
     execute<SongListen>(sql`
-      SELECT listened_at, release_name, source
+      SELECT listened_at, release_name, release_mbid::text AS release_mbid, source
       FROM ${schema.listens}
       WHERE user_name = ${username}
         AND ${songFilter}

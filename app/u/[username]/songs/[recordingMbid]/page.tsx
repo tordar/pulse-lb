@@ -72,7 +72,18 @@ async function SongDetail({ username, recordingMbid, name, artist }: { username:
             <Music2 size={13} /> Song
           </p>
           <h1 className="text-3xl font-bold leading-tight">{header.track_name}</h1>
-          <p className="text-lg text-foreground/80">{header.artist_name}</p>
+          <p className="text-lg text-foreground/80">
+            {header.artist_mbid ? (
+              <Link
+                href={`/u/${encodeURIComponent(username)}/artists/${header.artist_mbid}`}
+                className="hover:underline active:opacity-70"
+              >
+                {header.artist_name}
+              </Link>
+            ) : (
+              header.artist_name
+            )}
+          </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2 pt-3">
             {rank != null && <Stat label="Rank" value={`#${rank.toLocaleString()}`} />}
             <Stat label="Plays" value={header.total_plays.toLocaleString()} />
@@ -141,15 +152,21 @@ async function SongDetail({ username, recordingMbid, name, artist }: { username:
             {recent.map((r, i) => {
               const [date, time] = fmtDateTime(r.listened_at).split(" ");
               return (
-                <li key={i} className="flex gap-3 py-1.5 items-baseline">
-                  <span className="text-subtle-foreground tabular-nums shrink-0 text-xs leading-tight whitespace-nowrap">
-                    <span className="block">{date}</span>
-                    <span className="block">{time}</span>
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                    {r.release_name ?? "—"}
-                  </span>
-                  {showSource && <SourceDot source={r.source} />}
+                <li key={i}>
+                  <RecentRow
+                    href={r.release_mbid && r.release_name
+                      ? `/u/${encodeURIComponent(username)}/albums/${r.release_mbid}?${new URLSearchParams({ name: r.release_name, artist: header.artist_name })}`
+                      : null}
+                  >
+                    <span className="text-subtle-foreground tabular-nums shrink-0 text-xs leading-tight whitespace-nowrap">
+                      <span className="block">{date}</span>
+                      <span className="block">{time}</span>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      {r.release_name ?? "—"}
+                    </span>
+                    {showSource && <SourceDot source={r.source} />}
+                  </RecentRow>
                 </li>
               );
             })}
@@ -180,6 +197,16 @@ function Unplayed({ username, name, artist }: { username: string; name: string; 
         <p className="text-sm text-muted-foreground pt-3">No plays recorded yet.</p>
       </header>
     </div>
+  );
+}
+
+function RecentRow({ href, children }: { href: string | null; children: React.ReactNode }) {
+  return href ? (
+    <Link href={href} className="flex gap-3 py-1.5 items-baseline hover:bg-muted active:bg-muted transition-colors -mx-2 px-2 rounded">
+      {children}
+    </Link>
+  ) : (
+    <div className="flex gap-3 py-1.5 items-baseline">{children}</div>
   );
 }
 
