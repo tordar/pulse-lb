@@ -4,7 +4,7 @@ import { buildPayload } from "./build";
 import { MAX_NAMED_ARTISTS, type LandingPayload } from "./payload";
 import { showcaseTz, showcaseUser } from "./showcase";
 
-export type ListenAt = { track: string; artist: string; recordingMbid: string | null; listenedAt: string };
+export type ListenAt = { track: string; artist: string; recordingMbid: string | null; artistMbid: string | null; listenedAt: string };
 
 export async function loadShowcasePayload(): Promise<LandingPayload | null> {
   const user = showcaseUser();
@@ -20,9 +20,9 @@ export async function loadShowcasePayload(): Promise<LandingPayload | null> {
 // drizzle's shared client returns timestamps as strings, so derive listenedAt from ts (the match is exact).
 export async function loadListenAt(ts: number): Promise<ListenAt | null> {
   const user = showcaseUser();
-  const rows = await withRetry(() => sqlClient<{ track_name: string; artist_name: string | null; recording_mbid: string | null }[]>`
-    SELECT track_name, artist_name, recording_mbid FROM listens
+  const rows = await withRetry(() => sqlClient<{ track_name: string; artist_name: string | null; recording_mbid: string | null; artist_mbid: string | null }[]>`
+    SELECT track_name, artist_name, recording_mbid, artist_mbids[1] AS artist_mbid FROM listens
     WHERE user_name = ${user} AND listened_at = to_timestamp(${ts}) ORDER BY track_name LIMIT 1`);
   const r = rows[0];
-  return r ? { track: r.track_name, artist: r.artist_name ?? "", recordingMbid: r.recording_mbid, listenedAt: new Date(ts * 1000).toISOString() } : null;
+  return r ? { track: r.track_name, artist: r.artist_name ?? "", recordingMbid: r.recording_mbid, artistMbid: r.artist_mbid, listenedAt: new Date(ts * 1000).toISOString() } : null;
 }

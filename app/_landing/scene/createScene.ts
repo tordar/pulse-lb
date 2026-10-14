@@ -94,6 +94,8 @@ export async function createScene(canvas: HTMLCanvasElement, p: Prepared, opts: 
 
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
+    // iOS can report a 0×0 canvas mid-transition; sizing to it would leave a NaN camera aspect.
+    if (!w || !h) return;
     const dpr = Math.min(window.devicePixelRatio || 1, w < 720 ? 1.5 : 2);
     renderer.setPixelRatio(dpr); renderer.setSize(w, h, false); U.uDpr.value = dpr;
     camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -124,7 +126,7 @@ export async function createScene(canvas: HTMLCanvasElement, p: Prepared, opts: 
     setScroll(f) { scroll = Math.max(0, Math.min(1, f)); },
     project(x, y, z) {
       v.set(x, y, z, 1).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix);
-      if (v.w <= 0) return null;
+      if (!(v.w > 1e-6) || !canvas.clientWidth || !canvas.clientHeight) return null;
       return [(v.x / v.w + 1) * canvas.clientWidth / 2, (1 - v.y / v.w) * canvas.clientHeight / 2];
     },
     pick(sx, sy, radius, accept) {

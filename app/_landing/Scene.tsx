@@ -62,11 +62,21 @@ export function Scene({ data, error, user, filter, children }: {
       const sc = window.scrollY / window.innerHeight;
       wrap.style.opacity = String(Math.max(0, 1 - sc * 3) * (filterRef.current ? 0 : 1));
       const portrait = window.innerHeight > window.innerWidth, topMin = portrait ? 96 : 110;
+      const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
       anchors.forEach((a, k) => {
         const p = h.project(a[0], a[1], a[2]), el = labels[k];
-        if (!p || !el) return;
+        if (!el) return;
+        // Hide a callout whose anchor isn't on screen instead of pinning it to a corner.
+        const visible = !!p && Number.isFinite(p[0]) && Number.isFinite(p[1])
+          && p[0] >= -24 && p[0] <= window.innerWidth + 24 && p[1] >= topMin && p[1] <= window.innerHeight;
+        for (const node of [el, lines[k], dots[k]]) node.style.visibility = visible ? "" : "hidden";
+        if (!visible) return;
         const [ax, ay] = p, w = el.offsetWidth, ht = el.offsetHeight;
-        const lx = Math.min(window.innerWidth - w - 12, Math.max(12, ax - 6)), ly = Math.max(topMin, ay - (OFF[k] ?? 60) - ht);
+        const lx = Math.min(window.innerWidth - w - 12, Math.max(12, ax - 6));
+        let ly = Math.max(topMin, ay - (OFF[k] ?? 60) - ht);
+        // Push down past any label already placed in the same horizontal band.
+        for (const b of placed) if (lx < b.x1 && lx + w > b.x0 && ly < b.y1 && ly + ht > b.y0) ly = b.y1 + 6;
+        placed.push({ x0: lx, x1: lx + w, y0: ly, y1: ly + ht });
         el.style.transform = `translate(${lx}px, ${ly}px)`;
         const bx = Math.min(Math.max(ax, lx), lx + w);
         lines[k].setAttribute("x1", String(bx)); lines[k].setAttribute("y1", String(ly + ht + 3));
@@ -168,11 +178,16 @@ export function Scene({ data, error, user, filter, children }: {
               style={{ left: Math.min(window.innerWidth - 290, Math.max(8, r.x + 14)), top: r.y + 14 + 90 > window.innerHeight ? r.y - 104 : r.y + 14 }}
             >
               <div className={s.dim}>{dayStr(data.baseMs, data.day[r.i])} · {minStr(data.minute[r.i])}</div>
-              <div><b>{r.listen?.track ?? "…"}</b></div>
-              <div>{r.listen?.artist ?? data.payload.header.artists[data.payload.artist[r.i]] ?? ""}</div>
-              {r.pinned && r.listen?.recordingMbid && (
-                <a href={`/u/${encodeURIComponent(user)}/songs/${r.listen.recordingMbid}`}>→ song page</a>
-              )}
+              <div><b>
+                {r.listen?.recordingMbid
+                  ? <a href={`/u/${encodeURIComponent(user)}/songs/${r.listen.recordingMbid}`}>{r.listen.track}</a>
+                  : r.listen?.track ?? "…"}
+              </b></div>
+              <div>
+                {r.listen?.artistMbid
+                  ? <a href={`/u/${encodeURIComponent(user)}/artists/${r.listen.artistMbid}`}>{r.listen.artist}</a>
+                  : r.listen?.artist ?? data.payload.header.artists[data.payload.artist[r.i]] ?? ""}
+              </div>
             </div>
           </>
         )}
