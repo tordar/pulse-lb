@@ -109,14 +109,13 @@ test("concerts: unknown user renders the empty state", async ({ page }) => {
   await expect(page.getByText("No concerts yet.")).toBeVisible();
 });
 
-test("home: visitor sees Sign in, owner sees Signed in as", async ({ page, context, baseURL }) => {
+test("home: visitor sees Sign in, owner is sent to their dashboard", async ({ page, context, baseURL }) => {
   await page.goto("/", { waitUntil: "load" });
   await expect(page.getByText("Sign in with ListenBrainz")).toBeVisible();
-  await expect(page.getByText(/Signed in as/)).toHaveCount(0);
+  await expect(page.getByText(/subscribe|pricing/i)).toHaveCount(0);
   await context.addCookies([{ name: "pulse_session", value: fx.tok, url: baseURL! }]);
   await page.goto("/", { waitUntil: "load" });
-  await expect(page.getByText(/Signed in as/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page).toHaveURL(/\/u\/tordar\/stats$/);
 });
 
 test("home ?error=upstream shows the banner; onboarding ?error=notfound too", async ({ page }) => {
@@ -124,4 +123,20 @@ test("home ?error=upstream shows the banner; onboarding ?error=notfound too", as
   await expect(page.getByText("ListenBrainz looks unreachable right now.")).toBeVisible();
   await page.goto("/onboarding?error=notfound&username=zz", { waitUntil: "load" });
   await expect(page.getByText(/couldn.t find/)).toBeVisible();
+});
+
+test("landing shows the scene, both ways in, and a cached points payload", async ({ page }) => {
+  await check(page, "/");
+  await expect(page.getByRole("link", { name: /sign in with listenbrainz/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /profile/i })).toBeVisible();
+  await expect(page.locator("canvas")).toHaveCount(1);
+  const res = await page.request.get("/api/landing/points");
+  expect(res.status()).toBe(200);
+  expect(res.headers()["cache-control"]).toContain("s-maxage=3600");
+  const body = await res.body();
+  const headLen = body.readUInt32LE(0);
+  const header = JSON.parse(body.subarray(4, 4 + headLen).toString("utf8"));
+  expect(header.n).toBeGreaterThan(1000);
+  const bad = await page.request.get("/api/landing/listen?ts=abc");
+  expect(bad.status()).toBe(400);
 });

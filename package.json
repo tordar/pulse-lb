@@ -28,6 +28,7 @@
     "react-dom": "19.3.0",
     "recharts": "^3.8.1",
     "stripe": "^22.2.0",
+    "three": "0.169.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -37,6 +38,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "0.169.0",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
