@@ -8,7 +8,8 @@ import { topOf } from "./scene/positions";
 import { fetchListen } from "./listen";
 import s from "./landing.module.css";
 
-type Readout = { i: number; x: number; y: number; pinned: boolean; listen: ListenAt | null; f: Filter | null };
+// x/y: the point on screen (crosshair). px/py: where the pointer was (the box opens there).
+type Readout = { i: number; x: number; y: number; px: number; py: number; pinned: boolean; listen: ListenAt | null; f: Filter | null };
 
 export function Scene({ data, error, user, filter, children }: {
   data: Prepared | null; error: boolean; user: string; filter: Filter | null; children: ReactNode;
@@ -21,8 +22,24 @@ export function Scene({ data, error, user, filter, children }: {
   const [status, setStatus] = useState<"idle" | "ready" | "nogl">("idle");
   const [readout, setReadout] = useState<Readout | null>(null);
   const readoutRef = useRef<Readout | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { readoutRef.current = readout?.f === filter ? readout : null; });
   const facts = useMemo(() => (data ? callouts(data) : []), [data]);
+
+  // Open the box beside the pointer, flipping left/up and clamping so it never leaves the screen.
+  useLayoutEffect(() => {
+    const box = boxRef.current, hero = heroRef.current;
+    if (!box || !hero || !readout) return;
+    const vw = window.innerWidth, vh = window.innerHeight, w = box.offsetWidth, h = box.offsetHeight, gap = 12, m = 8;
+    let x = readout.px + gap, y = readout.py + gap;
+    if (x + w > vw - m) x = readout.px - gap - w;
+    if (y + h > vh - m) y = readout.py - gap - h;
+    x = Math.max(m, Math.min(vw - m - w, x));
+    y = Math.max(m, Math.min(vh - m - h, y));
+    const top = hero.getBoundingClientRect().top;
+    box.style.left = `${x}px`;
+    box.style.top = `${y - top}px`;
+  }, [readout]);
 
   // Mount the scene once data is in.
   useEffect(() => {
@@ -112,9 +129,9 @@ export function Scene({ data, error, user, filter, children }: {
     const accept = (i: number) => !filterRef.current || matches(filterRef.current, data, i);
     // The crosshair and date/artist show at once; the track name (a server round trip) follows
     // once the pointer has rested, so sweeping the cursor never queues dozens of lookups.
-    const show = (i: number, x: number, y: number, pinned: boolean, fetchDelay = 0) => {
+    const show = (i: number, x: number, y: number, px: number, py: number, pinned: boolean, fetchDelay = 0) => {
       if (readoutRef.current?.i === i && readoutRef.current.pinned === pinned) return;
-      setReadout({ i, x, y, pinned, listen: null, f: filterRef.current });
+      setReadout({ i, x, y, px, py, pinned, listen: null, f: filterRef.current });
       const load = () => fetchListen(data.payload.ts[i]).then((listen) =>
         setReadout((cur) => (cur && cur.i === i ? { ...cur, listen } : cur)));
       window.clearTimeout(hoverTimer);
@@ -127,7 +144,7 @@ export function Scene({ data, error, user, filter, children }: {
       if (!h || !at || readoutRef.current?.pinned) return;
       const i = h.pick(at.x, at.y, 12, accept);
       if (i < 0) { window.clearTimeout(hoverTimer); setReadout(null); return; }
-      const q = h.project(...h.pointAt(i)); if (q) show(i, q[0], q[1], false, 120);
+      const q = h.project(...h.pointAt(i)); if (q) show(i, q[0], q[1], at.x, at.y, false, 120);
     };
     const isUi = (t: EventTarget | null) => t instanceof Element && !!t.closest("a,button");
     const down = (e: PointerEvent) => { if (!isUi(e.target)) drag = { x: e.clientX, y: e.clientY, moved: false, id: e.pointerId }; };
@@ -157,7 +174,7 @@ export function Scene({ data, error, user, filter, children }: {
       const i = h.pick(e.clientX, e.clientY, e.pointerType === "touch" ? 28 : 14, accept);
       const q = i >= 0 ? h.project(...h.pointAt(i)) : null;
       const cur = readoutRef.current;
-      if (q && !(cur?.pinned && cur.i === i)) show(i, q[0], q[1], true); else setReadout(null);
+      if (q && !(cur?.pinned && cur.i === i)) show(i, q[0], q[1], e.clientX, e.clientY, true); else setReadout(null);
     };
     const cancel = (e: PointerEvent) => {
       if (!drag || e.pointerId !== drag.id) return;
@@ -199,8 +216,9 @@ export function Scene({ data, error, user, filter, children }: {
           <>
             <div className={s.cross} style={{ left: r.x, top: r.y }} />
             <div
+              ref={boxRef}
               className={`${s.readout} ${r.pinned ? s.pinned : ""}`}
-              style={{ left: Math.min(window.innerWidth - 290, Math.max(8, r.x + 14)), top: r.y + 14 + 90 > window.innerHeight ? r.y - 104 : r.y + 14 }}
+              style={{ left: r.px + 12, top: r.py + 12 }}
             >
               <div className={s.dim}>{dayStr(data.baseMs, data.day[r.i])} · {minStr(data.minute[r.i])}</div>
               <div><b>
