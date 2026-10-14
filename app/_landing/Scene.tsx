@@ -168,6 +168,7 @@ export function Scene({ data, error, user, filter, children }: {
     };
     const up = (e: PointerEvent) => {
       const h = handleRef.current;
+      if (twoFinger) { drag = null; return; }
       if (!drag || e.pointerId !== drag.id || !h) return;
       const click = !drag.moved; drag = null;
       if (!click) return;
@@ -181,13 +182,40 @@ export function Scene({ data, error, user, filter, children }: {
       if (drag.moved && hero.hasPointerCapture(e.pointerId)) hero.releasePointerCapture(e.pointerId);
       drag = null;
     };
+    // Phones: one finger scrolls the page as usual; two fingers turn the mountain.
+    let twoFinger = false, mid: { x: number; y: number } | null = null;
+    const midOf = (t: TouchList) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+    const touchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      twoFinger = true; drag = null; mid = midOf(e.touches);
+      window.clearTimeout(hoverTimer); setReadout(null);
+    };
+    const touchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || !mid) return;
+      e.preventDefault(); // keep the browser from scrolling or zooming during the turn
+      const m = midOf(e.touches);
+      handleRef.current?.rotate((m.x - mid.x) * 1.4, (m.y - mid.y) * 1.4);
+      mid = m;
+    };
+    const touchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) mid = null;
+      if (e.touches.length === 0) twoFinger = false;
+    };
     const leave = () => { hoverAt = null; window.clearTimeout(hoverTimer); if (!readoutRef.current?.pinned) setReadout(null); };
     hero.addEventListener("pointerdown", down);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", cancel);
     hero.addEventListener("pointerleave", leave);
+    hero.addEventListener("touchstart", touchStart, { passive: true });
+    hero.addEventListener("touchmove", touchMove, { passive: false });
+    hero.addEventListener("touchend", touchEnd);
+    hero.addEventListener("touchcancel", touchEnd);
     return () => {
+      hero.removeEventListener("touchstart", touchStart);
+      hero.removeEventListener("touchmove", touchMove);
+      hero.removeEventListener("touchend", touchEnd);
+      hero.removeEventListener("touchcancel", touchEnd);
       cancelAnimationFrame(hoverFrame);
       window.clearTimeout(hoverTimer);
       hero.removeEventListener("pointerdown", down);
