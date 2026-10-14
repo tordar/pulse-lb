@@ -5,8 +5,7 @@ import { SignInOnly } from "./_landing/SignInOnly";
 
 type SP = Promise<{ error?: string; reason?: string }>;
 
-// Signed-in visitors never see this page: proxy.ts sends them to their own
-// dashboard. Everyone else gets the showcase landscape and a way to sign in.
+// Everyone, signed in or not, gets the showcase landscape and a way to sign in.
 export default function Home({ searchParams }: { searchParams: SP }) {
   return (
     <>
