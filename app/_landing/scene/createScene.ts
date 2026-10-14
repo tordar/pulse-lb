@@ -96,7 +96,7 @@ export async function createScene(canvas: HTMLCanvasElement, p: Prepared, opts: 
     const w = canvas.clientWidth, h = canvas.clientHeight;
     // iOS can report a 0×0 canvas mid-transition; sizing to it would leave a NaN camera aspect.
     if (!w || !h) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, w < 720 ? 1.5 : 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     renderer.setPixelRatio(dpr); renderer.setSize(w, h, false); U.uDpr.value = dpr;
     camera.aspect = w / h; camera.updateProjectionMatrix();
   }

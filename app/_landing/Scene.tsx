@@ -96,12 +96,26 @@ export function Scene({ data, error, user, filter, children }: {
     const hero = heroRef.current;
     if (status !== "ready" || !hero || !data) return;
     let drag: { x: number; y: number; moved: boolean; id: number } | null = null;
-    let hoverTimer = 0;
+    let hoverTimer = 0, hoverFrame = 0, hoverAt: { x: number; y: number } | null = null;
     const accept = (i: number) => !filterRef.current || matches(filterRef.current, data, i);
-    const show = (i: number, x: number, y: number, pinned: boolean) => {
+    // The crosshair and date/artist show at once; the track name (a server round trip) follows
+    // once the pointer has rested, so sweeping the cursor never queues dozens of lookups.
+    const show = (i: number, x: number, y: number, pinned: boolean, fetchDelay = 0) => {
+      if (readoutRef.current?.i === i && readoutRef.current.pinned === pinned) return;
       setReadout({ i, x, y, pinned, listen: null, f: filterRef.current });
-      fetchListen(data.payload.ts[i]).then((listen) =>
-        setReadout((cur) => (cur && cur.i === i ? { ...cur, listen } : cur)));
+      window.clearTimeout(hoverTimer);
+      hoverTimer = window.setTimeout(() => {
+        fetchListen(data.payload.ts[i]).then((listen) =>
+          setReadout((cur) => (cur && cur.i === i ? { ...cur, listen } : cur)));
+      }, fetchDelay);
+    };
+    const hoverPick = () => {
+      hoverFrame = 0;
+      const h = handleRef.current, at = hoverAt;
+      if (!h || !at || readoutRef.current?.pinned) return;
+      const i = h.pick(at.x, at.y, 12, accept);
+      if (i < 0) { window.clearTimeout(hoverTimer); setReadout(null); return; }
+      const q = h.project(...h.pointAt(i)); if (q) show(i, q[0], q[1], false, 120);
     };
     const isUi = (t: EventTarget | null) => t instanceof Element && !!t.closest("a,button");
     const down = (e: PointerEvent) => { if (!isUi(e.target)) drag = { x: e.clientX, y: e.clientY, moved: false, id: e.pointerId }; };
@@ -115,16 +129,13 @@ export function Scene({ data, error, user, filter, children }: {
         if (drag?.moved) { h.rotate(e.movementX, e.movementY); return; }
       }
       if (e.pointerType !== "mouse" || readoutRef.current?.pinned) return;
-      window.clearTimeout(hoverTimer);
       if (window.scrollY > 8 || isUi(e.target) || !(e.target instanceof Node && hero.contains(e.target))) {
-        setReadout(null);
+        hoverAt = null; window.clearTimeout(hoverTimer); setReadout(null);
         return;
       }
-      hoverTimer = window.setTimeout(() => {
-        const i = h.pick(e.clientX, e.clientY, 12, accept);
-        if (i < 0) { setReadout(null); return; }
-        const q = h.project(...h.pointAt(i)); if (q) show(i, q[0], q[1], false);
-      }, 150);
+      // At most one pick per frame, however fast the pointer events arrive.
+      hoverAt = { x: e.clientX, y: e.clientY };
+      if (!hoverFrame) hoverFrame = requestAnimationFrame(hoverPick);
     };
     const up = (e: PointerEvent) => {
       const h = handleRef.current;
@@ -133,20 +144,22 @@ export function Scene({ data, error, user, filter, children }: {
       if (!click) return;
       const i = h.pick(e.clientX, e.clientY, e.pointerType === "touch" ? 28 : 14, accept);
       const q = i >= 0 ? h.project(...h.pointAt(i)) : null;
-      if (q && i !== readoutRef.current?.i) show(i, q[0], q[1], true); else setReadout(null);
+      const cur = readoutRef.current;
+      if (q && !(cur?.pinned && cur.i === i)) show(i, q[0], q[1], true); else setReadout(null);
     };
     const cancel = (e: PointerEvent) => {
       if (!drag || e.pointerId !== drag.id) return;
       if (drag.moved && hero.hasPointerCapture(e.pointerId)) hero.releasePointerCapture(e.pointerId);
       drag = null;
     };
-    const leave = () => { window.clearTimeout(hoverTimer); if (!readoutRef.current?.pinned) setReadout(null); };
+    const leave = () => { hoverAt = null; window.clearTimeout(hoverTimer); if (!readoutRef.current?.pinned) setReadout(null); };
     hero.addEventListener("pointerdown", down);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", cancel);
     hero.addEventListener("pointerleave", leave);
     return () => {
+      cancelAnimationFrame(hoverFrame);
       window.clearTimeout(hoverTimer);
       hero.removeEventListener("pointerdown", down);
       window.removeEventListener("pointermove", move);
