@@ -58,31 +58,43 @@ export function Scene({ data, error, user, filter, children }: {
     const lines = [...wrap.querySelectorAll<SVGLineElement>("line")];
     const dots = [...wrap.querySelectorAll<SVGCircleElement>("circle")];
     const OFF = [70, 110, 50];
+    // Label sizes only change with the viewport; reading them every frame forced a layout per frame.
+    let sizes: [number, number][] = [], sizedFor = "";
+    let lastKey = "";
     return h.onFrame(() => {
       const sc = window.scrollY / window.innerHeight;
-      wrap.style.opacity = String(Math.max(0, 1 - sc * 3) * (filterRef.current ? 0 : 1));
-      const portrait = window.innerHeight > window.innerWidth, topMin = portrait ? 96 : 110;
-      const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
-      anchors.forEach((a, k) => {
-        const p = h.project(a[0], a[1], a[2]), el = labels[k];
-        if (!el) return;
-        // Hide a callout whose anchor isn't on screen instead of pinning it to a corner.
-        const visible = !!p && Number.isFinite(p[0]) && Number.isFinite(p[1])
-          && p[0] >= -24 && p[0] <= window.innerWidth + 24 && p[1] >= topMin && p[1] <= window.innerHeight;
-        for (const node of [el, lines[k], dots[k]]) node.style.visibility = visible ? "" : "hidden";
-        if (!visible) return;
-        const [ax, ay] = p, w = el.offsetWidth, ht = el.offsetHeight;
-        const lx = Math.min(window.innerWidth - w - 12, Math.max(12, ax - 6));
-        let ly = Math.max(topMin, ay - (OFF[k] ?? 60) - ht);
-        // Push down past any label already placed in the same horizontal band.
-        for (const b of placed) if (lx < b.x1 && lx + w > b.x0 && ly < b.y1 && ly + ht > b.y0) ly = b.y1 + 6;
-        placed.push({ x0: lx, x1: lx + w, y0: ly, y1: ly + ht });
-        el.style.transform = `translate(${lx}px, ${ly}px)`;
-        const bx = Math.min(Math.max(ax, lx), lx + w);
-        lines[k].setAttribute("x1", String(bx)); lines[k].setAttribute("y1", String(ly + ht + 3));
-        lines[k].setAttribute("x2", String(ax)); lines[k].setAttribute("y2", String(ay - 3));
-        dots[k].setAttribute("cx", String(ax)); dots[k].setAttribute("cy", String(ay));
-      });
+      const opacity = String(Math.max(0, 1 - sc * 3) * (filterRef.current ? 0 : 1));
+      if (wrap.style.opacity !== opacity) wrap.style.opacity = opacity;
+      const viewport = `${window.innerWidth}x${window.innerHeight}`;
+      if (sizedFor !== viewport) { sizes = labels.map((el) => [el.offsetWidth, el.offsetHeight]); sizedFor = viewport; }
+      const projected = anchors.map((a) => h.project(a[0], a[1], a[2]));
+      // The camera is still most of the time: skip all DOM writes when nothing moved.
+      const key = viewport + projected.map((p) => (p ? `${Math.round(p[0])},${Math.round(p[1])}` : "-")).join("|");
+      if (key !== lastKey) {
+        lastKey = key;
+        const portrait = window.innerHeight > window.innerWidth, topMin = portrait ? 96 : 110;
+        const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+        anchors.forEach((_, k) => {
+          const p = projected[k], el = labels[k];
+          if (!el) return;
+          // Hide a callout whose anchor isn't on screen instead of pinning it to a corner.
+          const visible = !!p && Number.isFinite(p[0]) && Number.isFinite(p[1])
+            && p[0] >= -24 && p[0] <= window.innerWidth + 24 && p[1] >= topMin && p[1] <= window.innerHeight;
+          for (const node of [el, lines[k], dots[k]]) node.style.visibility = visible ? "" : "hidden";
+          if (!visible) return;
+          const [ax, ay] = p, [w, ht] = sizes[k];
+          const lx = Math.min(window.innerWidth - w - 12, Math.max(12, ax - 6));
+          let ly = Math.max(topMin, ay - (OFF[k] ?? 60) - ht);
+          // Push down past any label already placed in the same horizontal band.
+          for (const b of placed) if (lx < b.x1 && lx + w > b.x0 && ly < b.y1 && ly + ht > b.y0) ly = b.y1 + 6;
+          placed.push({ x0: lx, x1: lx + w, y0: ly, y1: ly + ht });
+          el.style.transform = `translate(${lx}px, ${ly}px)`;
+          const bx = Math.min(Math.max(ax, lx), lx + w);
+          lines[k].setAttribute("x1", String(bx)); lines[k].setAttribute("y1", String(ly + ht + 3));
+          lines[k].setAttribute("x2", String(ax)); lines[k].setAttribute("y2", String(ay - 3));
+          dots[k].setAttribute("cx", String(ax)); dots[k].setAttribute("cy", String(ay));
+        });
+      }
       const r = readoutRef.current;
       if (r) {
         const q = h.project(...h.pointAt(r.i));
@@ -103,11 +115,11 @@ export function Scene({ data, error, user, filter, children }: {
     const show = (i: number, x: number, y: number, pinned: boolean, fetchDelay = 0) => {
       if (readoutRef.current?.i === i && readoutRef.current.pinned === pinned) return;
       setReadout({ i, x, y, pinned, listen: null, f: filterRef.current });
+      const load = () => fetchListen(data.payload.ts[i]).then((listen) =>
+        setReadout((cur) => (cur && cur.i === i ? { ...cur, listen } : cur)));
       window.clearTimeout(hoverTimer);
-      hoverTimer = window.setTimeout(() => {
-        fetchListen(data.payload.ts[i]).then((listen) =>
-          setReadout((cur) => (cur && cur.i === i ? { ...cur, listen } : cur)));
-      }, fetchDelay);
+      // A tap fetches right away: on touch, pointerleave follows pointerup and clears hoverTimer.
+      if (fetchDelay) hoverTimer = window.setTimeout(load, fetchDelay); else load();
     };
     const hoverPick = () => {
       hoverFrame = 0;
