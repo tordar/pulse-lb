@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 
 /**
- * Two jobs, both about keeping work off the database.
+ * Three jobs.
  *
  * 1. Turn away commercial crawlers before they reach a route handler. These are
  *    SEO/data-broker and AI-training bots that either ignore robots.txt or
@@ -9,7 +10,10 @@ import { NextRequest, NextResponse } from "next/server";
  *    never opens a Postgres connection. Search engines are deliberately absent
  *    from the list — robots.txt is the right tool for those, and they respect it.
  *
- * 2. Mark every non-canonical host noindex. The raw deployment URL
+ * 2. Send signed-in users from / straight to their own dashboard. Error
+ *    redirects (/?error=…) still land on the page so the banner shows.
+ *
+ * 3. Mark every non-canonical host noindex. The raw deployment URL
  *    (pulse-<hash>-tordars-projects.vercel.app) was being crawled alongside the
  *    real domain, paying twice for the same pages.
  */
@@ -34,13 +38,22 @@ function canonicalHost(): string | null {
   return process.env.VERCEL_PROJECT_PRODUCTION_URL ?? null;
 }
 
-export default function proxy(req: NextRequest) {
+export default async function proxy(req: NextRequest) {
   const ua = req.headers.get("user-agent") ?? "";
   if (BLOCKED_UA.test(ua)) {
     return new NextResponse(null, {
       status: 403,
       headers: { "Cache-Control": "public, max-age=86400" },
     });
+  }
+
+  if (req.nextUrl.pathname === "/" && !req.nextUrl.searchParams.has("error")) {
+    const session = await verifySessionToken(req.cookies.get(COOKIE_NAME)?.value);
+    if (session) {
+      return NextResponse.redirect(
+        new URL(`/u/${encodeURIComponent(session.lbUsername)}/stats`, req.url),
+      );
+    }
   }
 
   const res = NextResponse.next();

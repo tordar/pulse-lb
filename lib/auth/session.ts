@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 
-const COOKIE_NAME = "pulse_session";
+export const COOKIE_NAME = "pulse_session";
 const ALGO = "HS256";
 const ONE_DAY = 60 * 60 * 24;
 const SESSION_TTL_SECONDS = 30 * ONE_DAY;
@@ -37,7 +37,11 @@ export async function setSession(session: Session): Promise<void> {
 
 export async function getSession(): Promise<Session | null> {
   const jar = await cookies();
-  const token = jar.get(COOKIE_NAME)?.value;
+  return verifySessionToken(jar.get(COOKIE_NAME)?.value);
+}
+
+/** Cookie-store-free variant for proxy.ts, which reads cookies off the request. */
+export async function verifySessionToken(token: string | undefined): Promise<Session | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secretKey(), { algorithms: [ALGO] });
