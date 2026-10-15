@@ -83,6 +83,8 @@
 .node.active .pkt { height: 1.6em; }
 .spec { line-height: 1.6; padding-top: 8px; max-width: 60ch; color: var(--color-muted-foreground); }
 .spec code { color: var(--color-foreground); font-family: var(--font-mono); font-size: 12px; }
+.group { color: var(--color-subtle-foreground); font-size: 11px; text-transform: uppercase; letter-spacing: .025em; margin-bottom: 8px; }
+.groupNext { margin-top: 24px; }
 .wire { width: 1px; height: 22px; margin-left: 20px; background: repeating-linear-gradient(to bottom, #3a3a3a 0 3px, transparent 3px 6px); }
 
 @media (max-width: 720px) {
