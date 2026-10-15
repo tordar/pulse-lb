@@ -10,7 +10,7 @@ const n = (x: number) => x.toLocaleString("en-US");
 export function Pipeline({ totals, latest }: { totals: Totals; latest: ListenAt | null }) {
   const stages: [string, string, string, React.ReactNode][] = [
     ["01 SOURCE", "ListenBrainz", `${n(totals.listens)} listens`, <>Every play from Spotify, Navidrome and friends is scrobbled to <code>ListenBrainz</code>, the open listen archive run by MetaBrainz. pulse never talks to the players directly.</>],
-    ["02 AUTH", "MB OAuth → JWT", "Session 30d", <>Sign in with your MetaBrainz account. The callback mints a signed <code>HS256</code> session cookie, and <code>proxy.ts</code> sends you straight to your own stats.</>],
+    ["02 AUTH", "MB OAuth → JWT", "Session 30d", <>Sign in with your MetaBrainz account. The callback mints a signed <code>HS256</code> session cookie that keeps you signed in for 30 days.</>],
     ["03 INGEST", "Poll + delta", "Live", <>An open tab polls LB for new listens and asks the server to fetch only the delta. History is backfilled once; duplicates are dropped on <code>(user, listened_at, track)</code>.</>],
     ["04 ENRICH", "MusicBrainz", `${n(totals.songs)} songs`, <>Recording, release and release-group MBIDs are resolved against <code>MusicBrainz</code> for real titles and years, with covers from the Cover Art Archive.</>],
     ["05 STORE", "Postgres", `${n(totals.albums)} albums`, <>Everything lands in Postgres through <code>postgres-js</code>: one row per listen, plus the MusicBrainz catalog it points to.</>],
@@ -27,7 +27,7 @@ export function Pipeline({ totals, latest }: { totals: Totals; latest: ListenAt 
 
   return (
     <section className={s.section}>
-      <header className={s.sectionHead}><span>{"// 02 — PIPELINE"}</span><span>HOW A LISTEN GETS HERE</span></header>
+      <header className={s.sectionHead}><span>Pipeline</span><span>How a listen gets here</span></header>
       <div className={s.pipe}>
         {stages.map(([num, title, value, spec], k) => (
           <div key={num}>
@@ -35,8 +35,8 @@ export function Pipeline({ totals, latest }: { totals: Totals; latest: ListenAt 
             <div className={s.stage}>
               <div className={`${s.node} ${k === active && packet ? s.active : ""}`}>
                 <div className={s.dim}>{num}</div>
-                {title.toUpperCase()}
-                <div className={s.v}>{value.toUpperCase()}</div>
+                <div>{title}</div>
+                <div className={s.v}>{value}</div>
                 <div className={s.pkt}>{k === active ? packet : ""}</div>
               </div>
               <div className={s.spec}>{spec}</div>

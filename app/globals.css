@@ -5,18 +5,18 @@
 
 @theme {
   /* Surfaces */
-  --color-background: #0a0a0a;
+  --color-background: #050505;
   --color-foreground: #fafafa;
-  --color-card: #111111;
+  --color-card: #050505;
   --color-card-foreground: #fafafa;
-  --color-card-border: #3a3a3a;
-  --color-border: #2a2a2a;
-  --color-input: #1a1a1a;
-  --color-popover: #111111;
+  --color-card-border: #262626;
+  --color-border: #262626;
+  --color-input: #0d0d0d;
+  --color-popover: #0a0a0a;
   --color-popover-foreground: #fafafa;
 
   /* Text */
-  --color-muted: #1a1a1a;
+  --color-muted: #111111;
   --color-muted-foreground: #a1a1aa;
   --color-subtle-foreground: #71717a;
 

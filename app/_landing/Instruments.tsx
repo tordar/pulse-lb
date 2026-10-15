@@ -24,7 +24,7 @@ export function Instruments({ data, totals, filter, onFilter }: {
 
   return (
     <section className={s.section}>
-      <header className={s.sectionHead}><span>{"// 01 — INSTRUMENTS"}</span><span>TAP TO LIGHT UP THE FIELD</span></header>
+      <header className={s.sectionHead}><span>Instruments</span><span>Tap to light up the mountain</span></header>
       <div className={s.grid}>
         <div className={s.gauge}>
           <h4>Weekday × hour</h4>
