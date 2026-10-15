@@ -41,6 +41,9 @@ export function Scene({ data, error, user, filter, children }: {
     box.style.top = `${y - top}px`;
   }, [readout]);
 
+  // Download three.js while the points are still in flight.
+  useEffect(() => { import("./scene/createScene"); import("three"); }, []);
+
   // Mount the scene once data is in.
   useEffect(() => {
     if (!data || !canvasRef.current) return;
@@ -238,6 +241,7 @@ export function Scene({ data, error, user, filter, children }: {
       </div>
       <div ref={heroRef} className={s.hero}>
         {children}
+        {status === "idle" && !error && <p className={`${s.msg} ${s.loading}`}>Loading listens</p>}
         {status === "nogl" && <p className={s.msg}>WebGL unavailable</p>}
         {error && <p className={s.msg}>Data unavailable</p>}
         {r && data && (

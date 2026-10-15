@@ -1,18 +1,20 @@
 import { Suspense } from "react";
+import { preload } from "react-dom";
 import { AlertTriangle } from "lucide-react";
-import { Landing } from "./_landing/Landing";
-import { SignInOnly } from "./_landing/SignInOnly";
+import { Landing, LandingLoading } from "./_landing/Landing";
 
 type SP = Promise<{ error?: string; reason?: string }>;
 
 // Everyone, signed in or not, gets the showcase landscape and a way to sign in.
 export default function Home({ searchParams }: { searchParams: SP }) {
+  // Start the mountain's download with the page instead of after hydration.
+  preload("/api/landing/points", { as: "fetch", crossOrigin: "anonymous" });
   return (
     <>
       <Suspense fallback={null}>
         <ErrorBanners searchParams={searchParams} />
       </Suspense>
-      <Suspense fallback={<SignInOnly />}>
+      <Suspense fallback={<LandingLoading />}>
         <Landing />
       </Suspense>
     </>
