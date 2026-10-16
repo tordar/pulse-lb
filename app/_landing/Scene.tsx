@@ -167,8 +167,9 @@ export function Scene({ data, error, user, filter, arrivals, onShow, children }:
       ctx.strokeStyle = `rgba(255,74,46,${1 - k})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 3 + k * 22, 0, 7); ctx.stroke();
     };
     const from = (): [number, number] => {
-      const el = heroRef.current?.querySelector("[data-latest]"), b = el?.getBoundingClientRect();
-      return b && b.width ? [b.left + 4, b.top + b.height / 2] : [16, window.innerHeight - 30];
+      // Just past the end of the song name (its last line, if it wraps).
+      const rects = heroRef.current?.querySelector("[data-latest]")?.getClientRects(), b = rects?.[rects.length - 1];
+      return b && b.width ? [b.right + 10, b.top + b.height / 2] : [16, window.innerHeight - 30];
     };
     return h.onFrame(() => {
       const flights = flightsRef.current;
