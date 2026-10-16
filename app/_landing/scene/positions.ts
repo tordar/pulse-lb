@@ -19,6 +19,12 @@ export function buildPositions(p: Prepared): Float32Array {
   return out;
 }
 
+/** A listen that arrived after the payload, sitting just on the surface (the heightfield isn't rebuilt). */
+export function livePosition(p: Prepared, day: number, minute: number): [number, number, number] {
+  const u = (day + 0.5) / (p.maxDay + 1), v = minute / 1440;
+  return [(u - 0.5) * W, heightAt(p.hf, Math.min(1, u), v) * HEIGHT + 0.01, (v - 0.5) * 2];
+}
+
 /** Highest point of the surface along the hour axis at a given day. */
 export function topOf(p: Prepared, day: number): [number, number, number] {
   const u = (day + 0.5) / (p.maxDay + 1);

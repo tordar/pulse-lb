@@ -4,8 +4,8 @@ import type { ListenAt } from "@/lib/landing/query";
 import type { Totals } from "./LandingClient";
 import s from "./landing.module.css";
 
-export function Hud({ user, totals, latest, chip, onClear }: {
-  user: string; totals: Totals; latest: ListenAt | null; chip: string | null; onClear: () => void;
+export function Hud({ user, totals, latest, fresh, chip, onClear }: {
+  user: string; totals: Totals; latest: ListenAt | null; fresh: boolean; chip: string | null; onClear: () => void;
 }) {
   const n = (x: number) => x.toLocaleString("en-US");
   return (
@@ -16,9 +16,9 @@ export function Hud({ user, totals, latest, chip, onClear }: {
         {chip && <div className={s.chip}>FILTER ▸ {chip.toUpperCase()}<button type="button" onClick={onClear} aria-label="Clear filter">×</button></div>}
       </div>
       {latest && (
-        <div className={`${s.hud} ${s.bl}`}>
+        <div className={`${s.hud} ${s.bl} ${s.latest} ${fresh ? s.fresh : ""}`}>
           <div className={s.dim}>LATEST ▸</div>
-          <div><b>{latest.artist} — {latest.track}</b></div>
+          <div><b data-latest>{latest.artist} — {latest.track}</b></div>
         </div>
       )}
       <div className={`${s.hud} ${s.br}`}>

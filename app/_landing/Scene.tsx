@@ -1,18 +1,27 @@
 // app/_landing/Scene.tsx
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { callouts, dayStr, filterUniforms, matches, minStr, type Filter, type Prepared } from "@/lib/landing/derive";
+import { callouts, dayStr, filterUniforms, livePoint, matches, minStr, type Filter, type Prepared } from "@/lib/landing/derive";
 import type { ListenAt } from "@/lib/landing/query";
 import type { SceneHandle } from "./scene/createScene";
 import { topOf } from "./scene/positions";
 import { fetchListen } from "./listen";
 import s from "./landing.module.css";
 
+/** A listen that arrived while the page was open. `quiet` ones are placed without a flight. */
+export type Arrival = { ts: number; track: string; artist: string; recordingMbid: string | null; quiet: boolean };
+type Flight = { a: Arrival; slot: number; start: number; shown: boolean; landedAt?: number };
+
+// A flight: two pulses on the LATEST line, a straight eased trip to the point, one ring on landing.
+const PULSE = 900, TRAVEL = 1400, RING = 700, FADE = 8000, GAP = 1000;
+const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
 // x/y: the point on screen (crosshair). px/py: where the pointer was (the box opens there).
 type Readout = { i: number; x: number; y: number; px: number; py: number; pinned: boolean; listen: ListenAt | null; f: Filter | null };
 
-export function Scene({ data, error, user, filter, children }: {
-  data: Prepared | null; error: boolean; user: string; filter: Filter | null; children: ReactNode;
+export function Scene({ data, error, user, filter, arrivals, onShow, children }: {
+  data: Prepared | null; error: boolean; user: string; filter: Filter | null;
+  arrivals: Arrival[]; onShow: (a: Arrival, flying: boolean) => void; children: ReactNode;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -25,6 +34,11 @@ export function Scene({ data, error, user, filter, children }: {
   const boxRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { readoutRef.current = readout?.f === filter ? readout : null; });
   const facts = useMemo(() => (data ? callouts(data) : []), [data]);
+  const fxRef = useRef<HTMLCanvasElement>(null);
+  const flightsRef = useRef<Flight[]>([]);
+  const placedRef = useRef(0);
+  const onShowRef = useRef(onShow);
+  useEffect(() => { onShowRef.current = onShow; });
 
   // Open the box beside the pointer, flipping left/up and clamping so it never leaves the screen.
   useLayoutEffect(() => {
@@ -122,6 +136,80 @@ export function Scene({ data, error, user, filter, children }: {
       }
     });
   }, [status, facts, data]);
+
+  // New listens: place each on the mountain; fly it in only when someone is looking at the hero.
+  useEffect(() => {
+    if (!data || status === "idle") return;
+    const h = handleRef.current, reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    for (; placedRef.current < arrivals.length; placedRef.current++) {
+      const a = arrivals[placedRef.current], lp = livePoint(data, a.ts, a.artist);
+      const slot = h ? h.addLive(lp.day, lp.minute, lp.artist) : -1;
+      const watching = !a.quiet && document.visibilityState === "visible" && window.scrollY < window.innerHeight * 0.5;
+      if (!h || slot < 0 || !watching || reduced) { h?.light(slot, watching); onShowRef.current(a, false); continue; }
+      const prev = flightsRef.current.at(-1);
+      flightsRef.current.push({ a, slot, start: Math.max(performance.now(), (prev?.start ?? 0) + GAP), shown: false });
+    }
+  }, [arrivals, status, data]);
+
+  // Flights are drawn on their own canvas. The target is re-projected every frame, so the dot
+  // follows the mountain however it's turned.
+  useEffect(() => {
+    const h = handleRef.current, cv = fxRef.current, ctx = cv?.getContext("2d");
+    if (status !== "ready" || !h || !cv || !ctx) return;
+    let sizedFor = "", drawn = false;
+    const dot = (x: number, y: number, r: number, a: number) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
+      g.addColorStop(0, `rgba(255,74,46,${a})`); g.addColorStop(0.25, `rgba(255,74,46,${a * 0.5})`); g.addColorStop(1, "rgba(255,74,46,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 4, 0, 7); ctx.fill();
+      ctx.fillStyle = `rgba(255,220,210,${a})`; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    };
+    const ring = (x: number, y: number, k: number) => {
+      ctx.strokeStyle = `rgba(255,74,46,${1 - k})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 3 + k * 22, 0, 7); ctx.stroke();
+    };
+    const from = (): [number, number] => {
+      const el = heroRef.current?.querySelector("[data-latest]"), b = el?.getBoundingClientRect();
+      return b && b.width ? [b.left + 4, b.top + b.height / 2] : [16, window.innerHeight - 30];
+    };
+    return h.onFrame(() => {
+      const flights = flightsRef.current;
+      if (!flights.length && !drawn) return;
+      const vw = window.innerWidth, vh = window.innerHeight, viewport = `${vw}x${vh}`;
+      if (sizedFor !== viewport) {
+        const d = Math.min(window.devicePixelRatio || 1, 2);
+        cv.width = vw * d; cv.height = vh * d; ctx.setTransform(d, 0, 0, d, 0, 0); sizedFor = viewport;
+      }
+      ctx.clearRect(0, 0, vw, vh);
+      const now = performance.now();
+      flightsRef.current = flights.filter((f) => {
+        const t = now - f.start;
+        if (t < 0) return true;
+        if (!f.shown) { f.shown = true; onShowRef.current(f.a, true); }
+        const [sx, sy] = from();
+        if (t < PULSE) { ring(sx, sy, (t % 450) / 450); dot(sx, sy, 2.5, 1); return true; }
+        const q = h.project(...h.livePointAt(f.slot));
+        // A spot past the screen edge still gets a flight (on phones the newest edge is often just
+        // below the fold); only a spot behind the camera skips straight to lighting up.
+        if (!q || !Number.isFinite(q[0]) || !Number.isFinite(q[1])) { if (f.landedAt === undefined) h.light(f.slot, true); return false; }
+        const [tx, ty] = q!;
+        if (t < PULSE + TRAVEL) {
+          const k = (t - PULSE) / TRAVEL;
+          for (let i = 6; i >= 0; i--) {
+            const e = ease(Math.max(0, k - i * 0.018));
+            dot(sx + (tx - sx) * e, sy + (ty - sy) * e, 2.5 - i * 0.25, i ? 0.25 / i : 1);
+          }
+          return true;
+        }
+        if (f.landedAt === undefined) { f.landedAt = now; h.light(f.slot, true); }
+        // The point alone gets lost on a dense ridge, so a dot holds the spot while it fades.
+        const age = now - f.landedAt;
+        if (age >= FADE) return false;
+        if (age < RING) ring(tx, ty, age / RING);
+        dot(tx, ty, 2, 1 - age / FADE);
+        return true;
+      });
+      drawn = flightsRef.current.length > 0;
+    });
+  }, [status]);
 
   // Pointer: hover (mouse) after 150ms rest, tap pins, desktop drag rotates, touch drags scroll.
   useEffect(() => {
@@ -239,6 +327,7 @@ export function Scene({ data, error, user, filter, children }: {
           <div key={f.key} data-callout className={s.callout}><span className={s.dim}>{f.label}</span><b>{f.value}</b></div>
         ))}
       </div>
+      <canvas ref={fxRef} className={s.fx} aria-hidden="true" />
       <div ref={heroRef} className={s.hero}>
         {children}
         {status === "idle" && !error && <p className={`${s.msg} ${s.loading}`}>Loading listens</p>}

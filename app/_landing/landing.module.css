@@ -37,6 +37,9 @@
 .readout a { color: inherit; text-decoration: underline; text-decoration-color: #555; text-underline-offset: 3px; }
 .readout a:hover { text-decoration-color: var(--hi); }
 
+.fx { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 2; pointer-events: none; }
+.latest b { transition: color .4s; }
+.latest.fresh b { color: var(--accent); }
 .callouts { position: fixed; inset: 0; z-index: 1; pointer-events: none; transition: opacity .2s; }
 .callouts svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .callouts line { stroke: rgba(236,236,236,.45); stroke-width: 1; }

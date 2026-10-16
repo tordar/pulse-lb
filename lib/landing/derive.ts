@@ -89,6 +89,17 @@ export function heightAt(hf: Heightfield, u: number, v: number): number {
   return Math.pow((a * (1 - tz) + b * tz) / hf.max, 0.75);
 }
 
+/** Where a listen that arrived after the payload sits on the mountain: day and minute on the payload's axes, artist rank. */
+export function livePoint(p: Prepared, ts: number, artistName: string): { day: number; minute: number; artist: number } {
+  const ms = ts * 1000, local = ms + offsetFinder(p.payload.header.tz)(ms);
+  const localDay = Math.floor(local / DAY_MS), rank = p.payload.header.artists.indexOf(artistName);
+  return {
+    day: localDay - Math.round(p.baseMs / DAY_MS),
+    minute: Math.floor((local - localDay * DAY_MS) / 6e4),
+    artist: rank < 0 ? OTHER_ARTIST : rank,
+  };
+}
+
 export function prepare(payload: LandingPayload): Prepared {
   const l = localize(payload.ts, payload.header.tz);
   const baseWeekday = (new Date(l.baseMs).getUTCDay() + 6) % 7;

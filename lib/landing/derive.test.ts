@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { OTHER_ARTIST, type LandingPayload } from "./payload";
 import {
-  callouts, countMatches, dayStr, filterLabel, filterUniforms, heightAt, localize, matches,
+  callouts, countMatches, dayStr, filterLabel, filterUniforms, heightAt, livePoint, localize, matches,
   minStr, prepare, punchCard, topArtists, yearCounts, yearStartDay,
 } from "./derive";
 
@@ -98,4 +98,14 @@ test("filterUniforms maps each kind", () => {
   assert.deepEqual(filterUniforms({ kind: "slot", weekday: 3, hour: 23 }), { uF: 1, uA: 3, uB: 23 });
   assert.deepEqual(filterUniforms({ kind: "year", year: 2020, from: 10, to: 20 }), { uF: 2, uA: 10, uB: 20 });
   assert.deepEqual(filterUniforms({ kind: "artist", rank: 4 }), { uF: 3, uA: 4, uB: 0 });
+});
+
+test("livePoint: a listen after the payload lands on the payload's day axis in local time", () => {
+  const p = prepare(payload(["2024-07-01T10:00:00Z", "2024-07-03T10:00:00Z"], [0, 1]));
+  const lp = livePoint(p, s("2024-07-04T22:30:00Z"), "B");
+  assert.equal(dayStr(p.baseMs, lp.day), "2024-07-05");
+  assert.equal(lp.day, p.maxDay + 2);
+  assert.equal(lp.minute, 30);
+  assert.equal(lp.artist, 1);
+  assert.equal(livePoint(p, s("2024-07-04T10:00:00Z"), "Nobody").artist, OTHER_ARTIST);
 });

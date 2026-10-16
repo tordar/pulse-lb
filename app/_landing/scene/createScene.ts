@@ -1,7 +1,7 @@
 // app/_landing/scene/createScene.ts
 import type * as T from "three";
 import type { Prepared } from "@/lib/landing/derive";
-import { buildPositions, W } from "./positions";
+import { buildPositions, livePosition, W } from "./positions";
 
 export type SceneHandle = {
   setFilter(u: { uF: number; uA: number; uB: number }): void;
@@ -10,13 +10,18 @@ export type SceneHandle = {
   project(x: number, y: number, z: number): [number, number] | null;
   pick(sx: number, sy: number, radius: number, accept?: (i: number) => boolean): number;
   pointAt(i: number): [number, number, number];
+  /** A listen that arrived after the payload: added hidden, shown by light(). Returns -1 when full. */
+  addLive(day: number, minute: number, artist: number): number;
+  /** Show a live point; fresh ones glow in the accent and fade to white. */
+  light(slot: number, fresh: boolean): void;
+  livePointAt(slot: number): [number, number, number];
   onFrame(cb: () => void): () => void;
   destroy(): void;
 };
 
 const VERT = /* glsl */ `
-  attribute float aDay, aMin, aArt, aRnd;
-  uniform float uTime, uMotion, uF, uA, uB, uBaseWd, uSize, uDpr, uDim;
+  attribute float aDay, aMin, aArt, aRnd, aBorn;
+  uniform float uTime, uNow, uMotion, uF, uA, uB, uBaseWd, uSize, uDpr, uDim;
   uniform vec3 uAccent;
   varying vec3 vCol; varying float vA;
   void main() {
@@ -26,8 +31,10 @@ const VERT = /* glsl */ `
     else if (uF > 1.5 && uF < 2.5) hl = step(uA, aDay) * step(aDay, uB - 0.5);
     else if (uF > 2.5) hl = step(abs(aArt - uA), 0.1);
     bool filtered = uF > 0.5;
-    vCol = mix(vec3(0.92), uAccent, filtered ? hl : 0.0);
-    vA = (filtered ? (hl > 0.5 ? 0.9 : 0.035) : 0.30) * uDim;
+    // A live point is hidden until lit (aBorn = HIDDEN), then glows and fades to white over 8s.
+    float fresh = filtered ? 0.0 : clamp(1.0 - (uNow - aBorn) / 8.0, 0.0, 1.0);
+    vCol = mix(vec3(0.92), uAccent, filtered ? hl : fresh);
+    vA = (filtered ? (hl > 0.5 ? 0.9 : 0.035) : mix(0.30, 0.9, fresh)) * uDim * (1.0 - step(1e8, aBorn));
     // Wind: every point sways around its true spot; waves travel along the time axis.
     float t = uTime;
     float ph = p.x * 1.4 - t * 0.32;
@@ -39,13 +46,15 @@ const VERT = /* glsl */ `
     float crest = smoothstep(0.55, 1.0, sin(p.x * 0.9 - t * 0.42)) * 0.9 + smoothstep(0.8, 1.0, sin(p.x * 2.3 + p.z * 1.1 - t * 0.7)) * 0.5;
     vA *= 1.0 + crest * uMotion;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    gl_PointSize = uSize * uDpr * (filtered && hl > 0.5 ? 1.6 : 1.0) * clamp(4.0 / -mv.z, 0.6, 2.2);
+    gl_PointSize = uSize * uDpr * (filtered && hl > 0.5 ? 1.6 : 1.0 + fresh * 3.0) * clamp(4.0 / -mv.z, 0.6, 2.2);
     gl_Position = projectionMatrix * mv;
   }`;
 
 const FRAG = /* glsl */ `
   varying vec3 vCol; varying float vA;
   void main() { vec2 c = gl_PointCoord - 0.5; if (dot(c, c) > 0.25) discard; gl_FragColor = vec4(vCol * vA, 1.0); }`;
+
+const LIVE_MAX = 2048, HIDDEN = 1e9, OLD = -1e6;
 
 export async function createScene(canvas: HTMLCanvasElement, p: Prepared, opts: { reducedMotion: boolean }): Promise<SceneHandle> {
   const THREE = await import("three");
@@ -62,8 +71,9 @@ export async function createScene(canvas: HTMLCanvasElement, p: Prepared, opts: 
   geo.setAttribute("aMin", new THREE.BufferAttribute(Float32Array.from(p.minute), 1));
   geo.setAttribute("aArt", new THREE.BufferAttribute(Float32Array.from(p.payload.artist), 1));
   geo.setAttribute("aRnd", new THREE.BufferAttribute(rnd, 1));
+  geo.setAttribute("aBorn", new THREE.BufferAttribute(new Float32Array(n).fill(OLD), 1));
   const U = {
-    uTime: { value: 0 }, uMotion: { value: opts.reducedMotion ? 0 : 1 },
+    uTime: { value: 0 }, uNow: { value: 0 }, uMotion: { value: opts.reducedMotion ? 0 : 1 },
     uF: { value: 0 }, uA: { value: 0 }, uB: { value: 0 }, uBaseWd: { value: p.baseWeekday },
     uSize: { value: 1.6 }, uDpr: { value: 1 }, uDim: { value: 1 }, uAccent: { value: new THREE.Color(0xff4a2e) },
   };
@@ -71,6 +81,18 @@ export async function createScene(canvas: HTMLCanvasElement, p: Prepared, opts: 
   const points = new THREE.Points(geo, mat);
   points.frustumCulled = false;
   scene.add(points);
+
+  // Listens that arrive while the page is open: a fixed-size buffer drawn up to `live`.
+  const liveGeo = new THREE.BufferGeometry(), lp = new Float32Array(LIVE_MAX * 3);
+  const liveAttr = (name: string, a: Float32Array) => { const b = new THREE.BufferAttribute(a, a === lp ? 3 : 1); liveGeo.setAttribute(name, b); return b; };
+  const lPos = liveAttr("position", lp), lDay = liveAttr("aDay", new Float32Array(LIVE_MAX)), lMin = liveAttr("aMin", new Float32Array(LIVE_MAX));
+  const lArt = liveAttr("aArt", new Float32Array(LIVE_MAX)), lBorn = liveAttr("aBorn", new Float32Array(LIVE_MAX).fill(HIDDEN));
+  liveAttr("aRnd", Float32Array.from({ length: LIVE_MAX }, (_, i) => rnd[i % Math.max(1, n)] ?? 0.5));
+  let live = 0;
+  liveGeo.setDrawRange(0, 0);
+  const livePoints = new THREE.Points(liveGeo, mat);
+  livePoints.frustumCulled = false;
+  scene.add(livePoints);
   const floor = new THREE.GridHelper(W * 1.1, 32, 0x2a2a2a, 0x1a1a1a);
   floor.scale.z = 0.5;
   (floor.material as T.Material).transparent = true;
@@ -108,6 +130,7 @@ export async function createScene(canvas: HTMLCanvasElement, p: Prepared, opts: 
     const dt = Math.min(50, now - last); last = now;
     if (document.hidden) return;
     U.uTime.value += (dt / 1000) * U.uMotion.value;
+    U.uNow.value = now / 1000;
     const t = target(), k = first || opts.reducedMotion ? 1 : 0.08; first = false;
     cam.yaw += (t.yaw - cam.yaw) * k; cam.pitch += (t.pitch - cam.pitch) * k; cam.dist += (t.dist - cam.dist) * k; cam.ty += (t.ty - cam.ty) * k;
     U.uDim.value = 1 - scroll * 0.45;
@@ -145,11 +168,26 @@ export async function createScene(canvas: HTMLCanvasElement, p: Prepared, opts: 
       return best;
     },
     pointAt(i) { return [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]]; },
+    addLive(day, minute, artist) {
+      if (live >= LIVE_MAX) return -1;
+      const i = live++;
+      lp.set(livePosition(p, day, minute), i * 3);
+      (lDay.array as Float32Array)[i] = day; (lMin.array as Float32Array)[i] = minute; (lArt.array as Float32Array)[i] = artist;
+      for (const a of [lPos, lDay, lMin, lArt]) a.needsUpdate = true;
+      liveGeo.setDrawRange(0, live);
+      return i;
+    },
+    light(slot, fresh) {
+      if (slot < 0) return;
+      (lBorn.array as Float32Array)[slot] = fresh ? performance.now() / 1000 : OLD;
+      lBorn.needsUpdate = true;
+    },
+    livePointAt(slot) { return [lp[slot * 3], lp[slot * 3 + 1], lp[slot * 3 + 2]]; },
     onFrame(cb) { frameCbs.add(cb); return () => frameCbs.delete(cb); },
     destroy() {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
-      geo.dispose(); mat.dispose(); floor.geometry.dispose(); (floor.material as T.Material).dispose();
+      geo.dispose(); liveGeo.dispose(); mat.dispose(); floor.geometry.dispose(); (floor.material as T.Material).dispose();
       renderer.dispose();
     },
   };
