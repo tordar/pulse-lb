@@ -5,8 +5,9 @@ import { fetchListensSince, nextDelay, type LBListen } from "@/lib/live/lbBrowse
 
 /**
  * Polls ListenBrainz (directly, from the browser) for the showcase user's listens newer
- * than the payload's last one. `quiet` is true for the first catch-up (the payload can be
- * up to an hour old) and for whatever piled up while the tab was hidden.
+ * than the payload's last one. `quiet` is true only for the first catch-up (the payload can be
+ * up to an hour old). Listens missed while the tab was hidden come in loud on return: on macOS
+ * a tab counts as hidden whenever its window is covered, e.g. by the music player.
  */
 export function useLiveListens(user: string, lastTs: number | null, onListens: (listens: LBListen[], quiet: boolean) => void) {
   const cb = useRef(onListens);
@@ -45,7 +46,7 @@ export function useLiveListens(user: string, lastTs: number | null, onListens: (
       if (!cancelled && document.visibilityState === "visible") timer = window.setTimeout(tick, nextDelay(failures));
     }
     const onVisibility = () => {
-      if (document.visibilityState === "visible") { quiet = true; void tick(); } else window.clearTimeout(timer);
+      if (document.visibilityState === "visible") void tick(); else window.clearTimeout(timer);
     };
     document.addEventListener("visibilitychange", onVisibility);
     void tick();

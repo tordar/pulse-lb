@@ -12,6 +12,8 @@ import { Scene, type Arrival } from "./Scene";
 import { useLandingData } from "./useLandingData";
 import { useLiveListens } from "./useLiveListens";
 
+const MAX_FLIGHTS = 3;
+
 export type Totals = { listens: number; artists: number; albums: number; songs: number };
 
 export function LandingClient({ user, totals }: { user: string; totals: Totals }) {
@@ -28,10 +30,11 @@ export function LandingClient({ user, totals }: { user: string; totals: Totals }
     if (data) fetchListen(data.payload.header.lastTs).then((l) => setLatest((cur) => cur ?? l));
   }, [data]);
 
+  // Only the newest few of a batch fly; a long backlog would keep the dot going for minutes.
   useLiveListens(user, data?.payload.header.lastTs ?? null, (listens, quiet) => setArrivals((cur) => [
     ...cur,
-    ...listens.map((l) => ({
-      ts: l.listened_at, track: l.track_metadata.track_name, artist: l.track_metadata.artist_name, quiet,
+    ...listens.map((l, i) => ({
+      ts: l.listened_at, track: l.track_metadata.track_name, artist: l.track_metadata.artist_name, quiet: quiet || i < listens.length - MAX_FLIGHTS,
       recordingMbid: l.track_metadata.mbid_mapping?.recording_mbid ?? l.track_metadata.additional_info?.recording_mbid ?? null,
     })),
   ]));
