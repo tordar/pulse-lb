@@ -13,7 +13,7 @@ const TABS = [
   { label: "Release year", caption: "hours listened, by album release year" },
 ] as const;
 
-const HEIGHT = 240;
+const HEIGHT = 360;
 
 // The three listening charts share one card. Tabs pick a chart; on touch
 // screens the strip also swipes sideways (scroll-snap), and the tabs follow.
