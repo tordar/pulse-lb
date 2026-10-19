@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { YearlyChart } from "@/components/YearlyChart";
 import { HourlyChart } from "@/components/HourlyChart";
 import { ReleaseYearChart } from "@/components/ReleaseYearChart";
@@ -15,8 +15,8 @@ const TABS = [
 
 const HEIGHT = 360;
 
-// The three listening charts share one card. Tabs pick a chart; on touch
-// screens the strip also swipes sideways (scroll-snap), and the tabs follow.
+// The three listening charts share one card; tabs pick which one shows. No
+// swipe between them: a horizontal drag scrubs the tooltip along the bars.
 export function ListeningCharts({
   yearly,
   hourly,
@@ -26,20 +26,7 @@ export function ListeningCharts({
   hourly: { hour: number; plays: number }[];
   releaseYears: YearPoint[];
 }) {
-  const strip = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
-
-  function select(i: number) {
-    setActive(i);
-    const el = strip.current;
-    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
-  }
-
-  function onScroll() {
-    const el = strip.current;
-    if (!el || !el.clientWidth) return;
-    setActive(Math.round(el.scrollLeft / el.clientWidth));
-  }
 
   return (
     <section className="space-y-3">
@@ -50,7 +37,7 @@ export function ListeningCharts({
               key={t.label}
               role="tab"
               aria-selected={active === i}
-              onClick={() => select(i)}
+              onClick={() => setActive(i)}
               className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 i > 0 ? "border-l border-border" : ""
               } ${
@@ -65,21 +52,9 @@ export function ListeningCharts({
         </div>
         <span className="text-sm text-subtle-foreground">({TABS[active].caption})</span>
       </div>
-      <div
-        ref={strip}
-        onScroll={onScroll}
-        className="flex overflow-x-auto snap-x snap-mandatory overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <div className="w-full shrink-0 snap-start">
-          <YearlyChart data={yearly} height={HEIGHT} />
-        </div>
-        <div className="w-full shrink-0 snap-start">
-          <HourlyChart data={hourly} height={HEIGHT} />
-        </div>
-        <div className="w-full shrink-0 snap-start">
-          <ReleaseYearChart data={releaseYears} height={HEIGHT} />
-        </div>
-      </div>
+      {active === 0 && <YearlyChart data={yearly} height={HEIGHT} />}
+      {active === 1 && <HourlyChart data={hourly} height={HEIGHT} />}
+      {active === 2 && <ReleaseYearChart data={releaseYears} height={HEIGHT} />}
     </section>
   );
 }
