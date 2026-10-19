@@ -48,19 +48,19 @@ export const nameKeyExpr = (alias: string) =>
 /** Case- and hyphen-folded artist name: "blink‐182" and "Blink-182" agree. */
 export const foldExpr = (col: string) => `lower(translate(${col}, '‐‑’', '--'''))`;
 
-/** Per-listen artist identity. A listen crediting exactly one artist is keyed
- *  by that artist's MBID, so every spelling and alias ("Turboneger",
- *  "Mac Demarco", Navidrome's "The Tallest Man on Earth" vs Spotify's "On")
- *  lands on one artist. Any other listen adopts the MBID its folded name maps
- *  to in artist_aliases, else keeps its own entry keyed by that folded name
- *  (a genuine "X feat. Y" credit). The alias must carry user_name. */
+/** Per-listen artist identity: the MBID the listen's folded name maps to in
+ *  artist_aliases (its most-played single-artist MBID), so every spelling and
+ *  alias ("Turboneger", "Mac Demarco", Navidrome's "The Tallest Man on Earth"
+ *  vs Spotify's "On") lands on one artist. Decided per name, not per listen:
+ *  LB maps the odd listen to a same-named stranger ("New Order" ×1 under
+ *  another MBID), which must not split off. Names with no single-artist
+ *  listen keep their own entry keyed by the folded name (a genuine "X feat. Y"
+ *  credit). The alias must carry user_name. */
 export const artistKeyExpr = (alias: string) =>
-  `CASE WHEN cardinality(${alias}.artist_mbids) = 1 THEN ${alias}.artist_mbids[1]::text
-   ELSE COALESCE(
+  `COALESCE(
      (SELECT aa.artist_mbid::text FROM artist_aliases aa
       WHERE aa.user_name = ${alias}.user_name AND aa.fold = ${foldExpr(`${alias}.artist_name`)}),
-     'name:' || ${foldExpr(`${alias}.artist_name`)})
-   END`;
+     'name:' || ${foldExpr(`${alias}.artist_name`)})`;
 
 /** TS mirror of nameKeyExpr for resolving a clicked album into its cluster. */
 export function nameKey(releaseName: string, artistName: string): string {
