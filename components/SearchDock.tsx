@@ -151,7 +151,11 @@ export function SearchDock({
   return (
     <div
       ref={dockRef}
-      className="flex flex-col"
+      // Lifted, the dock leaves the tab bar's glass behind at the bottom of the
+      // screen, and a nested backdrop-filter can't blur the page through that
+      // glass — so it carries its own near-opaque fill, or the list shows
+      // through around the field.
+      className={`flex flex-col ${lift ? "bg-background/95 border-t border-white/10" : ""}`}
       style={{
         transform: lift ? `translateY(-${lift}px)` : undefined,
         // The home indicator is under the keyboard once it's up, so padding
