@@ -80,6 +80,30 @@ async function main() {
       return [{ ...r, listened_at: new Date(new Date(r.listened_at).getTime() + 1000).toISOString(),
         artist_name: r.artist_name!.toUpperCase() === r.artist_name ? r.artist_name!.toLowerCase() : r.artist_name!.toUpperCase() }];
     }, true),
+    // A name-keyed (no single MBID) listen sharing a lower-cased spelling with
+    // an MBID-keyed artist: its album vote can move that artist's clusters.
+    await scenario("name key beside mbid key", async () => {
+      const [r] = await sql<Row[]>`SELECT * FROM listens WHERE user_name = ${USER}
+        AND release_name IS NOT NULL AND cardinality(artist_mbids) = 1 ORDER BY listened_at DESC LIMIT 1`;
+      return [{ ...r, listened_at: new Date(new Date(r.listened_at).getTime() + 2000).toISOString(),
+        artist_name: r.artist_name!.toLowerCase(), artist_mbids: [] }];
+    }, true),
+    // Enough single-artist listens under a new MBID to flip a name's alias:
+    // that name's multi-artist listens move from one artist to another.
+    await scenario("alias flips", async () => {
+      const [a] = await sql<{ artist_name: string; release_name: string; n: number }[]>`
+        SELECT l.artist_name, MIN(l.release_name) AS release_name, COUNT(*)::int AS n FROM listens l
+        WHERE l.user_name = ${USER} AND cardinality(l.artist_mbids) > 1 AND l.release_name IS NOT NULL
+          AND EXISTS (SELECT 1 FROM artist_aliases aa WHERE aa.user_name = ${USER}
+                      AND aa.fold = lower(l.artist_name))
+        GROUP BY l.artist_name ORDER BY COUNT(*) DESC LIMIT 1`;
+      const [{ c }] = await sql<{ c: number }[]>`SELECT COUNT(*)::int AS c FROM listens
+        WHERE user_name = ${USER} AND lower(artist_name) = lower(${a.artist_name}) AND cardinality(artist_mbids) = 1`;
+      return Array.from({ length: c + 1 }, (_, i) => ({
+        ...synthetic(new Date(Date.UTC(2031, 0, 4, 0, 0, i)).toISOString(), a.artist_name, a.release_name, null),
+        artist_mbids: ["00000000-0000-4000-8000-0000000a11a5"],
+      }));
+    }, true),
     // Same-titled albums: a listen on one of a self-titled series, whose
     // display name depends on its siblings.
     await scenario("same-titled albums", () => sql<Row[]>`

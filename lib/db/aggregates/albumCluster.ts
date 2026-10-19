@@ -45,6 +45,23 @@ const NAME_MATCHES_RG = `(
 export const nameKeyExpr = (alias: string) =>
   `lower(btrim(${alias}.release_name)) || '|' || lower(COALESCE(${alias}.artist_name, ''))`;
 
+/** Case- and hyphen-folded artist name: "blink‐182" and "Blink-182" agree. */
+export const foldExpr = (col: string) => `lower(translate(${col}, '‐‑’', '--'''))`;
+
+/** Per-listen artist identity. A listen crediting exactly one artist is keyed
+ *  by that artist's MBID, so every spelling and alias ("Turboneger",
+ *  "Mac Demarco", Navidrome's "The Tallest Man on Earth" vs Spotify's "On")
+ *  lands on one artist. Any other listen adopts the MBID its folded name maps
+ *  to in artist_aliases, else keeps its own entry keyed by that folded name
+ *  (a genuine "X feat. Y" credit). The alias must carry user_name. */
+export const artistKeyExpr = (alias: string) =>
+  `CASE WHEN cardinality(${alias}.artist_mbids) = 1 THEN ${alias}.artist_mbids[1]::text
+   ELSE COALESCE(
+     (SELECT aa.artist_mbid::text FROM artist_aliases aa
+      WHERE aa.user_name = ${alias}.user_name AND aa.fold = ${foldExpr(`${alias}.artist_name`)}),
+     'name:' || ${foldExpr(`${alias}.artist_name`)})
+   END`;
+
 /** TS mirror of nameKeyExpr for resolving a clicked album into its cluster. */
 export function nameKey(releaseName: string, artistName: string): string {
   return `${releaseName.trim().toLowerCase()}|${artistName.toLowerCase()}`;
@@ -58,8 +75,8 @@ export function nameKey(releaseName: string, artistName: string): string {
 type ClusterScope = "user" | "artist" | "artistSet";
 const clusterCTE = (scope: ClusterScope) => `
   base AS (
-    SELECT l.listened_at, l.track_name, l.release_name, l.artist_name, l.caa_id, l.caa_release_mbid,
-           l.release_mbid, l.recording_mbid, l.duration_ms,
+    SELECT l.user_name, l.listened_at, l.track_name, l.release_name, l.artist_name, l.caa_id, l.caa_release_mbid,
+           l.release_mbid, l.recording_mbid, l.duration_ms, l.artist_mbids,
            COALESCE(l.release_group_mbid, rel.release_group_mbid) AS rg,
            ${nameKeyExpr("l")} AS name_key,
            ${NORM("l.release_name")} AS name_norm
@@ -196,16 +213,18 @@ export type ClusteredArtistAlbum = {
 /**
  * Clustered top-albums for an artist page plus the total cluster count (the
  * "albums" stat) in one artist-scoped query — the window count sees every
- * cluster before LIMIT trims the list.
+ * cluster before LIMIT trims the list. $2 is every spelling the artist is
+ * credited under; the artist key keeps out other artists sharing a spelling.
  */
 export async function artistClusteredAlbums(
   username: string,
-  artistName: string,
+  artistNames: string[],
+  artistKey: string,
   limit: number,
 ): Promise<{ albums: ClusteredArtistAlbum[]; clusterCount: number }> {
   const rows = (await withRetry(() =>
     sqlClient.unsafe(
-      withArtistAlbumClusters(`
+      withArtistSetAlbumClusters(`
         SELECT
           COALESCE(MIN(agg.release_name), MIN(rgm.name),
                    mode() WITHIN GROUP (ORDER BY cl.release_name)) AS release_name,
@@ -221,11 +240,12 @@ export async function artistClusteredAlbums(
         LEFT JOIN release_groups rgm ON rgm.mbid = cl.canon_rg
         LEFT JOIN agg_album agg
           ON agg.user_name = $1 AND agg.scope = 0 AND agg.group_key = cl.cluster_key
+        WHERE ${artistKeyExpr("cl")} = $3
         GROUP BY cl.cluster_key, rgm.name
         ORDER BY plays DESC, release_name
-        LIMIT $3
+        LIMIT $4
       `),
-      [username, artistName, limit],
+      [username, artistNames, artistKey, limit],
     ),
   )) as (ClusteredArtistAlbum & { cluster_count: number })[];
   return {

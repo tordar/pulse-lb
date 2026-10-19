@@ -2,7 +2,7 @@ import "dotenv/config";
 import postgres from "postgres";
 import { writeFileSync } from "node:fs";
 
-const TABLES = ["agg_alltime", "agg_year", "agg_hour", "agg_day", "agg_song", "agg_artist", "agg_album"];
+const TABLES = ["agg_alltime", "agg_year", "agg_hour", "agg_day", "agg_song", "agg_artist", "agg_album", "artist_aliases"];
 
 export async function snapshot(sql: postgres.Sql, user: string): Promise<Record<string, string[]>> {
   const out: Record<string, string[]> = {};

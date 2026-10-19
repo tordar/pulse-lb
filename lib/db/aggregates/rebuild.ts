@@ -8,6 +8,8 @@ import {
   ALBUM_DISPLAY_NAMES,
   ALBUM_CLUSTER_CTE,
   ARTIST_SET_CLUSTER_CTE,
+  artistKeyExpr,
+  foldExpr,
   nameKeyExpr,
   withAlbumClusters,
 } from "./albumCluster";
@@ -28,7 +30,10 @@ export async function rebuildAll(username: string): Promise<void> {
       await tx`DELETE FROM agg_song    WHERE user_name = ${username}`;
       await tx`DELETE FROM agg_artist  WHERE user_name = ${username}`;
       await tx`DELETE FROM agg_album   WHERE user_name = ${username}`;
+      await tx`DELETE FROM artist_aliases WHERE user_name = ${username}`;
 
+      // Aliases first: artistKeyExpr reads them.
+      await buildAliases(tx, username);
       await buildAlltime(tx, username);
       await buildYear(tx, username);
       await buildHour(tx, username);
@@ -54,7 +59,7 @@ async function buildAlltime(tx: TransactionSql, username: string) {
       $1::text,
       COUNT(*)::int,
       COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
-      COUNT(DISTINCT l.artist_name)::int,
+      COUNT(DISTINCT ${artistKeyExpr("l")}) FILTER (WHERE l.artist_name IS NOT NULL)::int,
       (${withAlbumClusters(`SELECT COUNT(DISTINCT cluster_key)::int FROM clustered`)}),
       COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int,
       MIN(l.listened_at),
@@ -191,70 +196,108 @@ export async function buildSong(
   );
 }
 
+// Each folded name's most-played single-artist MBID. Scoped: $2 every
+// spelling of $3 the folded names to rebuild.
+export async function buildAliases(
+  tx: TransactionSql,
+  username: string,
+  scope?: { names: string[]; folds: string[] },
+) {
+  const filter = scope
+    ? `AND l.artist_name = ANY($2::text[]) AND ${foldExpr("l.artist_name")} = ANY($3::text[])`
+    : "";
+  await tx.unsafe(
+    `
+    INSERT INTO artist_aliases (user_name, fold, artist_mbid)
+    SELECT DISTINCT ON (fold) $1::text, fold, mbid
+    FROM (
+      SELECT ${foldExpr("l.artist_name")} AS fold, l.artist_mbids[1] AS mbid, COUNT(*) AS c
+      FROM listens l
+      WHERE l.user_name = $1 AND l.artist_name IS NOT NULL
+        AND cardinality(l.artist_mbids) = 1 ${filter}
+      GROUP BY 1, 2
+    ) s
+    ORDER BY fold, c DESC, mbid
+  `,
+    scope ? [username, scope.names, scope.folds] : [username],
+  );
+}
+
 export async function buildArtist(
   tx: TransactionSql,
   username: string,
-  artists?: string[],
+  scope?: { names: string[]; keys: string[] },
 ) {
-  const filter = artists ? "AND l.artist_name = ANY($2::text[])" : "";
+  // Scoped: $2 every spelling of the listens' names (the cluster CTE needs all
+  // of them to count votes), $3 the artist keys to rebuild.
+  const filter = scope
+    ? `AND l.artist_name = ANY($2::text[]) AND ${artistKeyExpr("l")} = ANY($3::text[])`
+    : "";
   // distinct_albums counts album clusters: each listen is mapped to its
   // cluster key via the shared canon CTE (listens without a release_name
   // contribute nothing, matching the old DISTINCT release_name semantics).
   const clusterKey = `CASE WHEN l.release_name IS NULL THEN NULL
     ELSE COALESCE(c.canon_rg::text, ${nameKeyExpr("l")}) END`;
+  const columns = `
+      COUNT(*)::int,
+      COALESCE(SUM(COALESCE(k.duration_ms, r.length_ms)), 0)::bigint,
+      COUNT(DISTINCT COALESCE(k.recording_mbid::text, k.track_name))::int,
+      COUNT(DISTINCT k.cluster_key)::int,
+      i.artist_mbid,
+      (array_agg(k.caa_id ORDER BY k.listened_at DESC, k.track_name DESC)
+        FILTER (WHERE k.caa_id IS NOT NULL))[1],
+      (array_agg(k.caa_release_mbid ORDER BY k.listened_at DESC, k.track_name DESC)
+        FILTER (WHERE k.caa_release_mbid IS NOT NULL))[1]`;
   await tx.unsafe(
     `
-    WITH ${artists ? ARTIST_SET_CLUSTER_CTE : ALBUM_CLUSTER_CTE}
+    WITH ${scope ? ARTIST_SET_CLUSTER_CTE : ALBUM_CLUSTER_CTE},
+    keyed AS (
+      SELECT l.listened_at, l.track_name, l.artist_name, l.artist_mbids, l.recording_mbid,
+             l.duration_ms, l.caa_id, l.caa_release_mbid,
+             ${artistKeyExpr("l")} AS artist_key,
+             ${clusterKey} AS cluster_key
+      FROM listens l
+      LEFT JOIN canon c ON c.name_key = ${nameKeyExpr("l")}
+      WHERE l.user_name = $1 AND l.artist_name IS NOT NULL ${filter}
+    ),
+    ident AS (
+      -- One display name and MBID per key, shared by its year rows. A
+      -- name-keyed (multi-artist) credit links to its lead artist's MBID.
+      SELECT artist_key,
+             mode() WITHIN GROUP (ORDER BY artist_name) AS artist_name,
+             array_agg(DISTINCT artist_name) AS artist_names,
+             CASE WHEN artist_key LIKE 'name:%'
+               THEN mode() WITHIN GROUP (ORDER BY artist_mbids[1])
+                      FILTER (WHERE artist_mbids[1] IS NOT NULL)
+               ELSE artist_key::uuid
+             END AS artist_mbid
+      FROM keyed
+      GROUP BY artist_key
+    )
     INSERT INTO agg_artist (
-      user_name, scope, artist_name, plays, effective_ms,
+      user_name, scope, artist_key, artist_name, artist_names, plays, effective_ms,
       distinct_songs, distinct_albums,
       artist_mbid, caa_id, caa_release_mbid
     )
     -- Year-scoped
-    SELECT
-      $1::text,
-      EXTRACT(YEAR FROM l.listened_at)::int,
-      l.artist_name,
-      COUNT(*)::int,
-      COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
-      COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int,
-      COUNT(DISTINCT ${clusterKey})::int,
-      mode() WITHIN GROUP (ORDER BY l.artist_mbids[1])
-        FILTER (WHERE l.artist_mbids[1] IS NOT NULL),
-      (array_agg(l.caa_id ORDER BY l.listened_at DESC, l.track_name DESC)
-        FILTER (WHERE l.caa_id IS NOT NULL))[1],
-      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC, l.track_name DESC)
-        FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1]
-    FROM listens l
-    LEFT JOIN recordings r ON r.mbid = l.recording_mbid
-    LEFT JOIN canon c ON c.name_key = ${nameKeyExpr("l")}
-    WHERE l.user_name = $1 AND l.artist_name IS NOT NULL ${filter}
-    GROUP BY EXTRACT(YEAR FROM l.listened_at)::int, l.artist_name
+    SELECT $1::text, EXTRACT(YEAR FROM k.listened_at)::int, k.artist_key, i.artist_name, NULL::text[],
+      ${columns}
+    FROM keyed k
+    JOIN ident i USING (artist_key)
+    LEFT JOIN recordings r ON r.mbid = k.recording_mbid
+    GROUP BY EXTRACT(YEAR FROM k.listened_at)::int, k.artist_key, i.artist_name, i.artist_mbid
 
     UNION ALL
 
     -- All-time (scope = 0 (all-time sentinel))
-    SELECT
-      $1::text,
-      0::int,
-      l.artist_name,
-      COUNT(*)::int,
-      COALESCE(SUM(COALESCE(l.duration_ms, r.length_ms)), 0)::bigint,
-      COUNT(DISTINCT COALESCE(l.recording_mbid::text, l.track_name))::int,
-      COUNT(DISTINCT ${clusterKey})::int,
-      mode() WITHIN GROUP (ORDER BY l.artist_mbids[1])
-        FILTER (WHERE l.artist_mbids[1] IS NOT NULL),
-      (array_agg(l.caa_id ORDER BY l.listened_at DESC, l.track_name DESC)
-        FILTER (WHERE l.caa_id IS NOT NULL))[1],
-      (array_agg(l.caa_release_mbid ORDER BY l.listened_at DESC, l.track_name DESC)
-        FILTER (WHERE l.caa_release_mbid IS NOT NULL))[1]
-    FROM listens l
-    LEFT JOIN recordings r ON r.mbid = l.recording_mbid
-    LEFT JOIN canon c ON c.name_key = ${nameKeyExpr("l")}
-    WHERE l.user_name = $1 AND l.artist_name IS NOT NULL ${filter}
-    GROUP BY l.artist_name
+    SELECT $1::text, 0::int, k.artist_key, i.artist_name, i.artist_names,
+      ${columns}
+    FROM keyed k
+    JOIN ident i USING (artist_key)
+    LEFT JOIN recordings r ON r.mbid = k.recording_mbid
+    GROUP BY k.artist_key, i.artist_name, i.artist_names, i.artist_mbid
   `,
-    artists ? [username, artists] : [username],
+    scope ? [username, scope.names, scope.keys] : [username],
   );
 }
 

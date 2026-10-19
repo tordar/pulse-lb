@@ -127,6 +127,13 @@
       "when": 1791790509824,
       "tag": "0017_late_mister_fear",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792396738940,
+      "tag": "0018_far_eddie_brock",
+      "breakpoints": true
     }
   ]
 }

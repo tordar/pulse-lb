@@ -158,12 +158,32 @@ export const aggSong = pgTable(
   (t) => [index("agg_song_top").on(t.userName, t.scope, t.plays)],
 );
 
+// Which artist a multi-artist credit belongs to, by its scrobbled name.
+// Spotify scrobbles carry only the lead artist's name while MusicBrainz
+// attaches the full credit ("Together Pangea" listens crediting two MBIDs), so
+// a folded name adopts the MBID its single-artist listens most often carry.
+// Derived (rebuilt with the aggregates); read by artistKeyExpr.
+export const artistAliases = pgTable(
+  "artist_aliases",
+  {
+    userName: text("user_name").notNull(),
+    fold: text("fold").notNull(),
+    artistMbid: uuid("artist_mbid").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userName, t.fold] })],
+);
+
 export const aggArtist = pgTable(
   "agg_artist",
   {
     userName: text("user_name").notNull(),
     scope: integer("scope"),
+    // Identity the row groups on: see artistKeyExpr in albumCluster.ts.
+    artistKey: text("artist_key"),
+    // Display name: the most-played spelling under this key.
     artistName: text("artist_name").notNull(),
+    // Every verbatim spelling credited under this key. Scope 0 rows only.
+    artistNames: text("artist_names").array(),
     plays: integer("plays").notNull(),
     effectiveMs: bigint("effective_ms", { mode: "number" }).notNull(),
     distinctSongs: integer("distinct_songs").notNull(),

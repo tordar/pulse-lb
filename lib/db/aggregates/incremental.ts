@@ -1,6 +1,6 @@
 import type { TransactionSql } from "postgres";
-import { buildAlbum, buildArtist, buildSong } from "./rebuild";
-import { withArtistSetAlbumClusters } from "./albumCluster";
+import { buildAlbum, buildAliases, buildArtist, buildSong } from "./rebuild";
+import { artistKeyExpr, foldExpr, withArtistSetAlbumClusters } from "./albumCluster";
 
 // Live ingest's replacement for rebuildAll(): recompute only the agg_* rows a
 // batch of new listens can change. Exact, not an estimate: scripts/
@@ -11,8 +11,11 @@ import { withArtistSetAlbumClusters } from "./albumCluster";
 //  - agg_day: the days the new listens fall on.
 //  - agg_year: derived from agg_day (same sums, same rounding as the rebuild).
 //  - agg_song: grouped by verbatim artist_name, so that artist's songs.
-//  - agg_artist: distinct_albums counts album clusters, and cluster name keys
-//    are lower-cased, so every spelling of the artist.
+//  - artist_aliases: the new listens' folded names.
+//  - agg_artist: grouped by artist key (an MBID or a folded name), so the
+//    keys of every listen under a folded name the batch touches, before and
+//    after its alias moves. That also covers distinct_albums: cluster name
+//    keys are lower-cased, and a new vote can move another key's clusters.
 //  - agg_album: a cluster can span artists through a shared release group
 //    (112 do in production). Re-read every artist that shares a cluster with
 //    the new listens' artists (agg_album.member_artists), and rebuild exactly
@@ -41,8 +44,8 @@ const uniq = <T,>(xs: T[]) => [...new Set(xs)];
 
 async function spellings(tx: TransactionSql, username: string, lowered: string[], extra: string[]) {
   const rows = await tx<{ artist_name: string }[]>`
-    SELECT artist_name FROM agg_artist
-    WHERE user_name = ${username} AND scope = 0 AND lower(artist_name) = ANY(${lowered}::text[])`;
+    SELECT DISTINCT n AS artist_name FROM agg_artist, unnest(artist_names) AS n
+    WHERE user_name = ${username} AND scope = 0 AND lower(n) = ANY(${lowered}::text[])`;
   return uniq([...extra, ...rows.map((r) => r.artist_name)]);
 }
 
@@ -54,6 +57,57 @@ async function clusterKeysOf(tx: TransactionSql, username: string, expanded: str
     [username, expanded, lowered],
   )) as unknown as { cluster_key: string }[];
   return rows.map((r) => r.cluster_key);
+}
+
+// Refresh the aliases of the inserted listens' folded names, then return the
+// agg_artist rows the batch can change and every spelling buildArtist needs
+// to recompute them. A changed alias re-keys every listen under that name, so
+// both the keys it had before and the keys it has now are rebuilt.
+async function refreshArtists(tx: TransactionSql, username: string, ts: string[], tracks: string[]) {
+  const inserted = (await tx.unsafe(
+    `SELECT DISTINCT l.artist_name, ${foldExpr("l.artist_name")} AS fold
+     FROM unnest($2::text[]::timestamptz[], $3::text[]) AS n(ts, track)
+     JOIN listens l ON l.user_name = $1 AND l.listened_at = n.ts AND l.track_name = n.track
+     WHERE l.artist_name IS NOT NULL`,
+    [username, ts, tracks],
+  )) as unknown as { artist_name: string; fold: string }[];
+  if (inserted.length === 0) return null;
+  const folds = uniq(inserted.map((r) => r.fold));
+  const insertedNames = inserted.map((r) => r.artist_name);
+
+  // Every stored spelling folding to one of these names.
+  const spellingsOf = async (fs: string[], extra: string[]) => {
+    const rows = (await tx.unsafe(
+      `SELECT DISTINCT n FROM agg_artist, unnest(artist_names) AS n
+       WHERE user_name = $1 AND scope = 0 AND ${foldExpr("n")} = ANY($2::text[])`,
+      [username, fs],
+    )) as unknown as { n: string }[];
+    return uniq([...extra, ...rows.map((r) => r.n)]);
+  };
+  const keysOf = async (names: string[]) => {
+    const rows = (await tx.unsafe(
+      `SELECT DISTINCT ${artistKeyExpr("l")} AS key FROM listens l
+       WHERE l.user_name = $1 AND l.artist_name = ANY($2::text[])`,
+      [username, names],
+    )) as unknown as { key: string }[];
+    return rows.map((r) => r.key);
+  };
+
+  const names = await spellingsOf(folds, insertedNames);
+  const before = await keysOf(names);
+  await tx`DELETE FROM artist_aliases WHERE user_name = ${username} AND fold = ANY(${folds}::text[])`;
+  await buildAliases(tx, username, { names, folds });
+  const keys = uniq([...before, ...(await keysOf(names))]);
+
+  const rows = await tx<{ artist_names: string[] }[]>`
+    SELECT artist_names FROM agg_artist
+    WHERE user_name = ${username} AND scope = 0 AND artist_key = ANY(${keys}::text[])`;
+  const all = uniq([...names, ...rows.flatMap((r) => r.artist_names)]);
+  const allFolds = (await tx.unsafe(
+    `SELECT DISTINCT ${foldExpr("n")} AS fold FROM unnest($1::text[]) AS n`,
+    [all],
+  )) as unknown as { fold: string }[];
+  return { keys, names: await spellingsOf(allFolds.map((r) => r.fold), all) };
 }
 
 export async function planIncremental(
@@ -140,9 +194,12 @@ export async function applyIncremental(
   await tx`DELETE FROM agg_song WHERE user_name = ${username} AND artist_name = ANY(${plan.songArtists}::text[])`;
   await buildSong(tx, username, plan.songArtists);
 
-  // agg_artist: every spelling (shared lower-cased name keys).
-  await tx`DELETE FROM agg_artist WHERE user_name = ${username} AND artist_name = ANY(${plan.artistVariants}::text[])`;
-  await buildArtist(tx, username, plan.artistVariants);
+  // artist_aliases + agg_artist: see refreshArtists.
+  const artists = await refreshArtists(tx, username, ts, tracks);
+  if (artists) {
+    await tx`DELETE FROM agg_artist WHERE user_name = ${username} AND artist_key = ANY(${artists.keys}::text[])`;
+    await buildArtist(tx, username, artists);
+  }
 
   // agg_album: clusters the new listens' artists were in before or are in now.
   const after = await clusterKeysOf(tx, username, plan.expandedArtists, plan.loweredArtists);
