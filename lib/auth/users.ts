@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { userCached } from "@/lib/db/queries/cache";
@@ -47,15 +47,15 @@ export type MbProfile = {
   email: string | null;
 };
 
-// LB usernames that get lifetime status on first sign-in instead of a trial.
-// These accounts existed before paid signup launched.
-const GRANDFATHERED_USERNAMES = new Set(["tordar", "powerole"]);
+// The only LB username that may sync. Everyone else can sign in but gets no
+// trial, so their history never gets imported.
+const GRANDFATHERED_USERNAMES = new Set(["tordar"]);
 
 /**
- * Find-or-create. New row → trial starts now + 7 days. Existing row →
+ * Find-or-create. New row → no subscription, so no sync. Existing row →
  * refresh lb_username/email only; preserve subscription_status, trial_ends_at,
  * and all Stripe fields. This is what protects pre-seeded "lifetime" users
- * from being downgraded to "trial" on their first sign-in.
+ * from being downgraded on their first sign-in.
  */
 export async function findOrCreateUserFromProfile(p: MbProfile): Promise<DbUser> {
   const existing = await getUserByMbId(p.mbAccountId);
@@ -78,7 +78,7 @@ export async function findOrCreateUserFromProfile(p: MbProfile): Promise<DbUser>
         email: p.email,
         ...(isGrandfathered
           ? { subscriptionStatus: "lifetime" as const, subscriptionKind: "lifetime" as const }
-          : { subscriptionStatus: "trial" as const, trialEndsAt: sql`now() + interval '7 days'` }),
+          : {}),
       })
       .returning(),
   );
