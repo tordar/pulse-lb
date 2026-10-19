@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { BarChart3, Calendar, Clock, Disc3, Music2, Play, TrendingUp, Users } from "lucide-react";
+import { BarChart3, Calendar, Clock, Disc3, Music2, Play, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { fmtHours, songHref, splitDateTime } from "@/lib/format";
 import {
   allTimeStats,
   yearlyListening,
   hourlyDistribution,
+  releaseYearDistribution,
   dailyListeningByYear,
   dayDetail,
   availableYears,
@@ -24,8 +25,7 @@ import { getSession } from "@/lib/auth/session";
 import { getShowListenSource } from "@/lib/auth/users";
 import { SourceDot } from "@/components/SourceDot";
 import { SignInButton } from "@/components/SignInButton";
-import { YearlyChart } from "@/components/YearlyChart";
-import { HourlyChart } from "@/components/HourlyChart";
+import { ListeningCharts } from "@/components/ListeningCharts";
 import { YearActivity } from "@/components/YearActivity";
 import { YearTabs } from "@/components/YearTabs";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
@@ -109,10 +109,11 @@ async function StatsPanels({
   dayDetail: React.ReactNode;
   recent: React.ReactNode;
 }) {
-  const [allTime, yearly, hourly, years] = await Promise.all([
+  const [allTime, yearly, hourly, releaseYears, years] = await Promise.all([
     allTimeStats(username),
     yearlyListening(username),
     hourlyDistribution(username),
+    releaseYearDistribution(username),
     availableYears(username),
   ]);
   const empty = allTime.total_plays === 0;
@@ -248,15 +249,7 @@ async function StatsPanels({
             </section>
           )}
 
-          <section className="space-y-3">
-            <SectionHeading icon={TrendingUp} extra="(hours listened)">Listening by year</SectionHeading>
-            <YearlyChart data={yearly} height={260} />
-          </section>
-
-          <section className="space-y-3">
-            <SectionHeading icon={Clock} extra="(hour of day, all-time)">When you listen</SectionHeading>
-            <HourlyChart data={hourly} height={200} />
-          </section>
+          <ListeningCharts yearly={yearly} hourly={hourly} releaseYears={releaseYears} />
 
           {selectedYear !== null && (
             <section className="rounded-lg border border-card-border bg-card p-5 space-y-4">

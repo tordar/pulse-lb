@@ -100,6 +100,28 @@ export async function hourlyDistribution(username: string): Promise<HourlyPoint[
   });
 }
 
+export type ReleaseYearPoint = { year: number; plays: number; hours: number };
+
+// All-time listening by the album's first release year. Read from the scope 0
+// album clusters, which already carry their release group's year, so this
+// never touches listens.
+export async function releaseYearDistribution(username: string): Promise<ReleaseYearPoint[]> {
+  return userCached(username, ["releaseYearDistribution", username], async () => {
+    const res = await withRetry(() =>
+      execute<ReleaseYearPoint>(sql`
+        SELECT rg_year AS year,
+               SUM(plays)::int AS plays,
+               (SUM(effective_ms) / 3600000.0)::float8 AS hours
+        FROM ${schema.aggAlbum}
+        WHERE user_name = ${username} AND scope = 0 AND rg_year IS NOT NULL
+        GROUP BY rg_year
+        ORDER BY rg_year
+      `),
+    );
+    return (res as unknown as Row<ReleaseYearPoint>).rows;
+  });
+}
+
 export type TopSongInYear = {
   track_name: string;
   artist_name: string;
