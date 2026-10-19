@@ -170,8 +170,21 @@ async function albumDetailUncached(
   const recIds = rawTracks.map((t) => t.recording_mbid).filter((x): x is string => !!x);
   const lengths = await ensureRecordingLengths(recIds);
 
+  // Some MB recordings carry no length ("Blue Jeans" on Born to Die), so their
+  // listens count as zero minutes. Borrow the length of a same-titled track on
+  // this album — usually the same song under another recording MBID.
+  const lengthByTitle = new Map<string, number>();
+  for (const t of rawTracks) {
+    const ms = t.recording_mbid ? lengths.get(t.recording_mbid) : undefined;
+    const key = titleKey(t.track_name);
+    if (ms && !lengthByTitle.has(key)) lengthByTitle.set(key, ms);
+  }
+
   const tracks: AlbumTrack[] = rawTracks.map((t) => {
-    const canonicalMs = t.recording_mbid ? (lengths.get(t.recording_mbid) ?? 0) : 0;
+    const canonicalMs =
+      (t.recording_mbid ? lengths.get(t.recording_mbid) : undefined) ??
+      lengthByTitle.get(titleKey(t.track_name)) ??
+      0;
     const playsMissing = t.plays - t.plays_with_duration;
     const effectiveMs = Number(t.sum_duration_ms) + canonicalMs * playsMissing;
     return { ...t, minutes: effectiveMs / 1000 / 60 };
@@ -188,6 +201,11 @@ async function albumDetailUncached(
     years: (yearsRes as unknown as Row<AlbumYear>).rows,
     tracks,
   };
+}
+
+/** Song title without version tags: "Blue Jeans - Remastered 2011" → "blue jeans". */
+function titleKey(name: string): string {
+  return name.toLowerCase().replace(/\s+(-\s|\().*$/, "").trim();
 }
 
 /** Cached entry point — see ./cache and songDetail for why. */

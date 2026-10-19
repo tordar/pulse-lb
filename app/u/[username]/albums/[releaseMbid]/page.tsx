@@ -131,11 +131,11 @@ async function AlbumDetail({ username, releaseMbid, name, artist }: { username: 
                 <span className="shrink-0 text-sm tabular-nums text-muted-foreground w-20 text-right">
                   {t.plays.toLocaleString()} plays
                 </span>
-                {t.minutes > 0 && (
-                  <span className="shrink-0 text-xs tabular-nums text-subtle-foreground w-16 text-right">
-                    {fmtHours(t.minutes / 60)}
-                  </span>
-                )}
+                {/* Always rendered so the plays column stays aligned when a
+                    track's length is unknown (fmtHours prints "—" for 0). */}
+                <span className="shrink-0 text-xs tabular-nums text-subtle-foreground w-16 text-right">
+                  {fmtHours(t.minutes / 60)}
+                </span>
               </>
             );
             return (
