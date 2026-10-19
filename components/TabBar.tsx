@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { isTabActive, navTabs } from "@/lib/nav";
-import { SearchDock } from "@/components/SearchDock";
+import { SearchSheet } from "@/components/SearchSheet";
 
 /**
  * Phone tab bar — fixed to the bottom, translucent over whatever scrolls
@@ -17,8 +17,7 @@ import { SearchDock } from "@/components/SearchDock";
  * convention — bottom placement, safe-area inset, icon over label, a ~49pt
  * row, and a tinted capsule behind the active icon.
  *
- * Search swaps the tabs for the field, the way iOS hands the bar over to a
- * search field rather than stacking one above the other.
+ * Search opens a full-screen <SearchSheet> over the page and the bar.
  *
  * Below md only; wider screens use <PillNav> in the header.
  */
@@ -34,20 +33,18 @@ export function TabBar({ username }: { username: string }) {
   const filtered = !!params.get("q");
 
   return (
-    <nav
-      aria-label="Sections"
-      className={`
-        md:hidden fixed inset-x-0 bottom-0 z-40
-        border-t border-white/10
-        bg-background/90 supports-[backdrop-filter]:bg-background/60
-        backdrop-blur-2xl backdrop-saturate-150
-        shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]
-        ${searching ? "" : "pb-[env(safe-area-inset-bottom)]"}
-      `}
-    >
-      {searching ? (
-        <SearchDock username={username} onClose={() => setSearching(false)} />
-      ) : (
+    <>
+      <nav
+        aria-label="Sections"
+        className={`
+          md:hidden fixed inset-x-0 bottom-0 z-40
+          border-t border-white/10
+          bg-background/90 supports-[backdrop-filter]:bg-background/60
+          backdrop-blur-2xl backdrop-saturate-150
+          shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]
+          pb-[env(safe-area-inset-bottom)]
+        `}
+      >
         <ul
           className="grid"
           style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}
@@ -84,7 +81,7 @@ export function TabBar({ username }: { username: string }) {
             <button
               type="button"
               onClick={() => setSearching(true)}
-              aria-expanded={false}
+              aria-expanded={searching}
               className="w-full flex min-h-[49px] flex-col items-center justify-center gap-0.5 py-1.5 transition active:scale-95"
             >
               <span
@@ -104,7 +101,10 @@ export function TabBar({ username }: { username: string }) {
             </button>
           </li>
         </ul>
-      )}
-    </nav>
+      </nav>
+      {/* Outside the nav: its backdrop-filter would make it the containing
+          block for a fixed child, pinning the sheet to the bar's box. */}
+      {searching && <SearchSheet username={username} onClose={() => setSearching(false)} />}
+    </>
   );
 }
