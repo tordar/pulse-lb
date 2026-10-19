@@ -103,19 +103,26 @@ export async function hourlyDistribution(username: string): Promise<HourlyPoint[
 export type ReleaseYearPoint = { year: number; plays: number; hours: number };
 
 // All-time listening by the album's first release year. Read from the scope 0
-// album clusters, which already carry their release group's year, so this
-// never touches listens.
+// album clusters, so this never touches listens. rg_year is only set when the
+// scrobbled album name matched its release group's name; otherwise the year
+// comes from the cluster's most-played release.
 export async function releaseYearDistribution(username: string): Promise<ReleaseYearPoint[]> {
   return userCached(username, ["releaseYearDistribution", username], async () => {
     const res = await withRetry(() =>
       execute<ReleaseYearPoint>(sql`
-        SELECT rg_year AS year,
+        SELECT year,
                SUM(plays)::int AS plays,
                (SUM(effective_ms) / 3600000.0)::float8 AS hours
-        FROM ${schema.aggAlbum}
-        WHERE user_name = ${username} AND scope = 0 AND rg_year IS NOT NULL
-        GROUP BY rg_year
-        ORDER BY rg_year
+        FROM (
+          SELECT COALESCE(a.rg_year, rg.first_release_year) AS year, a.plays, a.effective_ms
+          FROM ${schema.aggAlbum} a
+          LEFT JOIN ${schema.releases} rel ON rel.mbid = a.release_mbid
+          LEFT JOIN ${schema.releaseGroups} rg ON rg.mbid = rel.release_group_mbid
+          WHERE a.user_name = ${username} AND a.scope = 0
+        ) t
+        WHERE year IS NOT NULL
+        GROUP BY year
+        ORDER BY year
       `),
     );
     return (res as unknown as Row<ReleaseYearPoint>).rows;
