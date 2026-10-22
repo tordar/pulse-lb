@@ -19,9 +19,9 @@
 //
 // $1 = username.
 // Normalisation used when comparing a scrobbled name with an RG's canonical
-// title: lower-case, unify curly apostrophes, collapse whitespace.
+// title: lower-case, unify curly apostrophes and ellipses, collapse whitespace.
 const NORM = (col: string) =>
-  `regexp_replace(replace(replace(lower(btrim(${col})), '’', ''''), '‘', ''''), '\\s+', ' ', 'g')`;
+  `regexp_replace(replace(replace(replace(lower(btrim(${col})), '’', ''''), '‘', ''''), '…', '...'), '\\s+', ' ', 'g')`;
 
 // A scrobbled name "matches" the RG title when equal after normalisation, or
 // when one extends the other by an edition-style suffix: "(2011)", "(Deluxe
@@ -41,9 +41,12 @@ const NAME_MATCHES_RG = `(
         AND substring(rgm.name_norm FROM char_length(v.name_norm) + 1) ~ ${RG_EXTENDS_NAME_SUFFIX})
   )`;
 
-/** Per-listen normalized name key — must stay in sync with nameKey() below. */
+/**
+ * Per-listen normalized name key — must stay in sync with nameKey() below.
+ * "…" and "..." are the same album: scrobblers disagree on which they send.
+ */
 export const nameKeyExpr = (alias: string) =>
-  `lower(btrim(${alias}.release_name)) || '|' || lower(COALESCE(${alias}.artist_name, ''))`;
+  `replace(lower(btrim(${alias}.release_name)), '…', '...') || '|' || lower(COALESCE(${alias}.artist_name, ''))`;
 
 /** Case- and hyphen-folded artist name: "blink‐182" and "Blink-182" agree. */
 export const foldExpr = (col: string) => `lower(translate(${col}, '‐‑’', '--'''))`;
@@ -64,7 +67,7 @@ export const artistKeyExpr = (alias: string) =>
 
 /** TS mirror of nameKeyExpr for resolving a clicked album into its cluster. */
 export function nameKey(releaseName: string, artistName: string): string {
-  return `${releaseName.trim().toLowerCase()}|${artistName.toLowerCase()}`;
+  return `${releaseName.trim().toLowerCase().replaceAll("…", "...")}|${artistName.toLowerCase()}`;
 }
 
 // The CTE comes in two scopes from ONE generator so the rule logic can't
