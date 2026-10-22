@@ -25,3 +25,29 @@ export function coverArtSrc(ref: CoverArtRef, size: CoverSize = 250): string | n
   if (!ref.caaId || !ref.caaReleaseMbid) return null;
   return `/api/cover/${ref.caaReleaseMbid}/${ref.caaId}?s=${size}`;
 }
+
+type CaaListing = { release?: string; images?: { id: number | string; front?: boolean }[] };
+
+/**
+ * Front cover for a release from the Cover Art Archive, falling back to its
+ * release group (CAA then picks a release in the group and says which).
+ * Null when neither has art or CAA doesn't answer.
+ */
+export async function fetchCaaCover(
+  releaseMbid: string,
+  releaseGroupMbid: string | null,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CoverArtRef | null> {
+  const paths = [`release/${releaseMbid}`, ...(releaseGroupMbid ? [`release-group/${releaseGroupMbid}`] : [])];
+  for (const path of paths) {
+    const r = await fetchImpl(`https://coverartarchive.org/${path}`, {
+      signal: AbortSignal.timeout(5_000),
+    }).catch(() => null);
+    if (!r?.ok) continue;
+    const j = (await r.json().catch(() => null)) as CaaListing | null;
+    const front = j?.images?.find((i) => i.front);
+    const release = j?.release?.split("/").pop() ?? releaseMbid;
+    if (front) return { caaId: Number(front.id), caaReleaseMbid: release };
+  }
+  return null;
+}

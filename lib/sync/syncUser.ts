@@ -1,7 +1,9 @@
 import { eq, sql } from "drizzle-orm";
-import { db, schema, execute } from "@/lib/db/client";
+import { db, schema, execute, sqlClient } from "@/lib/db/client";
 import { withRetry } from "@/lib/db/retry";
 import { getListens, getListenCount, normalizeSource, LBError, type Listen } from "@/lib/listenbrainz/client";
+import { fetchCaaCover, type CoverArtRef } from "@/lib/listenbrainz/coverArt";
+import { searchReleaseRGs } from "@/lib/musicbrainz/client";
 
 const PAGE_SIZES = [1000, 500, 200, 100];
 const MAX_RETRIES_PER_SIZE = 3;
@@ -209,7 +211,7 @@ async function paginate(args: {
       break;
     }
 
-    const rows = listens.map((l) => listenToRow(args.username, l));
+    const rows = await listensToRows(args.username, listens);
     const inserted = await withRetry(() =>
       db
         .insert(schema.listens)
@@ -285,7 +287,7 @@ export async function fetchNewerListens(
     if (Date.now() >= opts.deadline || rows.length >= opts.maxRows) return { rows, more: true };
     const page = await fetchPageWithFallback({ username, mode: "incremental", cursor });
     if (page.length === 0) return { rows, more: false };
-    rows.push(...page.map((l) => listenToRow(username, l)));
+    rows.push(...(await listensToRows(username, page)));
     cursor = page[0].listened_at;
     if (page.length < 1000) return { rows, more: false };
   }
@@ -294,6 +296,15 @@ export async function fetchNewerListens(
 export function listenToRow(username: string, l: Listen) {
   const a = l.track_metadata.additional_info ?? {};
   const m = l.track_metadata.mbid_mapping ?? {};
+  // The release the player scrobbled beats LB's mapper, which can pick any
+  // release containing the recording (Into the Wild songs → a 2022 Earthling
+  // Expansion). The mapper's cover only counts when it's for the same album;
+  // otherwise listensToRows looks up the scrobbled release's own.
+  const sameRelease = !a.release_mbid || a.release_mbid === m.release_mbid;
+  const releaseGroupMbid = sameRelease
+    ? (m.release_group_mbid ?? a.release_group_mbid ?? null)
+    : (a.release_group_mbid ?? null);
+  const coverFits = sameRelease || (!!releaseGroupMbid && releaseGroupMbid === m.release_group_mbid);
   return {
     userName: username,
     listenedAt: new Date(l.listened_at * 1000),
@@ -301,12 +312,111 @@ export function listenToRow(username: string, l: Listen) {
     artistName: l.track_metadata.artist_name,
     releaseName: l.track_metadata.release_name ?? null,
     recordingMbid: m.recording_mbid ?? a.recording_mbid ?? null,
-    releaseMbid: m.release_mbid ?? a.release_mbid ?? null,
-    releaseGroupMbid: m.release_group_mbid ?? a.release_group_mbid ?? null,
+    releaseMbid: a.release_mbid ?? m.release_mbid ?? null,
+    releaseGroupMbid,
     artistMbids: m.artist_mbids ?? a.artist_mbids ?? [],
-    caaId: m.caa_id ?? null,
-    caaReleaseMbid: m.caa_release_mbid ?? null,
+    caaId: coverFits ? (m.caa_id ?? null) : null,
+    caaReleaseMbid: coverFits ? (m.caa_release_mbid ?? null) : null,
     durationMs: a.duration_ms ?? null,
     source: normalizeSource(a),
   };
+}
+
+type ResolveOpts = { fetchCover?: typeof fetchCaaCover; maxLookups?: number };
+
+/** listenToRow plus the lookups it can't do inline: release groups, then covers. */
+export async function listensToRows(username: string, listens: Listen[], opts: ResolveOpts = {}): Promise<ListenRow[]> {
+  const rows = listens.map((l) => listenToRow(username, l));
+  await fillReleaseGroups(rows, listens);
+  return resolveCovers(username, rows, opts);
+}
+
+/**
+ * Spotify scrobbles name a release but no release group. Find it (releases
+ * table, then MusicBrainz) so albums still cluster. Another edition of the
+ * mapper's album keeps the mapper's cover; a release MB can't place (merged
+ * ids, mostly) falls back to the mapper entirely, as before.
+ */
+async function fillReleaseGroups(rows: ListenRow[], listens: Listen[]) {
+  const need = [...new Set(rows.filter((r) => r.releaseMbid && !r.releaseGroupMbid).map((r) => r.releaseMbid!))];
+  if (need.length === 0) return;
+
+  // A cached row with a null group is a release MB couldn't place: don't ask again.
+  const groups = new Map<string, string | null>();
+  const cached = await withRetry(() => sqlClient<{ mbid: string; release_group_mbid: string | null }[]>`
+    SELECT mbid, release_group_mbid FROM releases WHERE mbid = ANY(${need}::uuid[])`);
+  for (const c of cached) groups.set(c.mbid, c.release_group_mbid);
+
+  const unknown = need.filter((m) => !groups.has(m));
+  for (let i = 0; i < unknown.length; i += 100) {
+    if (i > 0) await sleep(1_100);
+    const batch = unknown.slice(i, i + 100);
+    const found = await searchReleaseRGs(batch).catch(() => null);
+    if (!found) continue;
+    const byId = new Map(found.map((f) => [f.mbid, f]));
+    const values = batch.map((mbid) => ({
+      mbid, name: byId.get(mbid)?.name ?? null, release_group_mbid: byId.get(mbid)?.releaseGroupMbid ?? null,
+    }));
+    for (const v of values) groups.set(v.mbid, v.release_group_mbid);
+    await withRetry(() => sqlClient`
+      INSERT INTO releases ${sqlClient(values)} ON CONFLICT (mbid) DO UPDATE
+      SET release_group_mbid = COALESCE(releases.release_group_mbid, EXCLUDED.release_group_mbid),
+          name = COALESCE(releases.name, EXCLUDED.name)`);
+  }
+
+  rows.forEach((r, i) => {
+    if (r.releaseGroupMbid || !r.releaseMbid) return;
+    const m = listens[i].track_metadata.mbid_mapping ?? {};
+    const group = groups.get(r.releaseMbid) ?? null;
+    if (group && group !== m.release_group_mbid) {
+      r.releaseGroupMbid = group;
+      return;
+    }
+    if (!group && m.release_mbid) r.releaseMbid = m.release_mbid;
+    r.releaseGroupMbid = m.release_group_mbid ?? group;
+    r.caaId = m.caa_id ?? null;
+    r.caaReleaseMbid = m.caa_release_mbid ?? null;
+  });
+}
+
+// Bounds the CAA round-trips one call can add; a release left without a cover
+// keeps the song's older one until a later ingest or the backfill fills it.
+const MAX_CAA_LOOKUPS = 25;
+
+/**
+ * Fill covers listenToRow dropped. A release we already hold a cover for
+ * reuses it; anything else asks the Cover Art Archive.
+ */
+async function resolveCovers<R extends ListenRow>(
+  username: string,
+  rows: R[],
+  { fetchCover = fetchCaaCover, maxLookups = MAX_CAA_LOOKUPS }: ResolveOpts = {},
+): Promise<R[]> {
+  const missing = new Map<string, string | null>();
+  for (const r of rows) {
+    if (r.caaId == null && r.releaseMbid) missing.set(r.releaseMbid, r.releaseGroupMbid);
+  }
+  if (missing.size === 0) return rows;
+
+  const known = await withRetry(() => sqlClient<{ release_mbid: string; caa_id: string; caa_release_mbid: string }[]>`
+    SELECT DISTINCT ON (release_mbid) release_mbid, caa_id, caa_release_mbid
+    FROM listens
+    WHERE user_name = ${username} AND release_mbid = ANY(${[...missing.keys()]}::uuid[]) AND caa_id IS NOT NULL
+    ORDER BY release_mbid, listened_at DESC`);
+  const covers = new Map<string, CoverArtRef>(
+    known.map((k) => [k.release_mbid, { caaId: Number(k.caa_id), caaReleaseMbid: k.caa_release_mbid }]),
+  );
+
+  let lookups = 0;
+  for (const [release, group] of missing) {
+    if (covers.has(release) || lookups >= maxLookups) continue;
+    lookups++;
+    const c = await fetchCover(release, group);
+    if (c) covers.set(release, c);
+  }
+
+  return rows.map((r) => {
+    const c = r.caaId == null && r.releaseMbid ? covers.get(r.releaseMbid) : undefined;
+    return c ? { ...r, ...c } : r;
+  });
 }
