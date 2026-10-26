@@ -27,10 +27,10 @@ export default async function AccountLayout({
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 backdrop-blur-md bg-background/70 border-b border-border/60">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 md:flex-wrap">
           <Link
             href="/"
-            className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5"
+            className="shrink-0 text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5"
           >
             <ChevronLeft size={16} />
             <span className="font-semibold text-foreground">pulse</span>
@@ -38,7 +38,7 @@ export default async function AccountLayout({
             <span>{username}</span>
           </Link>
           <PillNav username={username}><AccountPill /></PillNav>
-          <div className="min-w-0 flex items-center gap-2">
+          <div className="flex-1 md:flex-none min-w-0 flex items-center justify-end gap-2">
             <NowPlaying username={username} cursor={cursor} />
             <AccountLink active />
           </div>

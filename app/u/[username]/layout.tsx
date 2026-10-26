@@ -23,10 +23,10 @@ export default function UserLayout({ children, params }: { children: React.React
             regardless of how wide the breadcrumb or now-playing pill is. The
             side tracks are minmax(0,1fr) so a long track name truncates
             inside its column instead of widening it over the pills. */}
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <Link
             href="/"
-            className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 md:justify-self-start"
+            className="shrink-0 text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 md:justify-self-start"
           >
             <ChevronLeft size={16} />
             <span className="font-semibold text-foreground">pulse</span>
@@ -40,7 +40,7 @@ export default function UserLayout({ children, params }: { children: React.React
               <HeaderNav params={params} />
             </Suspense>
           </div>
-          <div className="min-w-0 md:w-full flex items-center justify-end gap-2">
+          <div className="flex-1 min-w-0 md:w-full flex items-center justify-end gap-2">
             <Suspense fallback={null}>
               <HeaderRight params={params} />
             </Suspense>

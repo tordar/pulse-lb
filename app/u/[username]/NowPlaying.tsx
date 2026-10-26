@@ -143,7 +143,7 @@ export function NowPlaying({ username, cursor }: { username: string; cursor: num
       : null;
 
   const href = np ? songHref(username, np) : null;
-  const pillClass = "hidden md:inline-flex items-center gap-2 bg-card border border-card-border rounded-full pl-1 pr-3 py-1 max-w-xs min-w-0";
+  const pillClass = "inline-flex items-center gap-2 bg-card border border-card-border rounded-full pl-1 pr-3 py-1 max-w-xs min-w-0";
   const content = (
     <>
       {coverUrl ? (
