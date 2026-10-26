@@ -4,19 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Music2 } from "lucide-react";
-import { fetchListensSince, fetchPlayingNow, mergeNew, nextDelay, playingKey, toLiveListen, type PlayingNow } from "@/lib/live/lbBrowser";
+import { CONFIRM_MS, LISTENS_MS, fetchListensSince, fetchPlayingNow, mergeNew, nextDelay, playingKey, toLiveListen, type PlayingNow } from "@/lib/live/lbBrowser";
 import { recordListens } from "@/lib/sync/liveDelta";
 import { songHref } from "@/lib/format";
 import { setImportStatus } from "@/lib/live/importStatus";
 import type { IngestResult } from "@/lib/sync/ingest";
 
-// The one live loop on every profile page. Every 15s while the tab is visible
-// it asks ListenBrainz (directly, from the browser) for what's playing and for
-// listens newer than the newest one this page has seen. New listens go on
-// screen immediately via liveDelta; then the server is nudged to store them.
+// The one live loop on every profile page. While the tab is visible it asks
+// ListenBrainz (directly, from the browser) for what's playing every few
+// seconds, and every 15s for listens newer than the newest one this page has
+// seen. New listens go on screen immediately via liveDelta; then the server is
+// nudged to store them.
 // A hidden tab stops entirely.
-const CONFIRM_MS = 2_000;
-
 export function NowPlaying({ username, cursor }: { username: string; cursor: number | null }) {
   const [np, setNp] = useState<PlayingNow>(null);
   const router = useRouter();
@@ -48,11 +47,10 @@ export function NowPlaying({ username, cursor }: { username: string; cursor: num
     let ingestAllowed = true;
     const seen = seenRef.current;
     let shownKey = "";
+    let listensAt = 0;
 
-    // Navidrome briefly reports an album's first track when you jump to another
-    // track on it (seen as a ~1s blip on LB). A poll landing in that window used
-    // to pin the wrong song for a whole interval, so a change is only shown once
-    // a second read a moment later agrees.
+    // A poll landing in Navidrome's first-track blip would pin the wrong song,
+    // so a change is only shown once a second read a moment later agrees.
     async function confirmPlaying(playing: PlayingNow): Promise<PlayingNow> {
       if (playingKey(playing) === shownKey) return playing;
       await new Promise((r) => setTimeout(r, CONFIRM_MS));
@@ -90,9 +88,10 @@ export function NowPlaying({ username, cursor }: { username: string; cursor: num
       ticking = true;
       try {
         const since = sinceRef.current;
+        const listensDue = Date.now() - listensAt >= LISTENS_MS;
         const [playing, listens] = await Promise.all([
           fetchPlayingNow(username),
-          since == null ? Promise.resolve([]) : fetchListensSince(username, since),
+          since == null || !listensDue ? Promise.resolve([]) : fetchListensSince(username, since),
         ]);
         if (cancelled) return;
         const confirmed = await confirmPlaying(playing);
@@ -100,13 +99,16 @@ export function NowPlaying({ username, cursor }: { username: string; cursor: num
         shownKey = playingKey(confirmed);
         setNp(confirmed);
         failures = 0;
-        if (since == null) {
-          void ingest(); // no aggregates yet: first import
-        } else if (listens.length > 0) {
-          if (sinceRef.current == null || listens[0].listened_at > sinceRef.current) sinceRef.current = listens[0].listened_at;
-          const fresh = mergeNew(seen, listens.map(toLiveListen));
-          if (fresh.length > 0) recordListens(fresh);
-          void ingest();
+        if (listensDue) {
+          listensAt = Date.now();
+          if (since == null) {
+            void ingest(); // no aggregates yet: first import
+          } else if (listens.length > 0) {
+            if (sinceRef.current == null || listens[0].listened_at > sinceRef.current) sinceRef.current = listens[0].listened_at;
+            const fresh = mergeNew(seen, listens.map(toLiveListen));
+            if (fresh.length > 0) recordListens(fresh);
+            void ingest();
+          }
         }
       } catch {
         failures++;

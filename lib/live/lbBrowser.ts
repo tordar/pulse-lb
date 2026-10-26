@@ -34,8 +34,17 @@ export function toLiveListen(l: LBListen): LiveListen {
   };
 }
 
+// Now-playing is polled every tick; the listens history only every LISTENS_MS.
+// LB allows 30 requests per 10s per IP, so this leaves room for a few tabs.
+export const LISTENS_MS = 15_000;
+
+// Navidrome briefly reports an album's first track when you jump to another
+// track on it (a ~1s blip on LB), so a song change only counts once a second
+// read this long after agrees.
+export const CONFIRM_MS = 1_000;
+
 export function nextDelay(failures: number): number {
-  return failures <= 0 ? 15_000 : failures === 1 ? 60_000 : 300_000;
+  return failures <= 0 ? 4_000 : failures === 1 ? 60_000 : 300_000;
 }
 
 export function mergeNew(seen: Set<string>, incoming: LiveListen[]): LiveListen[] {

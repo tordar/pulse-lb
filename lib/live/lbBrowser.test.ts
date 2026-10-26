@@ -7,8 +7,8 @@ const L = (ts: number, track = "t"): LBListen => ({
     additional_info: { duration_ms: 1000, recording_mbid: null }, mbid_mapping: { recording_mbid: "m" } },
 });
 
-test("nextDelay backs off 15s → 60s → 5min", () => {
-  assert.deepEqual([0, 1, 2, 9].map(nextDelay), [15_000, 60_000, 300_000, 300_000]);
+test("nextDelay backs off 4s → 60s → 5min", () => {
+  assert.deepEqual([0, 1, 2, 9].map(nextDelay), [4_000, 60_000, 300_000, 300_000]);
 });
 
 test("toLiveListen prefers mapped recording mbid and ISO time", () => {

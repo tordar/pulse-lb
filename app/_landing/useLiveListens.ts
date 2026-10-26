@@ -1,11 +1,8 @@
 // app/_landing/useLiveListens.ts
 "use client";
 import { useEffect, useRef } from "react";
-import { fetchListensSince, fetchPlayingNow, nextDelay, type LBListen, type PlayingNow } from "@/lib/live/lbBrowser";
+import { CONFIRM_MS, LISTENS_MS, fetchListensSince, fetchPlayingNow, nextDelay, type LBListen, type PlayingNow } from "@/lib/live/lbBrowser";
 
-// Same guard as the profile's NowPlaying: Navidrome briefly reports an album's first track
-// when you jump to another one on it, so a change only counts once a second read agrees.
-const CONFIRM_MS = 2_000;
 const songKey = (artist: string, track: string) => `${artist}|${track}`;
 
 /**
@@ -22,7 +19,7 @@ export function useLiveListens(user: string, lastTs: number | null, onListens: (
 
   useEffect(() => {
     if (lastTs == null) return;
-    let since = lastTs, quiet = true, failures = 0, timer = 0, cancelled = false, ticking = false;
+    let since = lastTs, quiet = true, failures = 0, timer = 0, listensAt = 0, cancelled = false, ticking = false;
     const seen = new Set<string>();
     // Songs already placed from now-playing, waiting for their scrobble (a count: repeats happen).
     const pending = new Map<string, number>();
@@ -38,7 +35,11 @@ export function useLiveListens(user: string, lastTs: number | null, onListens: (
       if (ticking || document.visibilityState !== "visible") return;
       ticking = true;
       try {
-        const [listens, rawPlaying] = await Promise.all([fetchListensSince(user, since), fetchPlayingNow(user)]);
+        const listensDue = Date.now() - listensAt >= LISTENS_MS;
+        const [listens, rawPlaying] = await Promise.all([
+          listensDue ? fetchListensSince(user, since) : Promise.resolve([]),
+          fetchPlayingNow(user),
+        ]);
         if (cancelled) return;
         const playing = await confirmPlaying(rawPlaying);
         if (cancelled) return;
@@ -66,7 +67,7 @@ export function useLiveListens(user: string, lastTs: number | null, onListens: (
         if (started) fresh.push(started);
         if (listens.length) since = Math.max(since, listens[0].listened_at);
         if (fresh.length) cb.current(fresh, quiet);
-        quiet = false;
+        if (listensDue) { listensAt = Date.now(); quiet = false; }
       } catch {
         failures++;
       } finally {
