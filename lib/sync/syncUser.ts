@@ -328,7 +328,13 @@ type ResolveOpts = { fetchCover?: typeof fetchCaaCover; maxLookups?: number };
 export async function listensToRows(username: string, listens: Listen[], opts: ResolveOpts = {}): Promise<ListenRow[]> {
   const rows = listens.map((l) => listenToRow(username, l));
   await fillReleaseGroups(rows, listens);
-  return resolveCovers(username, rows, opts);
+  const resolved = await resolveCovers(username, rows, opts);
+  // No cover for the scrobbled release anywhere: the mapper's, even for
+  // another album, beats an empty tile.
+  return resolved.map((r, i) => {
+    const m = listens[i].track_metadata.mbid_mapping;
+    return r.caaId == null && m?.caa_id ? { ...r, caaId: m.caa_id, caaReleaseMbid: m.caa_release_mbid ?? null } : r;
+  });
 }
 
 /**
