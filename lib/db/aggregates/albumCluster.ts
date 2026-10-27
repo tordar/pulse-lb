@@ -33,8 +33,12 @@ const NORM = (col: string) =>
 // direction, where the RG title extends the name ("Bon Iver, Bon Iver").
 const NAME_EXTENDS_RG_SUFFIX = `'^\\s*[(\\[:–—-]'`;
 const RG_EXTENDS_NAME_SUFFIX = `'^\\s*[,(\\[:–—-]'`;
+// Punctuation-blind form: "The Glow Pt. 2" vs MB's "The Glow, Pt. 2".
+const BARE = (col: string) =>
+  `btrim(regexp_replace(regexp_replace(${col}, '[^[:alnum:][:space:]]', '', 'g'), '\\s+', ' ', 'g'))`;
 const NAME_MATCHES_RG = `(
     v.name_norm = rgm.name_norm
+    OR ${BARE("v.name_norm")} = ${BARE("rgm.name_norm")}
     OR (left(v.name_norm, char_length(rgm.name_norm)) = rgm.name_norm
         AND substring(v.name_norm FROM char_length(rgm.name_norm) + 1) ~ ${NAME_EXTENDS_RG_SUFFIX})
     OR (left(rgm.name_norm, char_length(v.name_norm)) = v.name_norm
