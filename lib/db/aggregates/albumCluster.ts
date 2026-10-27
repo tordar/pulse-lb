@@ -358,9 +358,13 @@ export const ALBUM_DISPLAY_NAMES = `
   ),
   picked AS (
     -- A scrobbled name that only differs by case/apostrophes adds nothing:
-    -- keep MB's spelling.
+    -- keep MB's spelling. One that differs by other punctuation is the
+    -- album's real title where MB's is a placeholder ("[Led Zeppelin IV]")
+    -- or drops it ("lust" for "[lust]"): keep the scrobbled name.
     SELECT *,
            CASE
+             WHEN alt_norm <> base_norm AND ${BARE("alt_norm")} = ${BARE("base_norm")}
+               THEN alt_name
              WHEN COUNT(*) OVER (PARTITION BY artist_key, base_norm) = 1 OR alt_norm = base_norm
                THEN base_name
              ELSE alt_name
