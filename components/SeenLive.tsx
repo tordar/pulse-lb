@@ -14,7 +14,7 @@ export function SeenLive({ concerts }: { concerts: ArtistConcert[] }) {
         {concerts.map((c) => (
           <li key={c.id} className="flex gap-3 py-2 items-baseline">
             <span className="text-subtle-foreground tabular-nums shrink-0 text-xs whitespace-nowrap">
-              {c.festivalName ? fmtDay(c.eventDate) + " " + c.eventDate.slice(0, 4) : fmtConcertDate(c.eventDate)}
+              {c.festivalName ? fmtDay(c.eventDate, true) : fmtConcertDate(c.eventDate)}
             </span>
             <span className="min-w-0 flex-1 truncate">
               {c.festivalName ?? c.venue ?? "Unknown venue"}

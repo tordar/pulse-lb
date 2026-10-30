@@ -1,3 +1,4 @@
+import { fmtDate } from "@/lib/format";
 import { OTHER_ARTIST, type LandingPayload } from "./payload";
 
 export type Heightfield = { gx: number; gz: number; grid: Float32Array; max: number };
@@ -132,14 +133,14 @@ export function callouts(p: Prepared): Callout[] {
   const perDay = new Uint32Array(p.maxDay + 1);
   for (const d of p.day) perDay[d]++;
   let peak = 0; for (let d = 1; d <= p.maxDay; d++) if (perDay[d] > perDay[peak]) peak = d;
-  const out: Callout[] = [{ key: "peak", label: "PEAK DAY", value: `${dayStr(p.baseMs, peak)} · ${perDay[peak]} LISTENS`, day: peak }];
+  const out: Callout[] = [{ key: "peak", label: "PEAK DAY", value: `${fmtDate(dayStr(p.baseMs, peak))} · ${perDay[peak]} LISTENS`, day: peak }];
   const firstYear = yearOf(p.baseMs, 0), lastYear = yearOf(p.baseMs, p.maxDay);
   const full = [...yearCounts(p).entries()].filter(([y]) => y > firstYear && y < lastYear).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
   if (full.length) {
     const [y, c] = full[0];
     out.push({ key: "quiet", label: "QUIETEST YEAR", value: `${y} · ${c.toLocaleString("en-US")} LISTENS`, day: yearStartDay(p.baseMs, y) + 182 });
   }
-  out.push({ key: "first", label: "FIRST LISTEN", value: dayStr(p.baseMs, 0), day: 0, index: 0 });
+  out.push({ key: "first", label: "FIRST LISTEN", value: fmtDate(dayStr(p.baseMs, 0)), day: 0, index: 0 });
   return out;
 }
 

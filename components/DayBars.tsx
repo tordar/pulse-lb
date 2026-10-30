@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { DayPoint } from "./DayTooltip";
+import { fmtDate } from "@/lib/format";
 
 /**
  * One bar per day of the year, height = listening time. Same data and same
@@ -62,7 +63,7 @@ export function DayBars({
             // rather than a zero-height bar it can't be told apart from.
             const unknown = d.plays > 0 && d.effective_ms === 0;
             const pct = unknown ? 0 : (d.effective_ms / limit) * 100;
-            const label = `${d.date} · ${d.plays} ${d.plays === 1 ? "play" : "plays"}`;
+            const label = `${fmtDate(d.date)} · ${d.plays} ${d.plays === 1 ? "play" : "plays"}`;
             const className = `daybar-col${activeDate === d.date ? " active" : ""}`;
             const bar =
               d.plays > 0 ? (

@@ -1,6 +1,7 @@
 // app/_landing/Scene.tsx
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { fmtDate } from "@/lib/format";
 import { callouts, dayStr, filterUniforms, livePoint, matches, minStr, type Filter, type Prepared } from "@/lib/landing/derive";
 import type { ListenAt } from "@/lib/landing/query";
 import type { SceneHandle } from "./scene/createScene";
@@ -342,7 +343,7 @@ export function Scene({ data, error, user, filter, arrivals, onShow, children }:
               className={`${s.readout} ${r.pinned ? s.pinned : ""}`}
               style={{ left: r.px + 12, top: r.py + 12 }}
             >
-              <div className={s.dim}>{dayStr(data.baseMs, data.day[r.i])} · {minStr(data.minute[r.i])}</div>
+              <div className={s.dim}>{fmtDate(dayStr(data.baseMs, data.day[r.i]))} · {minStr(data.minute[r.i])}</div>
               <div><b>
                 {r.listen?.recordingMbid
                   ? <a href={`/u/${encodeURIComponent(user)}/songs/${r.listen.recordingMbid}`}>{r.listen.track}</a>

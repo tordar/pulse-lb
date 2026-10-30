@@ -1,17 +1,13 @@
-const at = (d: string) => new Date(`${d}T00:00:00Z`);
-const fmt = (d: string, o: Intl.DateTimeFormatOptions) =>
-  at(d).toLocaleDateString("en-GB", { ...o, timeZone: "UTC" });
+import { fmtDate } from "@/lib/format";
 
-export const fmtConcertDate = (d: string) => fmt(d, { day: "numeric", month: "short", year: "numeric" });
+const weekday = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
 
-export const fmtDay = (d: string) =>
-  `${fmt(d, { weekday: "short" })} ${fmt(d, { day: "numeric", month: "short" })}`;
+export const fmtConcertDate = (d: string) => fmtDate(d);
+
+/** A festival day: weekday plus DD/MM, or the full date when `withYear`. */
+export const fmtDay = (d: string, withYear = false) =>
+  `${weekday(d)} ${withYear ? fmtDate(d) : `${d.slice(8, 10)}/${d.slice(5, 7)}`}`;
 
 export function fmtRange(start: string, end: string): string {
-  if (start === end) return fmtConcertDate(start);
-  const [sy, sm] = start.split("-");
-  const [ey, em] = end.split("-");
-  if (sy !== ey) return `${fmtConcertDate(start)} – ${fmtConcertDate(end)}`;
-  if (sm !== em) return `${fmt(start, { day: "numeric", month: "short" })} – ${fmtConcertDate(end)}`;
-  return `${Number(start.slice(8))}–${fmtConcertDate(end)}`;
+  return start === end ? fmtDate(start) : `${fmtDate(start)} – ${fmtDate(end)}`;
 }

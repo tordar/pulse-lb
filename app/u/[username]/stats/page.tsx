@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { BarChart3, Calendar, Clock, Disc3, Music2, Play, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { fmtHours, songHref, splitDateTime } from "@/lib/format";
+import { fmtDate, fmtHours, songHref, splitDateTime } from "@/lib/format";
 import {
   allTimeStats,
   yearlyListening,
@@ -222,7 +222,7 @@ async function StatsPanels({
                   ? `since ${fmtDate(allTime.first_played)}`
                   : "span"
               }
-              shortLabel={allTime.first_played ? `since ${fmtDate(allTime.first_played).slice(0, 4)}` : undefined}
+              shortLabel={allTime.first_played ? `since ${new Date(allTime.first_played).getUTCFullYear()}` : undefined}
             />
           </section>
 
@@ -333,13 +333,7 @@ function DayDetailBlock({
   showSource: boolean;
 }) {
   const date = new Date(`${day.date}T00:00:00Z`);
-  const human = date.toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+  const human = `${date.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })} ${fmtDate(day.date)}`;
   const hours = day.effective_ms / 1000 / 3600;
   const closeHref = `?${new URLSearchParams({ year: String(year) })}`;
 
@@ -446,10 +440,6 @@ function SectionHeading({ icon: Icon, children, extra }: { icon: LucideIcon; chi
       {extra && <span className="text-subtle-foreground font-normal normal-case">{extra}</span>}
     </h2>
   );
-}
-
-function fmtDate(s: string): string {
-  return new Date(s).toISOString().slice(0, 10);
 }
 
 function spanLabel(first: string, last: string): string {

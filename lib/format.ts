@@ -17,9 +17,20 @@ export function fmtListeningTime(ms: number): string {
   return fmtHours(ms / 1000 / 3600);
 }
 
+/**
+ * Every date on screen is DD/MM/YYYY. Takes a YYYY-MM-DD day or any timestamp
+ * (read in UTC). MusicBrainz's partial dates keep their precision: YYYY-MM
+ * becomes MM/YYYY and a bare year stays as it is.
+ */
+export function fmtDate(s: string): string {
+  if (/^\d{4}(-\d{2})?$/.test(s)) return s.split("-").reverse().join("/");
+  const [y, m, d] = (/^\d{4}-\d{2}-\d{2}$/.test(s) ? s : new Date(s).toISOString().slice(0, 10)).split("-");
+  return `${d}/${m}/${y}`;
+}
+
 export function splitDateTime(s: string): { date: string; time: string } {
   const iso = new Date(s).toISOString();
-  return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
+  return { date: fmtDate(iso), time: iso.slice(11, 16) };
 }
 
 /** Song page link for a listen, or null when it has no MusicBrainz recording. */

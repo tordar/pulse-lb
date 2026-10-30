@@ -11,7 +11,7 @@ import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
 import { SeenLive } from "@/components/SeenLive";
 import { concertsForArtist } from "@/lib/db/queries/concerts";
 import { artistRank } from "@/lib/db/queries/rank";
-import { songHref } from "@/lib/format";
+import { fmtDate, songHref, splitDateTime } from "@/lib/format";
 
 
 type Params = Promise<{ username: string; artistMbid: string }>;
@@ -166,7 +166,7 @@ async function ArtistDetail({ username, artistMbid }: { username: string; artist
           </h2>
           <ul className="divide-y divide-border text-sm">
             {recent.map((r, i) => {
-              const [date, time] = fmtDateTime(r.listened_at).split(" ");
+              const { date, time } = splitDateTime(r.listened_at);
               return (
                 <li key={i}>
                   <RecentRow href={songHref(username, { ...r, artist_name: header.artist_name })}>
@@ -209,14 +209,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="text-xs text-muted-foreground uppercase tracking-wide mt-0.5">{label}</div>
     </div>
   );
-}
-
-function fmtDate(s: string): string {
-  return new Date(s).toISOString().slice(0, 10);
-}
-
-function fmtDateTime(s: string): string {
-  return new Date(s).toISOString().slice(0, 16).replace("T", " ");
 }
 
 function fmtHours(h: number): string {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { fmtListeningTime } from "@/lib/format";
+import { fmtDate, fmtListeningTime } from "@/lib/format";
 
 export type DayPoint = { date: string; plays: number; effective_ms: number };
 
@@ -62,11 +62,5 @@ export function DayTooltip({ tip }: { tip: Tip | null }) {
 }
 
 function fmtTipDate(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  return `${new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })} ${fmtDate(iso)}`;
 }

@@ -8,6 +8,7 @@ import { albumRank } from "@/lib/db/queries/rank";
 import { DetailSkeleton } from "@/components/Skeletons";
 import { CoverArt } from "@/components/CoverArt";
 import { PlaysPerYearChart } from "@/components/PlaysPerYearChart";
+import { fmtDate } from "@/lib/format";
 
 
 type Params = Promise<{ username: string; releaseMbid: string }>;
@@ -86,7 +87,7 @@ async function AlbumDetail({ username, releaseMbid, name, artist }: { username: 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm md:flex md:flex-wrap md:gap-x-8 md:gap-y-2 pt-3">
             {rank != null && <Stat label="Rank" value={`#${rank.toLocaleString()}`} />}
             {header.first_release_date && (
-              <Stat label="Released" value={header.first_release_date} />
+              <Stat label="Released" value={fmtDate(header.first_release_date)} />
             )}
             <Stat label="Plays" value={header.total_plays.toLocaleString()} />
             <Stat label="Listening time" value={fmtHours(totalHours)} />
@@ -166,10 +167,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="text-xs text-muted-foreground uppercase tracking-wide mt-0.5">{label}</div>
     </div>
   );
-}
-
-function fmtDate(s: string): string {
-  return new Date(s).toISOString().slice(0, 10);
 }
 
 function fmtHours(h: number): string {

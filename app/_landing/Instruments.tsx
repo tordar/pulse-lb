@@ -1,6 +1,7 @@
 // app/_landing/Instruments.tsx
 "use client";
 import { useMemo } from "react";
+import { fmtDate } from "@/lib/format";
 import { dayStr, punchCard, topArtists, WEEKDAYS, yearCounts, yearOf, yearStartDay, type Filter, type Prepared } from "@/lib/landing/derive";
 import type { Totals } from "./LandingClient";
 import s from "./landing.module.css";
@@ -48,7 +49,7 @@ export function Instruments({ data, totals, filter, onFilter }: {
         <div className={s.gauge}>
           <h4>Totals</h4>
           <div className={s.totals}>
-            {[["Listens", n(totals.listens)], ["Artists", n(totals.artists)], ["Songs", n(totals.songs)], ["Since", dayStr(data.baseMs, 0)],
+            {[["Listens", n(totals.listens)], ["Artists", n(totals.artists)], ["Songs", n(totals.songs)], ["Since", fmtDate(dayStr(data.baseMs, 0))],
               ["Years", yearsSpan], ["Per day", (totals.listens / Math.max(1, data.maxDay)).toFixed(1)]].map(([k, v]) => (
               <div key={k}><div className={s.dim}>{k}</div><div className={s.v}>{v}</div></div>
             ))}

@@ -72,9 +72,9 @@ test("callouts: peak day, quietest full year, first listen", () => {
   ];
   const p = prepare(payload(iso, iso.map(() => 0)));
   const byKey = Object.fromEntries(callouts(p).map((c) => [c.key, c]));
-  assert.equal(byKey.peak.value, "2020-03-01 · 3 LISTENS");
+  assert.equal(byKey.peak.value, "01/03/2020 · 3 LISTENS");
   assert.equal(byKey.quiet.value, "2021 · 1 LISTENS");
-  assert.equal(byKey.first.value, "2019-12-31");
+  assert.equal(byKey.first.value, "31/12/2019");
   assert.equal(byKey.first.index, 0);
 });
 

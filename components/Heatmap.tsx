@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { DayPoint } from "./DayTooltip";
+import { fmtDate } from "@/lib/format";
 
 export function Heatmap({
   days,
@@ -113,7 +114,7 @@ export function Heatmap({
               );
             }
             const level = bucket(c.ms, limit, c.plays);
-            const label = `${c.date} · ${c.plays} ${c.plays === 1 ? "play" : "plays"}`;
+            const label = `${fmtDate(c.date)} · ${c.plays} ${c.plays === 1 ? "play" : "plays"}`;
             const active = activeDate === c.date;
             const className = `cell${active ? " active" : ""}`;
             // No `title` — the browser's ~1s delay is what the custom tooltip

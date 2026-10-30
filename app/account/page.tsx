@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { fmtDate } from "@/lib/format";
 import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { getUserByMbId } from "@/lib/auth/users";
@@ -80,14 +81,14 @@ function SubscriptionBlock({
   if (user.subscriptionStatus === "active" && user.currentPeriodEnd) {
     return (
       <div className="text-sm space-y-1">
-        <p>Active until {user.currentPeriodEnd.toISOString().slice(0, 10)}.</p>
+        <p>Active until {fmtDate(user.currentPeriodEnd.toISOString())}.</p>
       </div>
     );
   }
   if (user.subscriptionStatus === "canceled" && user.currentPeriodEnd) {
     return (
       <div className="text-sm space-y-2">
-        <p>Canceled. Sync stops {user.currentPeriodEnd.toISOString().slice(0, 10)}.</p>
+        <p>Canceled. Sync stops {fmtDate(user.currentPeriodEnd.toISOString())}.</p>
         <Link href="/#pricing" className="underline text-primary">Resubscribe</Link>
       </div>
     );
