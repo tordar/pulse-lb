@@ -1,5 +1,5 @@
 import { IntentLink } from "@/components/IntentLink";
-import { Play, Clock } from "lucide-react";
+import { Play, Clock, ArrowUp } from "lucide-react";
 import { CoverArt } from "@/components/CoverArt";
 import type { CoverArtRef } from "@/lib/listenbrainz/coverArt";
 import { fmtListeningTime } from "@/lib/format";
@@ -27,7 +27,7 @@ export function TopItemCard({
   href: string | null;
   badge?: string | null;
   // 30-day movement, when the owner turned it on: "+3" / "new", plays gained.
-  rankMove?: string | null;
+  rankMove?: number | "new" | null;
   recentPlays?: number;
 }) {
   const inner = (
@@ -42,7 +42,7 @@ export function TopItemCard({
         <div className="flex flex-wrap gap-1.5">
           <div className="inline-flex w-fit items-center px-2 py-0.5 rounded-md bg-muted text-xs font-medium tabular-nums">
             #{rank}
-            {rankMove && <span className="ml-1 text-primary">{rankMove}</span>}
+            {rankMove && <RankMove move={rankMove} className="ml-1" />}
           </div>
           {badge && (
             <div className="inline-flex w-fit items-center px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-medium">
@@ -85,5 +85,14 @@ export function TopItemCard({
     </IntentLink>
   ) : (
     inner
+  );
+}
+
+/** Places climbed, as a green up arrow and count, or "new". */
+export function RankMove({ move, className = "" }: { move: number | "new"; className?: string }) {
+  return (
+    <span className={`inline-flex items-center text-primary tabular-nums ${className}`}>
+      {move === "new" ? "new" : <><ArrowUp size="1em" strokeWidth={2.5} />{move}</>}
+    </span>
   );
 }

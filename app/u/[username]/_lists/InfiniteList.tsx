@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IntentLink } from "@/components/IntentLink";
-import { TopItemCard } from "@/components/TopItemCard";
+import { RankMove, TopItemCard } from "@/components/TopItemCard";
 import { CoverArt } from "@/components/CoverArt";
 import { fmtListeningTime } from "@/lib/format";
 import type { View } from "@/components/ViewToggle";
@@ -186,12 +186,12 @@ function renderCard(item: ListItem, kind: ListKind, username: string) {
 // Fixed width keeps covers lined up past rank 99.
 const RANK = "w-7 shrink-0 text-center text-xs text-subtle-foreground tabular-nums";
 
-// Places climbed over the last 30 days as "+3", or "new" for an item with no
-// plays before then. Drops and unmoved items show nothing.
-function rankMove(item: { rank: number } & Movement): string | null {
+// Places climbed over the last 30 days, or "new" for an item with no plays
+// before then. Drops and unmoved items show nothing.
+function rankMove(item: { rank: number } & Movement): number | "new" | null {
   if (item.recent_plays === undefined || item.recent_plays === 0) return null;
   if (item.rank_then == null) return "new";
-  return item.rank_then > item.rank ? `+${item.rank_then - item.rank}` : null;
+  return item.rank_then > item.rank ? item.rank_then - item.rank : null;
 }
 
 function Rank({ item }: { item: { rank: number } & Movement }) {
@@ -199,7 +199,7 @@ function Rank({ item }: { item: { rank: number } & Movement }) {
   return (
     <span className={`${RANK} leading-tight`}>
       {item.rank}
-      {move && <span className="block text-[10px] text-primary">{move}</span>}
+      {move && <span className="flex justify-center text-[10px]"><RankMove move={move} /></span>}
     </span>
   );
 }
