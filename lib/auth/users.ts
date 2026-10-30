@@ -41,6 +41,19 @@ export function getShowListenSource(lbUsername: string): Promise<boolean> {
   });
 }
 
+/** Same caching as getShowListenSource, for the top lists' 30-day movement. */
+export function getShowMovement(lbUsername: string): Promise<boolean> {
+  return userCached(lbUsername, ["showMovement", lbUsername], async () => {
+    const row = await withRetry(() =>
+      db.query.users.findFirst({
+        columns: { showMovement: true },
+        where: eq(schema.users.listenbrainzUsername, lbUsername),
+      }),
+    );
+    return row?.showMovement ?? false;
+  });
+}
+
 export type MbProfile = {
   mbAccountId: number;
   lbUsername: string;

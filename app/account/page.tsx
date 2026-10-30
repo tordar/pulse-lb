@@ -5,7 +5,8 @@ import { getSession } from "@/lib/auth/session";
 import { getUserByMbId } from "@/lib/auth/users";
 import { paymentsConfigured } from "@/lib/stripe";
 import { AccountActions } from "./AccountActions";
-import { SourceToggle } from "./SourceToggle";
+import { SettingToggle } from "./SettingToggle";
+import { setShowListenSource, setShowMovement } from "./actions";
 
 
 // Owner-only, outside the tab flow, redirects without a session: stays a blocking render.
@@ -49,7 +50,18 @@ export default async function AccountPage({
       </Section>
 
       <Section title="Display">
-        <SourceToggle initial={user.showListenSource} />
+        <SettingToggle
+          initial={user.showListenSource}
+          save={setShowListenSource}
+          label="Show listening source on listen events"
+          hint="A small colored dot on each listen showing where it was played (Spotify, Navidrome, …). Useful if you listen through more than one service."
+        />
+        <SettingToggle
+          initial={user.showMovement}
+          save={setShowMovement}
+          label="Show 30-day movement on top lists"
+          hint="Plays gained and places climbed over the last 30 days, next to each song, album and artist."
+        />
       </Section>
 
       <Section title="Session">

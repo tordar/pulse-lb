@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "show_movement" boolean DEFAULT false NOT NULL;

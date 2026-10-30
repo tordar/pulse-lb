@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Disc3, Music2, Users, type LucideIcon } from "lucide-react";
 import { topAlbums, topArtists, topSongs } from "@/lib/db/queries/topItems";
+import { getShowMovement } from "@/lib/auth/users";
 import { SearchBox } from "@/components/SearchBox";
 import { ViewToggle, type View } from "@/components/ViewToggle";
 import { ControlsSkeleton, ListSkeleton } from "@/components/Skeletons";
@@ -71,7 +72,8 @@ function parseView(v: string | undefined): View | null {
 
 async function CachedList({ kind, username, query, view }: { kind: Kind; username: string; query: string; view: View | null }) {
   const { Icon } = KINDS[kind];
-  const { items, hasMore } = await LOAD[kind]({ username, query, page: 0 });
+  const movement = await getShowMovement(username).catch(() => false);
+  const { items, hasMore } = await LOAD[kind]({ username, query, page: 0, movement });
   if (items.length === 0) {
     return (
       <div className="py-16 flex flex-col items-center text-sm text-muted-foreground gap-3">

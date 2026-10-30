@@ -277,6 +277,8 @@ export const users = pgTable("users", {
   currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
   // Profile option: annotate listen rows with a colored source dot.
   showListenSource: boolean("show_listen_source").default(false).notNull(),
+  // Profile option: show 30-day play and rank movement on the top lists.
+  showMovement: boolean("show_movement").default(false).notNull(),
 });
 
 export const stripeEvents = pgTable("stripe_events", {

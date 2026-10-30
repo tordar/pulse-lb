@@ -7,6 +7,7 @@ import { CoverArt } from "@/components/CoverArt";
 import { fmtListeningTime } from "@/lib/format";
 import type { View } from "@/components/ViewToggle";
 import type {
+  Movement,
   TopSong,
   TopAlbum,
   TopArtist,
@@ -138,6 +139,8 @@ function renderCard(item: ListItem, kind: ListKind, username: string) {
           plays={s.plays}
           effectiveMs={Number(s.effective_ms)}
           href={songHref(username, s.recording_mbid, s.track_name, s.artist_name)}
+          rankMove={rankMove(s)}
+          recentPlays={s.recent_plays}
         />
       </li>
     );
@@ -154,6 +157,8 @@ function renderCard(item: ListItem, kind: ListKind, username: string) {
           plays={a.plays}
           effectiveMs={Number(a.effective_ms)}
           href={albumHref(username, a.release_mbid, a.release_name, a.artist_name)}
+          rankMove={rankMove(a)}
+          recentPlays={a.recent_plays}
         />
       </li>
     );
@@ -170,6 +175,8 @@ function renderCard(item: ListItem, kind: ListKind, username: string) {
         plays={ar.plays}
         effectiveMs={Number(ar.effective_ms)}
         href={artistHref(username, ar.artist_mbid)}
+        rankMove={rankMove(ar)}
+        recentPlays={ar.recent_plays}
         badge={ar.seen_count ? `Seen live ${ar.seen_count}×` : null}
       />
     </li>
@@ -179,10 +186,31 @@ function renderCard(item: ListItem, kind: ListKind, username: string) {
 // Fixed width keeps covers lined up past rank 99.
 const RANK = "w-7 shrink-0 text-center text-xs text-subtle-foreground tabular-nums";
 
-function RowStats({ plays, effectiveMs }: { plays: number; effectiveMs: number }) {
+// Places climbed over the last 30 days as "+3", or "new" for an item with no
+// plays before then. Drops and unmoved items show nothing.
+function rankMove(item: { rank: number } & Movement): string | null {
+  if (item.recent_plays === undefined || item.recent_plays === 0) return null;
+  if (item.rank_then == null) return "new";
+  return item.rank_then > item.rank ? `+${item.rank_then - item.rank}` : null;
+}
+
+function Rank({ item }: { item: { rank: number } & Movement }) {
+  const move = rankMove(item);
+  return (
+    <span className={`${RANK} leading-tight`}>
+      {item.rank}
+      {move && <span className="block text-[10px] text-primary">{move}</span>}
+    </span>
+  );
+}
+
+function RowStats({ plays, effectiveMs, recentPlays }: { plays: number; effectiveMs: number; recentPlays?: number }) {
   return (
     <span className="shrink-0 text-right tabular-nums leading-tight">
-      <span className="block text-sm text-muted-foreground">{plays.toLocaleString()} plays</span>
+      <span className="block text-sm text-muted-foreground">
+        {!!recentPlays && <span className="text-primary">+{recentPlays.toLocaleString()} </span>}
+        {plays.toLocaleString()} plays
+      </span>
       {effectiveMs > 0 && (
         <span className="block text-xs text-subtle-foreground">{fmtListeningTime(effectiveMs)}</span>
       )}
@@ -196,9 +224,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
     const href = songHref(username, s.recording_mbid, s.track_name, s.artist_name);
     const row = (
       <>
-        <span className={RANK}>
-          {s.rank}
-        </span>
+        <Rank item={s} />
         <CoverArt
           art={{ caaId: s.caa_id, caaReleaseMbid: s.caa_release_mbid }}
           size={48}
@@ -209,7 +235,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
           <div className="truncate text-sm font-medium">{s.track_name}</div>
           <div className="truncate text-xs text-muted-foreground">{s.artist_name}</div>
         </div>
-        <RowStats plays={s.plays} effectiveMs={Number(s.effective_ms)} />
+        <RowStats plays={s.plays} effectiveMs={Number(s.effective_ms)} recentPlays={s.recent_plays} />
       </>
     );
     return (
@@ -232,9 +258,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
     const href = albumHref(username, a.release_mbid, a.release_name, a.artist_name);
     const row = (
       <>
-        <span className={RANK}>
-          {a.rank}
-        </span>
+        <Rank item={a} />
         <CoverArt
           art={{ caaId: a.caa_id, caaReleaseMbid: a.caa_release_mbid }}
           size={48}
@@ -245,7 +269,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
           <div className="truncate text-sm font-medium">{a.release_name}</div>
           <div className="truncate text-xs text-muted-foreground">{a.artist_name}</div>
         </div>
-        <RowStats plays={a.plays} effectiveMs={Number(a.effective_ms)} />
+        <RowStats plays={a.plays} effectiveMs={Number(a.effective_ms)} recentPlays={a.recent_plays} />
       </>
     );
     return (
@@ -264,9 +288,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
   const href = artistHref(username, ar.artist_mbid);
   const row = (
     <>
-      <span className={RANK}>
-        {ar.rank}
-      </span>
+      <Rank item={ar} />
       <CoverArt
         art={{ caaId: ar.caa_id, caaReleaseMbid: ar.caa_release_mbid }}
         size={48}
@@ -280,7 +302,7 @@ function renderRow(item: ListItem, kind: ListKind, username: string) {
           {ar.seen_count > 0 && <> <span className="text-primary whitespace-nowrap">· seen live {ar.seen_count}×</span></>}
         </div>
       </div>
-      <RowStats plays={ar.plays} effectiveMs={Number(ar.effective_ms)} />
+      <RowStats plays={ar.plays} effectiveMs={Number(ar.effective_ms)} recentPlays={ar.recent_plays} />
     </>
   );
   return (

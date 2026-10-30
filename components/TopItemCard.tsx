@@ -14,6 +14,8 @@ export function TopItemCard({
   effectiveMs,
   href,
   badge,
+  rankMove,
+  recentPlays,
 }: {
   rank: number;
   art: CoverArtRef;
@@ -24,6 +26,9 @@ export function TopItemCard({
   effectiveMs: number;
   href: string | null;
   badge?: string | null;
+  // 30-day movement, when the owner turned it on: "+3" / "new", plays gained.
+  rankMove?: string | null;
+  recentPlays?: number;
 }) {
   const inner = (
     <div className="h-full flex flex-col gap-3 p-3 rounded-lg border border-card-border bg-card hover:bg-muted/40 active:bg-muted/60 active:scale-[0.98] transition">
@@ -37,6 +42,7 @@ export function TopItemCard({
         <div className="flex flex-wrap gap-1.5">
           <div className="inline-flex w-fit items-center px-2 py-0.5 rounded-md bg-muted text-xs font-medium tabular-nums">
             #{rank}
+            {rankMove && <span className="ml-1 text-primary">{rankMove}</span>}
           </div>
           {badge && (
             <div className="inline-flex w-fit items-center px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-medium">
@@ -61,6 +67,7 @@ export function TopItemCard({
         <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums pt-0.5 mt-auto">
           <span className="inline-flex items-center gap-1">
             <Play size={12} /> {plays.toLocaleString()}
+            {!!recentPlays && <span className="text-primary">+{recentPlays.toLocaleString()}</span>}
           </span>
           {effectiveMs > 0 && (
             <span className="inline-flex items-center gap-1">

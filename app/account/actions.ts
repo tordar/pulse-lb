@@ -19,3 +19,15 @@ export async function setShowListenSource(value: boolean): Promise<void> {
   // rendering the old value until the next sync happens to invalidate.
   revalidateTag(`user:${session.lbUsername}`, "default");
 }
+
+export async function setShowMovement(value: boolean): Promise<void> {
+  const session = await getSession();
+  if (!session) throw new Error("unauthorized");
+  await withRetry(() =>
+    db
+      .update(schema.users)
+      .set({ showMovement: value })
+      .where(eq(schema.users.mbAccountId, session.mbAccountId)),
+  );
+  revalidateTag(`user:${session.lbUsername}`, "default");
+}

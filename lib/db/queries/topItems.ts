@@ -1,11 +1,30 @@
-import { sql } from "drizzle-orm";
-import { db, schema, execute } from "@/lib/db/client";
-import { userCached } from "./cache";
+import { sql, type SQL } from "drizzle-orm";
+import { db, schema, execute, sqlClient } from "@/lib/db/client";
+import { userCached, userCachedFor } from "./cache";
 import { withRetry } from "@/lib/db/retry";
+import { artistKeyExpr, withArtistSetAlbumClusters } from "@/lib/db/aggregates/albumCluster";
 
 const PAGE_SIZE = 50;
 
-export type ListPageOpts = { username: string; query: string; page: number };
+export type ListPageOpts = { username: string; query: string; page: number; movement?: boolean };
+
+// Present only when the list was asked for movement: plays in the last 30
+// days, and the item's rank 30 days ago (null when it had no plays then).
+export type Movement = { recent_plays?: number; rank_then?: number | null };
+
+const RECENT = sql.raw(`now() - interval '30 days'`);
+
+// Columns for an inner ranked select joined to a `recent (…, n)` relation.
+// The rank 30 days ago orders by the plays the item had then, the same way the
+// list orders by plays now; items with no plays then get no rank.
+function movementCols(nameCol: string): SQL {
+  return sql.raw(`,
+    COALESCE(recent.n, 0)::int AS recent_plays,
+    (CASE WHEN plays > COALESCE(recent.n, 0) THEN ROW_NUMBER() OVER (
+      PARTITION BY plays > COALESCE(recent.n, 0)
+      ORDER BY plays - COALESCE(recent.n, 0) DESC, ${nameCol}) END)::int AS rank_then`);
+}
+
 export type ListPageResult<T> = { items: T[]; page: number; pageSize: number; hasMore: boolean };
 
 function searchPattern(query: string): string | null {
@@ -14,7 +33,7 @@ function searchPattern(query: string): string | null {
   return `%${q.replace(/[\\%_]/g, (c) => "\\" + c)}%`;
 }
 
-export type TopSong = {
+export type TopSong = Movement & {
   rank: number;
   track_name: string;
   artist_name: string;
@@ -36,12 +55,21 @@ async function topSongsUncached(opts: ListPageOpts): Promise<ListPageResult<TopS
     execute<TopSong>(sql`
       SELECT rank, track_name, artist_name, plays, effective_ms,
              caa_id, caa_release_mbid, recording_mbid
+             ${opts.movement ? sql`, recent_plays, rank_then` : sql``}
       FROM (
         SELECT
           ROW_NUMBER() OVER (ORDER BY plays DESC, track_name)::int AS rank,
           track_name, artist_name, plays, effective_ms,
           caa_id, caa_release_mbid, recording_mbid
+          ${opts.movement ? movementCols("track_name") : sql``}
         FROM ${schema.aggSong}
+        ${opts.movement ? sql`LEFT JOIN (
+          SELECT COALESCE(recording_mbid::text, '~' || track_name) || '|' || COALESCE(artist_name, '') AS group_key,
+                 COUNT(*)::int AS n
+          FROM ${schema.listens}
+          WHERE user_name = ${opts.username} AND listened_at >= ${RECENT}
+          GROUP BY 1
+        ) recent USING (group_key)` : sql``}
         WHERE user_name = ${opts.username} AND scope = 0
       ) ranked
       WHERE ${pat ? sql`(track_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql`TRUE`}
@@ -53,7 +81,7 @@ async function topSongsUncached(opts: ListPageOpts): Promise<ListPageResult<TopS
   return paginate(items, opts.page);
 }
 
-export type TopAlbum = {
+export type TopAlbum = Movement & {
   rank: number;
   release_name: string;
   artist_name: string;
@@ -68,16 +96,22 @@ async function topAlbumsUncached(opts: ListPageOpts): Promise<ListPageResult<Top
   const pat = searchPattern(opts.query);
   const offset = opts.page * PAGE_SIZE;
   const limit = PAGE_SIZE + 1;
+  const recent = opts.movement ? await recentAlbumPlays(opts.username) : null;
   const rows = await withRetry(() =>
     execute<TopAlbum>(sql`
       SELECT rank, release_name, artist_name, plays, effective_ms,
              caa_id, caa_release_mbid, release_mbid
+             ${recent ? sql`, recent_plays, rank_then` : sql``}
       FROM (
         SELECT
           ROW_NUMBER() OVER (ORDER BY plays DESC, release_name)::int AS rank,
           release_name, artist_name, plays, effective_ms,
           caa_id, caa_release_mbid, release_mbid
+          ${recent ? movementCols("release_name") : sql``}
         FROM ${schema.aggAlbum}
+        ${recent ? sql`LEFT JOIN (
+          SELECT key AS group_key, value::int AS n FROM jsonb_each_text(${JSON.stringify(recent)}::jsonb)
+        ) recent USING (group_key)` : sql``}
         WHERE user_name = ${opts.username} AND scope = 0
       ) ranked
       WHERE ${pat ? sql`(release_name ILIKE ${pat} OR artist_name ILIKE ${pat})` : sql`TRUE`}
@@ -89,7 +123,7 @@ async function topAlbumsUncached(opts: ListPageOpts): Promise<ListPageResult<Top
   return paginate(items, opts.page);
 }
 
-export type TopArtist = {
+export type TopArtist = Movement & {
   rank: number;
   artist_name: string;
   plays: number;
@@ -112,6 +146,7 @@ async function topArtistsUncached(opts: ListPageOpts): Promise<ListPageResult<To
              ranked.distinct_tracks, ranked.distinct_albums,
              ranked.artist_mbid, ranked.caa_id, ranked.caa_release_mbid,
              COALESCE(seen.n, 0)::int AS seen_count
+             ${opts.movement ? sql`, ranked.recent_plays, ranked.rank_then` : sql``}
       FROM (
         SELECT
           ROW_NUMBER() OVER (ORDER BY plays DESC, artist_name)::int AS rank,
@@ -119,7 +154,14 @@ async function topArtistsUncached(opts: ListPageOpts): Promise<ListPageResult<To
           distinct_songs AS distinct_tracks,
           distinct_albums,
           artist_mbid, caa_id, caa_release_mbid
+          ${opts.movement ? movementCols("artist_name") : sql``}
         FROM ${schema.aggArtist}
+        ${opts.movement ? sql`LEFT JOIN (
+          SELECT ${sql.raw(artistKeyExpr("l"))} AS artist_key, COUNT(*)::int AS n
+          FROM ${schema.listens} l
+          WHERE l.user_name = ${opts.username} AND l.artist_name IS NOT NULL AND l.listened_at >= ${RECENT}
+          GROUP BY 1
+        ) recent USING (artist_key)` : sql``}
         WHERE user_name = ${opts.username} AND scope = 0
       ) ranked
       LEFT JOIN (
@@ -135,6 +177,31 @@ async function topArtistsUncached(opts: ListPageOpts): Promise<ListPageResult<To
   );
   const items = (rows as unknown as { rows: TopArtist[] }).rows;
   return paginate(items, opts.page);
+}
+
+// Last-30-day plays per album cluster. Clusters are decided over an artist's
+// whole history, so this clusters every listen of the artists played lately,
+// passing every spelling they're credited under (see withArtistSetAlbumClusters).
+async function recentAlbumPlays(username: string): Promise<Record<string, number>> {
+  const played = await withRetry(() => sqlClient<{ artist_name: string }[]>`
+    SELECT DISTINCT artist_name FROM listens
+    WHERE user_name = ${username} AND listened_at >= now() - interval '30 days' AND artist_name IS NOT NULL`);
+  if (played.length === 0) return {};
+  const lowered = [...new Set(played.map((r) => r.artist_name.toLowerCase()))];
+  const spelled = await withRetry(() => sqlClient<{ artist_name: string }[]>`
+    SELECT DISTINCT n AS artist_name FROM agg_artist, unnest(artist_names) AS n
+    WHERE user_name = ${username} AND scope = 0 AND lower(n) = ANY(${lowered}::text[])`);
+  const names = [...new Set([...played, ...spelled].map((r) => r.artist_name))];
+  const rows = (await withRetry(() =>
+    sqlClient.unsafe(
+      withArtistSetAlbumClusters(`
+        SELECT cluster_key, COUNT(*)::int AS n FROM clustered
+        WHERE listened_at >= now() - interval '30 days'
+        GROUP BY cluster_key`),
+      [username, names],
+    ),
+  )) as unknown as { cluster_key: string; n: number }[];
+  return Object.fromEntries(rows.map((r) => [r.cluster_key, r.n]));
 }
 
 function paginate<T>(rows: T[], page: number): ListPageResult<T> {
@@ -223,21 +290,24 @@ async function searchAllUncached(username: string, query: string): Promise<Searc
  */
 
 export function topSongs(opts: ListPageOpts): Promise<ListPageResult<TopSong>> {
-  return userCached(opts.username, ["topSongs", opts.username, opts.query, opts.page], () =>
-    topSongsUncached(opts),
-  );
+  return listCached(opts, "topSongs", () => topSongsUncached(opts));
 }
 
 export function topAlbums(opts: ListPageOpts): Promise<ListPageResult<TopAlbum>> {
-  return userCached(opts.username, ["topAlbums", opts.username, opts.query, opts.page], () =>
-    topAlbumsUncached(opts),
-  );
+  return listCached(opts, "topAlbums", () => topAlbumsUncached(opts));
 }
 
 export function topArtists(opts: ListPageOpts): Promise<ListPageResult<TopArtist>> {
-  return userCached(opts.username, ["topArtists", opts.username, opts.query, opts.page], () =>
-    topArtistsUncached(opts),
-  );
+  return listCached(opts, "topArtists", () => topArtistsUncached(opts));
+}
+
+// The 30-day window slides without any new listen to drop the tag, so lists
+// with movement also expire hourly.
+function listCached<T>(opts: ListPageOpts, name: string, fn: () => Promise<T>): Promise<T> {
+  const keys = [name, opts.username, opts.query, opts.page];
+  return opts.movement
+    ? userCachedFor(opts.username, [...keys, "movement"], 3600, fn)
+    : userCached(opts.username, keys, fn);
 }
 
 export function searchAll(username: string, query: string): Promise<SearchResults> {

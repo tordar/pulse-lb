@@ -1,9 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setShowListenSource } from "./actions";
 
-export function SourceToggle({ initial }: { initial: boolean }) {
+export function SettingToggle({
+  initial,
+  save,
+  label,
+  hint,
+}: {
+  initial: boolean;
+  save: (value: boolean) => Promise<void>;
+  label: string;
+  hint: string;
+}) {
   const [on, setOn] = useState(initial);
   const [pending, startTransition] = useTransition();
 
@@ -12,7 +21,7 @@ export function SourceToggle({ initial }: { initial: boolean }) {
     setOn(next);
     startTransition(async () => {
       try {
-        await setShowListenSource(next);
+        await save(next);
       } catch {
         setOn(!next); // revert on failure
       }
@@ -38,11 +47,8 @@ export function SourceToggle({ initial }: { initial: boolean }) {
         />
       </button>
       <span className="text-sm">
-        Show listening source on listen events
-        <span className="block text-xs text-muted-foreground mt-0.5">
-          A small colored dot on each listen showing where it was played (Spotify, Navidrome, …).
-          Useful if you listen through more than one service.
-        </span>
+        {label}
+        <span className="block text-xs text-muted-foreground mt-0.5">{hint}</span>
       </span>
     </label>
   );
