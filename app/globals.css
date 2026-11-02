@@ -44,6 +44,9 @@ html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Reserve the scrollbar's space even on short pages, so going from a long
+     page to a short one doesn't shift everything sideways. */
+  overflow-y: scroll;
 }
 
 body {
