@@ -28,18 +28,20 @@ export default async function AccountLayout({
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 backdrop-blur-md bg-background/70 border-b border-border/60">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 md:flex-wrap">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <Link
             href="/"
-            className="shrink-0 text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5"
+            className="shrink-0 text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 md:justify-self-start"
           >
             <ChevronLeft size={16} />
             <span className="font-semibold text-foreground">pulse</span>
             <span className="text-subtle-foreground mx-0.5">/</span>
             <span>{username}</span>
           </Link>
-          <PillNav username={username}><AccountPill /></PillNav>
-          <div className="flex-1 md:flex-none min-w-0 flex items-center justify-end gap-2">
+          <div className="hidden md:block md:justify-self-center">
+            <PillNav username={username}><AccountPill /></PillNav>
+          </div>
+          <div className="flex-1 min-w-0 md:w-full flex items-center justify-end gap-2">
             <NowPlaying username={username} cursor={cursor} />
             <AccountLink active />
           </div>
