@@ -36,7 +36,7 @@ export default function UserLayout({ children, params }: { children: React.React
             </Suspense>
           </Link>
           <div className="hidden md:block md:justify-self-center">
-            <Suspense fallback={<Sk className="h-[42px] w-[520px] rounded-full" />}>
+            <Suspense fallback={<Sk className="h-[42px] w-[260px] lg:w-[520px] rounded-full" />}>
               <HeaderNav params={params} />
             </Suspense>
           </div>

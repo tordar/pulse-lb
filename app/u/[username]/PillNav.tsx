@@ -45,12 +45,15 @@ function PillLink({
       href={href}
       aria-label={label}
       aria-current={active ? "page" : undefined}
-      className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition active:scale-95 ${
+      title={label}
+      className={`inline-flex items-center gap-2 px-3 lg:px-4 py-1.5 rounded-full text-sm font-medium transition active:scale-95 ${
         active ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-muted"
       }`}
     >
       <Icon size={15} strokeWidth={2} />
-      <span>{label}</span>
+      {/* Tablet widths can't fit the labels beside the breadcrumb and the
+          now-playing pill: icons only until lg. */}
+      <span className="hidden lg:inline">{label}</span>
     </Link>
   );
 }
