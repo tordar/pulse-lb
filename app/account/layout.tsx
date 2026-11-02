@@ -6,6 +6,7 @@ import { TabBar } from "@/components/TabBar";
 import { AccountLink } from "@/components/AccountLink";
 import { NowPlaying } from "../u/[username]/NowPlaying";
 import { getSession } from "@/lib/auth/session";
+import { RememberOwner } from "@/components/OwnerHint";
 import { allTimeStats } from "@/lib/db/queries/stats";
 
 // Owner-only, outside the tab flow, redirects without a session: stays a blocking render.
@@ -46,6 +47,7 @@ export default async function AccountLayout({
       </header>
       <div className="pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-0">{children}</div>
       <TabBar username={username} />
+      <RememberOwner username={username} owner />
     </div>
   );
 }

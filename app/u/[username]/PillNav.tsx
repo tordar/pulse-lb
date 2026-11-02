@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ACCOUNT_TAB, isTabActive, navTabs, type NavTab } from "@/lib/nav";
+import { OwnerHint, useOwnerHint, usePathUsername } from "@/components/OwnerHint";
+import { Sk } from "@/components/Skeletons";
 
 /**
  * Desktop section nav — the centred pill in the header. Phones get <TabBar>
@@ -22,6 +24,29 @@ export function PillNav({ username, children }: { username: string; children?: R
       ))}
       {children}
     </nav>
+  );
+}
+
+const NAV_SKELETON = <Sk className="h-[42px] w-[260px] lg:w-[520px] rounded-full" />;
+
+/**
+ * The header's fallback while params stream. For the owner it's the real nav
+ * built from the URL, so going back from /account doesn't blank the pills;
+ * everyone else (and the prerendered shell) gets the skeleton.
+ */
+export function PathPillNav() {
+  return useOwnerHint() === null ? NAV_SKELETON : <UrlPillNav />;
+}
+
+function UrlPillNav() {
+  const username = usePathUsername();
+  if (!username) return NAV_SKELETON;
+  return (
+    <PillNav username={username}>
+      <OwnerHint username={username}>
+        <AccountPill />
+      </OwnerHint>
+    </PillNav>
   );
 }
 

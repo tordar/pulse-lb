@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { ChevronLeft } from "lucide-react";
-import { AccountPill, PillNav } from "./PillNav";
+import { AccountPill, PathPillNav, PillNav } from "./PillNav";
 import { TabBar } from "@/components/TabBar";
 import { AccountLink } from "@/components/AccountLink";
 import { NowPlaying } from "./NowPlaying";
 import { OwnerOnly } from "@/components/OwnerOnly";
+import { OwnerHint } from "@/components/OwnerHint";
 import { Sk } from "@/components/Skeletons";
 import { allTimeStats } from "@/lib/db/queries/stats";
 
@@ -36,12 +37,12 @@ export default function UserLayout({ children, params }: { children: React.React
             </Suspense>
           </Link>
           <div className="hidden md:block md:justify-self-center">
-            <Suspense fallback={<Sk className="h-[42px] w-[260px] lg:w-[520px] rounded-full" />}>
+            <Suspense fallback={<PathPillNav />}>
               <HeaderNav params={params} />
             </Suspense>
           </div>
           <div className="flex-1 min-w-0 md:w-full flex items-center justify-end gap-2">
-            <Suspense fallback={null}>
+            <Suspense fallback={<OwnerHint><AccountLink /></OwnerHint>}>
               <HeaderRight params={params} />
             </Suspense>
           </div>
@@ -68,7 +69,7 @@ async function HeaderNav({ params }: { params: Params }) {
   const { username } = await params;
   return (
     <PillNav username={username}>
-      <Suspense fallback={null}>
+      <Suspense fallback={<OwnerHint username={username}><AccountPill /></OwnerHint>}>
         <OwnerOnly username={username}>
           <AccountPill />
         </OwnerOnly>
@@ -86,7 +87,7 @@ async function HeaderRight({ params }: { params: Params }) {
   return (
     <>
       <NowPlaying username={username} cursor={cursor} />
-      <Suspense fallback={null}>
+      <Suspense fallback={<OwnerHint username={username}><AccountLink /></OwnerHint>}>
         <OwnerOnly username={username}>
           <AccountLink />
         </OwnerOnly>
